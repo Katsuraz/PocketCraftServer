@@ -1260,9 +1260,15 @@ class MainActivity : Activity() {
         val actions=ui.row(this)
         actions.addView(ui.action(this,"↻  Refresh",true){render()},ui.weight(this))
         actions.addView(ui.action(this,"Copy log"){
-            val manager=getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            manager.setPrimaryClip(ClipData.newPlainText("PocketCraft logs",getLog()))
-            toast("Log copied")
+            AlertDialog.Builder(this).setTitle("Copy server log?")
+                .setMessage("Raw Minecraft logs may contain player information, public addresses or private configuration values. Review them before sharing. For a token-free status summary, use Server Health instead.")
+                .setNegativeButton("CANCEL",null)
+                .setNeutralButton("SERVER HEALTH") {_,_->showHealthCenter()}
+                .setPositiveButton("COPY RAW LOG") {_,_->
+                    val manager=getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    manager.setPrimaryClip(ClipData.newPlainText("PocketCraft raw logs",getLog()))
+                    toast("Raw log copied. Check for private details before sharing.")
+                }.show()
         },LinearLayout.LayoutParams(0,-2,1f))
         body.addView(actions)
         body.addView(ui.space(this,13))
