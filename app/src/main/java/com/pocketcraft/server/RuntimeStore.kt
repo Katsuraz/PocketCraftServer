@@ -11,6 +11,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.nio.file.Files
 import java.security.MessageDigest
+import java.util.concurrent.TimeUnit
 
 /**
  * Opt-in Android ARM64 JRE installer. Uses an upstream Android-specific OpenJDK archive,
@@ -94,7 +95,7 @@ object RuntimeStore {
                 ).filter { it.isNotBlank() }.joinToString(":")
             }.start()
         val text = process.inputStream.bufferedReader().use { it.readText().take(7000) }
-        if (!process.waitFor(12, java.util.concurrent.TimeUnit.SECONDS)) {
+        if (!process.waitFor(12, TimeUnit.SECONDS)) {
             process.destroyForcibly()
             throw IOException("Java self-test timed out")
         }
