@@ -4,6 +4,7 @@
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <application
         android:allowBackup="false"
+        android:extractNativeLibs="true"
         android:label="PocketCraft Server"
         android:icon="@drawable/pocket_logo"
         android:theme="@style/PocketCraftTheme"
