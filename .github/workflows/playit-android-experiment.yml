@@ -36,6 +36,9 @@ jobs:
           echo "CC_aarch64_linux_android=$NDK/aarch64-linux-android28-clang" >> "$GITHUB_ENV"
           export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$NDK/aarch64-linux-android28-clang"
           export CC_aarch64_linux_android="$NDK/aarch64-linux-android28-clang"
+          export AR_aarch64_linux_android="$NDK/llvm-ar"
+          export CFLAGS_aarch64_linux_android="--target=aarch64-linux-android28"
+          export PATH="$NDK:$PATH"
           cargo build --release --locked --target aarch64-linux-android -p playit-cli
           file target/aarch64-linux-android/release/playit-cli
       - uses: actions/upload-artifact@v4
