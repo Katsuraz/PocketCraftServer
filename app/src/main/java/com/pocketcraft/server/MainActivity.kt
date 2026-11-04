@@ -60,10 +60,10 @@ class MainActivity : Activity() {
         top.addView(ui.column(this).apply {
             setPadding(ui.dp(this@MainActivity,12),0,0,0)
             addView(ui.text(this@MainActivity,"POCKETCRAFT",17f,ui.WHITE,true))
-            addView(ui.text(this@MainActivity,"YOUR WORLD, EVERYWHERE",9f,ui.MUTED,true))
+            addView(ui.text(this@MainActivity,"HOST • CUSTOMIZE • PLAY",9f,ui.MUTED,true))
         }, LinearLayout.LayoutParams(0, -2, 1f))
-        top.addView(ui.text(this,"⋮",26f,ui.MUTED,true).apply {
-            setOnClickListener { about() }; contentDescription="About and setup"
+        top.addView(ui.text(this,"⚙",24f,ui.GREEN,true).apply {
+            setOnClickListener { startActivity(Intent(this@MainActivity,SettingsActivity::class.java)) }; contentDescription="Server settings"
             ui.run { padding(this@MainActivity, 10, 3, 10, 3) }
         })
         screen.addView(top)
@@ -89,6 +89,9 @@ class MainActivity : Activity() {
             item.addView(ui.text(this,icons[i],24f,if(i==tab) ui.GREEN else ui.MUTED,true).apply { gravity=Gravity.CENTER })
             item.addView(ui.space(this,5))
             item.addView(ui.text(this,labels[i],10f,if(i==tab) ui.GREEN else ui.MUTED,true).apply { gravity=Gravity.CENTER })
+            item.isClickable = true
+            item.contentDescription = "Open "+labels[i].lowercase(Locale.ROOT)
+            item.background=if(i==tab) ui.shape(this,ui.SURFACE,14) else ui.shape(this,0xFF101A2D.toInt(),14)
             item.setOnClickListener { tab=i; render() }
             navbar.addView(item,LinearLayout.LayoutParams(0,ui.dp(this,52),1f))
         }
@@ -96,7 +99,7 @@ class MainActivity : Activity() {
         setContentView(screen)
     }
     private fun dashboard(body: LinearLayout) {
-        body.addView(h("Your pocket server","A cozy home for your Minecraft worlds"))
+        body.addView(h("Pocket server","Your Minecraft world, your rules"))
         body.addView(ui.space(this,16))
         val hero = ui.column(this).apply {
             background = ui.gradient(this@MainActivity,0xFF29366A.toInt(),0xFF17354D.toInt(),0xFF145044.toInt())
@@ -105,10 +108,10 @@ class MainActivity : Activity() {
         val header = ui.row(this)
         header.addView(ui.pill(this,if(ServerService.running)"●  JVM ACTIVE" else "●  OFFLINE",if(ServerService.running)ui.GREEN else ui.RED))
         header.addView(View(this),LinearLayout.LayoutParams(0,1,1f))
-        header.addView(ui.pill(this,"FABRIC  •  JAVA + BEDROCK",ui.CYAN))
+        header.addView(ui.pill(this,"FABRIC HOST",ui.CYAN))
         hero.addView(header)
         hero.addView(ui.space(this,10))
-        hero.addView(ui.text(this,"Your next adventure\nstarts here.",25f,ui.WHITE,true))
+        hero.addView(ui.text(this,"Build a world.\nBring your friends.",25f,ui.WHITE,true))
         hero.addView(WorldArt(this))
         hero.addView(ui.text(this,if(ServerService.running)"Minecraft process launched" else "Server engine setup",13f,ui.WHITE,true))
         hero.addView(ui.space(this,6))
@@ -120,11 +123,13 @@ class MainActivity : Activity() {
         body.addView(setupJourney())
         body.addView(ui.space(this,14))
         body.addView(enginePanel())
+        body.addView(ui.space(this,14))
+        body.addView(connectionPanel())
         body.addView(ui.space(this,19))
         body.addView(h("Overview"))
         body.addView(ui.space(this,11))
         val row = ui.row(this)
-        row.addView(stat("0 / 5", "PLAYERS", "♟"), ui.weight(this))
+        row.addView(stat("— / "+serverProperty("max-players","5"), "PLAYERS", "♟"), ui.weight(this))
         row.addView(stat(modFiles().count { it.name.endsWith(".jar") }.toString(), "MODS", "⬡"), LinearLayout.LayoutParams(0,-2,1f))
         body.addView(row)
         body.addView(ui.space(this,10))
@@ -136,7 +141,7 @@ class MainActivity : Activity() {
         body.addView(h("Quick actions"))
         body.addView(ui.space(this,11))
         val actions = ui.card(this)
-        actions.addView(actionRow("⚙","Server settings","Difficulty, players, world options") {
+        actions.addView(actionRow("⚙","Server settings","Addresses, non-premium access, gameplay & performance") {
             startActivity(Intent(this, SettingsActivity::class.java))
         })
         actions.addView(line())
@@ -154,9 +159,9 @@ class MainActivity : Activity() {
         val note = ui.card(this)
         note.addView(ui.pill(this,"COMPATIBILITY CHECK",ui.PURPLE))
         note.addView(ui.space(this,9))
-        note.addView(ui.text(this,"Crossplay is not configured yet",15f,ui.WHITE,true))
+        note.addView(ui.text(this,"Crossplay compatibility",15f,ui.WHITE,true))
         note.addView(ui.space(this,7))
-        note.addView(ui.text(this,"Geyser-Fabric + Floodgate need builds that match your Fabric server version. Most client-required content mods cannot be used by Bedrock players.",12f,ui.MUTED))
+        note.addView(ui.text(this,"Geyser-Fabric + Floodgate must match your Fabric version. Non-premium Java access and Bedrock authentication are separate settings; neither proves that public multiplayer works.",12f,ui.MUTED))
         body.addView(note)
     }
     /** Honest, actionable setup journey: never equates imported files with a running server. */
@@ -225,6 +230,52 @@ class MainActivity : Activity() {
 
 
     /** Live local process controls. A JVM process is not proof that the game server is ready. */
+    private fun serverProperty(key:String,default:String):String {
+        val properties=java.util.Properties()
+        try {
+            File(base,"server.properties").takeIf { it.isFile }?.inputStream()?.use { properties.load(it) }
+        } catch (_:Exception) {}
+        return properties.getProperty(key,default)
+    }
+
+    private fun connectionPanel():LinearLayout {
+        val box=ui.card(this)
+        val authorized=serverProperty("online-mode","true")!="false"
+        val port=serverProperty("server-port","25565")
+        val share=getSharedPreferences("pocketcraft",0).getString("shareAddress","").orEmpty().trim()
+        val lan=NetworkInfo.lanAddress()
+        box.addView(ui.text(this,"CONNECT & SHARE",11f,ui.CYAN,true))
+        box.addView(ui.space(this,9))
+        box.addView(ui.text(this,"Invite your friends",18f,ui.WHITE,true))
+        box.addView(ui.space(this,6))
+        box.addView(ui.pill(this,if(authorized)"✓  VERIFIED JAVA ACCOUNTS" else "⚠  NON-PREMIUM MODE",if(authorized) ui.GREEN else ui.RED))
+        box.addView(ui.space(this,10))
+        if(!authorized) {
+            box.addView(ui.text(this,"Account verification is OFF. Usernames can be impersonated. Prefer trusted, private connections and avoid OP permissions.",12f,ui.RED))
+            box.addView(ui.space(this,12))
+        }
+        val address=if(share.isNotBlank())share else if(lan!=null)"$lan:$port" else ""
+        box.addView(ui.text(this,if(share.isNotBlank())"CUSTOM SHARE ADDRESS" else "LOCAL NETWORK ADDRESS",11f,ui.MUTED,true))
+        box.addView(ui.space(this,7))
+        box.addView(ui.text(this,address.ifEmpty { "Unavailable — connect to Wi-Fi" },16f,ui.WHITE,true))
+        box.addView(ui.space(this,8))
+        box.addView(ui.text(this,if(share.isNotBlank())"Saved for sharing only. DNS, port forwarding or a tunnel must actually point to your phone." else "Java only, same LAN. Your Bedrock address depends on an active Geyser server.",11f,ui.MUTED))
+        box.addView(ui.space(this,12))
+        val buttons=ui.row(this)
+        buttons.addView(ui.action(this,"COPY ADDRESS",true,address.isNotBlank()) {
+            (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
+                .setPrimaryClip(ClipData.newPlainText("Minecraft server address",address))
+            toast("Copied. Verify connectivity before sharing.")
+        },ui.weight(this))
+        buttons.addView(ui.action(this,"EDIT NETWORK") {
+            startActivity(Intent(this,SettingsActivity::class.java))
+        },LinearLayout.LayoutParams(0,-2,1f))
+        box.addView(buttons)
+        box.addView(ui.space(this,12))
+        box.addView(ui.text(this,"Java port: $port   •   Bedrock usually: 19132 (Geyser required)",11f,ui.MUTED))
+        return box
+    }
+
     private fun enginePanel(): LinearLayout {
         val box = ui.card(this)
         val state = ServerService.status
