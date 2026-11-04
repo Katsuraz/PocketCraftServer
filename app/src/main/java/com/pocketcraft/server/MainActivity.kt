@@ -392,6 +392,18 @@ class MainActivity : Activity() {
         body.addView(ui.space(this,15))
         body.addView(ui.action(this,"+  IMPORT MOD JAR",true) {picker(2)})
         body.addView(ui.space(this,10))
+        val packCard=ui.card(this)
+        packCard.addView(ui.pill(this,"NEW  •  MODPACKS",ui.GREEN))
+        packCard.addView(ui.space(this,9))
+        packCard.addView(ui.text(this,"Import a complete modpack",18f,ui.WHITE,true))
+        packCard.addView(ui.space(this,7))
+        packCard.addView(ui.text(this,"Modrinth .mrpack or CurseForge manifest ZIP. Installs server-compatible files only; no world or launcher replacement.",12f,ui.MUTED))
+        packCard.addView(ui.space(this,13))
+        packCard.addView(ui.action(this,"＋  IMPORT MODPACK",true) {
+            if(ServerService.running){toast("Stop the server before installing a modpack")}else picker(5)
+        })
+        body.addView(packCard)
+        body.addView(ui.space(this,14))
         body.addView(ui.action(this,"↓  INSTALL CROSSPLAY FILES") {
             AlertDialog.Builder(this).setTitle("Install crossplay bridge?")
                 .setMessage("Downloads matching Fabric API from Modrinth, plus the latest Geyser-Fabric and Floodgate from GeyserMC for Minecraft Java 26.3. These server files alone cannot host Minecraft: an Android Java runtime is still required.")
@@ -616,22 +628,69 @@ class MainActivity : Activity() {
     }
 
     private fun downloadAsync(label:String, action:()->String) {
-        val waiting=AlertDialog.Builder(this).setTitle("Downloading "+label)
-            .setMessage("Retrieving files from the official project. Network connection required.")
-            .setCancelable(false).create()
+        val cancelled=java.util.concurrent.atomic.AtomicBoolean(false)
+        val panel=ui.column(this).apply {
+            setPadding(ui.dp(this@MainActivity,22),ui.dp(this@MainActivity,16),
+                ui.dp(this@MainActivity,22),ui.dp(this@MainActivity,20))
+        }
+        panel.addView(ui.pill(this,"✦  POCKETCRAFT INSTALLER",ui.CYAN))
+        panel.addView(ui.space(this,15))
+        val title=ui.text(this,label,19f,ui.WHITE,true)
+        panel.addView(title)
+        panel.addView(ui.space(this,8))
+        val status=ui.text(this,"Preparing download…",13f,ui.MUTED)
+        panel.addView(status)
+        panel.addView(ui.space(this,17))
+        val bar=android.widget.ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal).apply {
+            isIndeterminate=true
+            max=1000
+            progressTintList=android.content.res.ColorStateList.valueOf(ui.GREEN)
+            indeterminateTintList=android.content.res.ColorStateList.valueOf(ui.CYAN)
+        }
+        panel.addView(bar,LinearLayout.LayoutParams(-1,ui.dp(this,10)))
+        panel.addView(ui.space(this,9))
+        val details=ui.text(this,"Connecting securely…",12f,ui.MUTED)
+        panel.addView(details)
+        panel.addView(ui.space(this,10))
+        panel.addView(ui.text(this,"Keep this screen open. Cancelling stops the current transfer; partially installed files may need cleanup.",11f,ui.MUTED))
+        val waiting=AlertDialog.Builder(this)
+            .setView(panel).setNegativeButton("CANCEL") {_,_->cancelled.set(true)}
+            .create()
+        waiting.setCancelable(false)
         waiting.show()
         Thread {
-            val outcome=try {Result.success(action())}catch(e:Exception){Result.failure<String>(e)}
+            val outcome=try {
+                Result.success(InstallProgress.withSession({update ->
+                    runOnUiThread {
+                        if(!isFinishing && waiting.isShowing) {
+                            status.text=update.stage
+                            val total=update.total
+                            if(total>0) {
+                                bar.isIndeterminate=false
+                                bar.progress=((update.done.toDouble()/total).coerceIn(0.0,1.0)*1000).toInt()
+                                val doneMb=update.done/1048576.0
+                                val totalMb=total/1048576.0
+                                details.text=String.format(Locale.ROOT,"%.1f / %.1f MB",doneMb,totalMb)+
+                                    (if(update.files>0)"  •  File ${update.file}/${update.files}" else "")
+                            }else{
+                                bar.isIndeterminate=true
+                                details.text=if(update.files>0)"File ${update.file} of ${update.files}" else "Preparing installation"
+                            }
+                        }
+                    }
+                }, {cancelled.get()}) { action() })
+            } catch(e:Exception){ Result.failure<String>(e) }
             runOnUiThread {
+                if(isFinishing)return@runOnUiThread
                 waiting.dismiss()
                 outcome.onSuccess {message->
-                    AlertDialog.Builder(this).setTitle("Download complete")
+                    AlertDialog.Builder(this).setTitle("✓  Installation complete")
                         .setMessage(message).setPositiveButton("OK",null).show()
                     render()
                     if(label.startsWith("Fabric") && !ServerDownloads.eulaAccepted(this)) offerEula()
                 }.onFailure {error->
-                    AlertDialog.Builder(this).setTitle("Download failed")
-                        .setMessage(error.message ?: "Please check your connection and try again.")
+                    AlertDialog.Builder(this).setTitle(if(cancelled.get())"Installation cancelled" else "Installation failed")
+                        .setMessage(error.message ?: "Check your connection and available storage.")
                         .setPositiveButton("OK",null).show()
                 }
             }
@@ -666,11 +725,38 @@ class MainActivity : Activity() {
     private fun picker(code:Int) {
         val intent=Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
-            type=if(code==3)"application/zip" else "*/*"
+            type=if(code==3 || code==5)"*/*" else "*/*"
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         startActivityForResult(intent,code)
     }
+    private fun askCurseForgeKey(uri:android.net.Uri) {
+        val keyBox=android.widget.EditText(this).apply {
+            hint="Optional CurseForge developer API key"
+            setSingleLine(true)
+            inputType=android.text.InputType.TYPE_CLASS_TEXT or
+                android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+        }
+        val wrapper=ui.column(this).apply {
+            setPadding(ui.dp(this@MainActivity,20),ui.dp(this@MainActivity,12),
+                ui.dp(this@MainActivity,20),ui.dp(this@MainActivity,8))
+            addView(ui.text(this@MainActivity,"CurseForge downloads generally require an approved API key. It is used for this import only and is not saved.",12f,ui.MUTED))
+            addView(ui.space(this@MainActivity,13))
+            addView(keyBox)
+        }
+        AlertDialog.Builder(this).setTitle("Import CurseForge modpack")
+            .setView(wrapper).setNegativeButton("CANCEL",null)
+            .setPositiveButton("IMPORT"){_,_->
+                installModpack(uri,keyBox.text.toString().trim().ifEmpty {null})
+            }.show()
+    }
+
+    private fun installModpack(uri:android.net.Uri,key:String?) {
+        downloadAsync("Modpack installation") {
+            ModpackImporter.install(this,uri,key).description()
+        }
+    }
+
     private fun createBackupDocument(world:File) {
         val intent=Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE);type="application/zip"
@@ -742,6 +828,14 @@ class MainActivity : Activity() {
                         runOnUiThread {toast("World imported: "+imported.name);tab=2;render()}
                     } catch(e:Exception) {runOnUiThread {toast("World import failed: "+e.message)}}
                 }.start()
+            }
+            5 -> {
+                val name=displayName(uri).lowercase(Locale.ROOT)
+                if(!name.endsWith(".mrpack") && !name.endsWith(".zip")) {
+                    toast("Choose a .mrpack or CurseForge .zip file");return
+                }
+                val isCurse=name.endsWith(".zip")
+                if(isCurse) askCurseForgeKey(uri) else installModpack(uri,null)
             }
             4 -> {
                 val world=pendingBackup ?: return
