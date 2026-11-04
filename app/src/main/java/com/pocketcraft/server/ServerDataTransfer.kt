@@ -46,8 +46,10 @@ internal object ServerDataTransfer {
         if (ServerService.running) throw IOException("Stop Minecraft before restoring")
         val root = WorldStore.root(context).canonicalFile
         // Never silently overwrite an existing world, modpack, or config.
-        if (!root.listFiles().isNullOrEmpty()) {
-            throw IOException("Restore requires a fresh, empty server folder. Export the current server first; this will never overwrite existing files.")
+        // PocketCraft creates an empty mods/ directory on first launch;
+        // that must not prevent restoring a fresh install.
+        if (root.walkTopDown().any { it.isFile }) {
+            throw IOException("Restore requires a new server without existing files. Export the current server first; no files will be overwritten.")
         }
         var count = 0
         var expanded = 0L
@@ -91,19 +93,28 @@ internal object ServerDataTransfer {
                 }
             }
             if (count==0) throw IOException("ZIP contains no server data")
-            if(!root.listFiles().isNullOrEmpty()) throw IOException("Server folder changed during restore")
-            var moved=0
-            try {
-                staged.listFiles()?.forEach { file ->
-                    val dest=File(root,file.name)
-                    if(dest.exists() || !file.renameTo(dest))
-                        throw IOException("Cannot activate restored file: "+file.name)
-                    moved++
+            // Preflight all collisions before moving even one file.
+            val stagedFiles=staged.walkTopDown().filter { it.isFile }.toList()
+            if(stagedFiles.isEmpty()) throw IOException("ZIP has no server files")
+            for (source in stagedFiles) {
+                val relative=source.relativeTo(staged).invariantSeparatorsPath
+                val target=ServerFileOps.checked(root,File(root,relative))
+                if(target.exists()) {
+                    throw IOException("Restore would overwrite existing file: " + relative)
                 }
-            } catch(e:Exception) {
-                // Never erase already moved files on failure; they are the only copy
-                // inside the fresh install. User can recover with the original ZIP.
-                throw IOException("Partial restore after "+moved+" items: "+e.message,e)
+            }
+            var moved=0
+            for (source in stagedFiles) {
+                val relative=source.relativeTo(staged).invariantSeparatorsPath
+                val target=ServerFileOps.checked(root,File(root,relative))
+                if(!target.parentFile.mkdirs() && !target.parentFile.isDirectory)
+                    throw IOException("Cannot create destination folder: " + relative)
+                if (!source.renameTo(target)) {
+                    throw IOException("Restore transferred "+moved+
+                        " files, but failed on: "+relative+
+                        ". The original backup ZIP can be used to recover missing items.")
+                }
+                moved++
             }
             return count
         } finally {
