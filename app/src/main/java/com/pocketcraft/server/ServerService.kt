@@ -54,10 +54,16 @@ class ServerService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_TUNNEL_START -> {
-                notice("Starting Playit Internet tunnel agent")
+                if (!running && status != "STARTING") begin()
+                notice("Setting up online Minecraft hosting")
                 Thread {
-                    PlayitManager.start(this)
-                    notice(if(PlayitManager.isActive()) "Playit agent active • configure tunnels" else "Playit startup failed • check logs")
+                    val javaPort = try {
+                        val config = java.util.Properties()
+                        File(root, "server.properties").takeIf { it.isFile }?.inputStream()?.use { config.load(it) }
+                        config.getProperty("server-port", "25565").toIntOrNull()?.takeIf { it in 1..65535 } ?: 25565
+                    } catch (_: Exception) { 25565 }
+                    PlayitManager.goOnline(this, javaPort)
+                    notice(if(PlayitManager.isActive()) "Playit agent active • check PocketCraft for setup" else "Playit startup failed • check diagnostics")
                 }.start()
             }
             ACTION_TUNNEL_STOP -> {
