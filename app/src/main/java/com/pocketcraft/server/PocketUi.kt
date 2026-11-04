@@ -13,14 +13,14 @@ import android.widget.TextView
 
 /** Lightweight theme built using Android views, no external UI dependency. */
 object PocketUi {
-    const val BG = 0xFF0A1020.toInt()
-    const val PANEL = 0xFF151E32.toInt()
-    const val SURFACE = 0xFF1E2B43.toInt()
-    const val MUTED = 0xFF91A3BE.toInt()
+    const val BG = 0xFF090F1C.toInt()
+    const val PANEL = 0xFF142137.toInt()
+    const val SURFACE = 0xFF22344B.toInt()
+    const val MUTED = 0xFFA6B9CC.toInt()
     const val WHITE = 0xFFF5F8FF.toInt()
-    const val GREEN = 0xFF67E8AC.toInt()
-    const val CYAN = 0xFF70D8FF.toInt()
-    const val PURPLE = 0xFF9B85FF.toInt()
+    const val GREEN = 0xFF6CF0BF.toInt()
+    const val CYAN = 0xFF65D9FF.toInt()
+    const val PURPLE = 0xFFA996FF.toInt()
     const val RED = 0xFFFF8B9A.toInt()
 
     fun dp(c: Context, v: Int): Int = (v * c.resources.displayMetrics.density + .5f).toInt()
@@ -47,7 +47,7 @@ object PocketUi {
     fun View.padding(c: Context, l: Int, t: Int, r: Int, b: Int) { setPadding(dp(c,l),dp(c,t),dp(c,r),dp(c,b)) }
     fun space(c: Context, h: Int): View = View(c).apply { layoutParams = LinearLayout.LayoutParams(1, dp(c,h)) }
     fun card(c: Context): LinearLayout = column(c).apply {
-        background = shape(c, PANEL, 22, 0xFF26354D.toInt())
+        background = shape(c, PANEL, 22, 0xFF35506A.toInt())
         padding(c, 18, 17, 18, 17)
     }
     fun pill(c: Context, label: String, tint: Int = CYAN): TextView = text(c, label, 11f, tint, true).apply {
@@ -56,10 +56,11 @@ object PocketUi {
         gravity = Gravity.CENTER
     }
     fun action(c: Context, label: String, primary: Boolean = false, enabledAction: Boolean = true, click: () -> Unit): TextView =
-        text(c, label, 14f, if (primary) BG else WHITE, true).apply {
+        text(c, label, 13f, if (primary) BG else WHITE, true).apply {
             gravity = Gravity.CENTER
             background = if (primary) gradient(c, GREEN, CYAN) else shape(c, SURFACE, 14, 0xFF31415D.toInt())
-            padding(c, 16, 15, 16, 15)
+            padding(c, 16, 16, 16, 16)
+            minHeight = dp(c, 48)
             isEnabled = enabledAction
             alpha = if (enabledAction) 1f else .45f
             if (enabledAction) setOnClickListener { click() }
