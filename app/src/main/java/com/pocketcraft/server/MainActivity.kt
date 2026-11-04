@@ -1381,8 +1381,8 @@ class MainActivity : Activity() {
         hero.addView(ui.text(this,"Explore, install and manage add-ons. Everything runs on your phone.",12f,ui.MUTED))
         hero.addView(ui.space(this,8))
         hero.addView(WorldArt(this))
-        val activeVersion=getSharedPreferences("pocketcraft",0).getString("gameVersion",null)
-        hero.addView(ui.text(this,"Fabric • " + (activeVersion ?: "Version unknown"),11f,ui.CYAN,true))
+        val fabricInfo=ServerVersionManager.current(this)
+        hero.addView(ui.text(this,"Fabric • " + (fabricInfo.version ?: "Version unknown"),11f,ui.CYAN,true))
         body.addView(hero)
         body.addView(ui.space(this,16))
 
@@ -1394,6 +1394,12 @@ class MainActivity : Activity() {
         discover.addView(ui.action(this,"↗  ADD MODS FROM WEBSITE") { installFromWebsite() })
         discover.addView(ui.space(this,9))
         discover.addView(ui.text(this,"Paste Modrinth mod/modpack pages or trusted direct Fabric JAR / .mrpack download links.",11f,ui.MUTED))
+        discover.addView(ui.space(this,10))
+        discover.addView(ui.action(this,"CONFIRM EXISTING FABRIC VERSION",true) { showServerVersionPrompt() })
+        discover.addView(ui.space(this,7))
+        discover.addView(ui.text(this,
+            "Already have a working server? Confirm its Minecraft version without reinstalling Fabric or changing any server files.",
+            11f,ui.MUTED))
         body.addView(discover)
         body.addView(ui.space(this,16))
 
