@@ -399,6 +399,10 @@ class MainActivity : Activity() {
         packCard.addView(ui.space(this,7))
         packCard.addView(ui.text(this,"Modrinth .mrpack or CurseForge manifest ZIP. Installs server-compatible files only; no world or launcher replacement.",12f,ui.MUTED))
         packCard.addView(ui.space(this,13))
+        packCard.addView(ui.action(this,"⌕  BROWSE MODRINTH PACKS",true) {
+            browseModrinth()
+        })
+        packCard.addView(ui.space(this,8))
         packCard.addView(ui.action(this,"＋  IMPORT MODPACK",true) {
             if(ServerService.running){toast("Stop the server before installing a modpack")}else picker(5)
         })
@@ -730,6 +734,88 @@ class MainActivity : Activity() {
         }
         startActivityForResult(intent,code)
     }
+    private fun browseModrinth() {
+        val input=android.widget.EditText(this).apply {
+            hint="Search Fabric modpacks"
+            setSingleLine(true)
+            textSize=16f
+            setTextColor(ui.WHITE);setHintTextColor(ui.MUTED)
+            background=ui.shape(this@MainActivity,ui.SURFACE,12)
+            setPadding(ui.dp(this@MainActivity,14),ui.dp(this@MainActivity,14),
+                ui.dp(this@MainActivity,14),ui.dp(this@MainActivity,14))
+        }
+        val shell=ui.column(this).apply{
+            setPadding(ui.dp(this@MainActivity,20),ui.dp(this@MainActivity,12),
+                ui.dp(this@MainActivity,20),ui.dp(this@MainActivity,15))
+            addView(input)
+        }
+        AlertDialog.Builder(this).setTitle("Explore Modrinth")
+            .setMessage("Discover Fabric modpacks. Only releases matching your installed Minecraft server can be installed.")
+            .setView(shell).setNegativeButton("CANCEL",null)
+            .setPositiveButton("SEARCH") {_,_->
+                val query=input.text.toString().trim()
+                if(query.isBlank())toast("Enter a search term") else {
+                    val wait=AlertDialog.Builder(this).setTitle("Searching Modrinth")
+                        .setMessage("Finding compatible Fabric modpacks…").setCancelable(false).create()
+                    wait.show()
+                    Thread{
+                        val result=runCatching{ModrinthDiscovery.find(query)}
+                        runOnUiThread {
+                            wait.dismiss()
+                            result.onSuccess {showModrinthPacks(it)}
+                                .onFailure {toast("Search failed: "+it.message)}
+                        }
+                    }.start()
+                }
+            }.show()
+    }
+
+    private fun showModrinthPacks(packs:List<ModrinthDiscovery.Pack>) {
+        if(packs.isEmpty()){toast("No Fabric modpacks found");return}
+        val screen=ui.column(this).apply {
+            setPadding(ui.dp(this@MainActivity,15),ui.dp(this@MainActivity,8),
+                ui.dp(this@MainActivity,15),ui.dp(this@MainActivity,16))
+        }
+        lateinit var dialog:AlertDialog
+        packs.forEach { pack ->
+            val item=ui.column(this).apply{
+                background=ui.shape(this@MainActivity,ui.SURFACE,13)
+                setPadding(ui.dp(this@MainActivity,15),ui.dp(this@MainActivity,13),
+                    ui.dp(this@MainActivity,15),ui.dp(this@MainActivity,13))
+                isClickable=true
+                addView(ui.text(this@MainActivity,pack.title,15f,ui.WHITE,true))
+                addView(ui.space(this@MainActivity,5))
+                addView(ui.text(this@MainActivity,pack.description,11f,ui.MUTED))
+                setOnClickListener {
+                    dialog.dismiss()
+                    AlertDialog.Builder(this@MainActivity)
+                        .setTitle("Install "+pack.title+"?")
+                        .setMessage("The app downloads the matching .mrpack, checks its server dependencies and installs allowed server files. The server must be stopped. Existing files won't be overwritten.")
+                        .setNegativeButton("CANCEL",null)
+                        .setPositiveButton("INSTALL"){_,_->
+                            if(ServerService.running){toast("Stop the server first");return@setPositiveButton}
+                            val version=getSharedPreferences("pocketcraft",0)
+                                .getString("gameVersion",null)
+                            if(version.isNullOrBlank()){toast("Install a Fabric server first");return@setPositiveButton}
+                            downloadAsync("Modrinth: "+pack.title){
+                                val uri=ModrinthDiscovery.downloadLatest(this@MainActivity,pack,version)
+                                try {ModpackImporter.install(this@MainActivity,uri).description()}
+                                finally{File(uri.path ?: "").delete()}
+                            }
+                        }.show()
+                }
+            }
+            screen.addView(item)
+            screen.addView(ui.space(this,9))
+        }
+        val scroll=ScrollView(this).apply {addView(screen)}
+        dialog=AlertDialog.Builder(this).setTitle("Modrinth modpacks")
+            .setView(scroll).setNegativeButton("CLOSE",null).create()
+        dialog.show()
+        dialog.window?.setLayout((resources.displayMetrics.widthPixels*0.94).toInt(),
+            (resources.displayMetrics.heightPixels*0.75).toInt())
+    }
+
     private fun askCurseForgeKey(uri:android.net.Uri) {
         val keyBox=android.widget.EditText(this).apply {
             hint="Optional CurseForge developer API key"
