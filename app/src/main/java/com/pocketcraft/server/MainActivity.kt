@@ -263,16 +263,19 @@ class MainActivity : Activity() {
         }
         box.addView(ui.space(this,8))
         val lan = NetworkInfo.lanAddress()
+        val serverConfig = java.util.Properties()
+        File(base, "server.properties").takeIf {it.isFile}?.inputStream()?.use {serverConfig.load(it)}
+        val javaPort = serverConfig.getProperty("server-port", "25565")
         if(lan != null) {
             box.addView(ui.space(this,15))
             box.addView(ui.text(this,"LAN CONNECTION",11f,ui.CYAN,true))
             box.addView(ui.space(this,7))
-            box.addView(ui.text(this,"Java: $lan:25565",13f,ui.WHITE,true))
+            box.addView(ui.text(this,"Java: $lan:$javaPort",13f,ui.WHITE,true))
             box.addView(ui.text(this,"Bedrock: $lan:19132 (only when Geyser is active)",12f,ui.MUTED))
             box.addView(ui.space(this,9))
             box.addView(ui.action(this,"COPY JAVA LAN ADDRESS") {
                 val manager = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                manager.setPrimaryClip(ClipData.newPlainText("Minecraft Java LAN", "$lan:25565"))
+                manager.setPrimaryClip(ClipData.newPlainText("Minecraft Java LAN", "$lan:$javaPort"))
                 toast("Local address copied")
             })
         }
