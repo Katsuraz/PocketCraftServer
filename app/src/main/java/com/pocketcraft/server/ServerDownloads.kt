@@ -104,11 +104,23 @@ object ServerDownloads {
         val version=context.getSharedPreferences("pocketcraft",0).getString("gameVersion",null)
         if(version!="26.3") throw IOException("Auto-install supports only Java 26.3. Older Fabric needs a compatible proxy.")
         val mods=File(WorldStore.root(context),"mods").apply {mkdirs()}
+        val loaders=encoded("[\"fabric\"]")
+        val versions=encoded("[\"26.3\"]")
+        val apiVersions=readJsonArray("https://api.modrinth.com/v2/project/P7dR8mSH/version?loaders="+loaders+"&game_versions="+versions)
+        if(apiVersions.length()==0) throw IOException("No Fabric API version was found for Minecraft 26.3")
+        val candidates=apiVersions.getJSONObject(0).getJSONArray("files")
+        if(candidates.length()==0) throw IOException("Fabric API has no downloadable files")
+        var file=candidates.getJSONObject(0)
+        for(i in 0 until candidates.length()) {
+            val candidate=candidates.getJSONObject(i)
+            if(candidate.optBoolean("primary")) {file=candidate;break}
+        }
+        download(file.getString("url"),File(mods,"fabric-api.jar"))
         download(GEYSER_DOWNLOADS+"geyser/versions/latest/builds/latest/downloads/fabric",
             File(mods,"Geyser-Fabric.jar"))
         download(GEYSER_DOWNLOADS+"floodgate/versions/latest/builds/latest/downloads/fabric",
             File(mods,"floodgate-fabric.jar"))
-        return "Geyser-Fabric and Floodgate-Fabric downloaded. Install matching Fabric API; test on a working JVM before claiming crossplay."
+        return "Fabric API, Geyser-Fabric, and Floodgate downloaded. Crossplay still needs a compatible Android JVM and server test."
     }
 
     fun acceptEula(context:Context) {
