@@ -125,3 +125,44 @@ Playit upstream: https://github.com/playit-cloud/playit-agent (copyright Develop
 PocketCraft now has **Go Online — Java + Bedrock** on the Home dashboard. The action starts Fabric, launches the embedded Playit agent, and (after an account is approved) attempts one free Minecraft Java tunnel and one Minecraft Bedrock NetherNet tunnel using the provider's supported API. On the first connection, approve the account in your browser once; PocketCraft does **not** collect your Playit password. If supported by the provider, the resulting Java and Bedrock addresses appear in the app with Copy buttons. Provider restrictions or unavailable allocation may require manual setup; a displayed address is not proof of successful remote connectivity. The Advanced Setup / Diagnostics screen preserves tunnel logs and a link to the Playit dashboard.
 
 **Caution:** Online hosting exposes your server publicly. Use secure account authentication and whitelist trusted players. An app process running is not proof that TCP/UDP tunneling works on your network. Existing APKs must have the same signing certificate to install as updates; back up worlds and mods before migrating to a newly signed build.
+
+
+## v0.8.1 — experimental Android NetherNet JNI integration
+
+On Android, headless OpenJDK reports Linux/aarch64 but uses Android's
+**bionic** C library, not glibc or musl. Geyser can load while NetherNet
+fails with "Cannot identify the JVM's libc" / "Could not load its WebRTC
+native library".
+
+PocketCraft's APK build now **attempts** to package an Android ARM64 native
+WebRTC library matching Geyser's pinned libdatachannel-java version from
+the Open Collaboration repository. It tries the Android AAR and ARM64
+classifier JAR; accepts a download only when the upstream SHA-256 sidecar
+matches and the binary is ELF AArch64 with no glibc dependency. An absent
+artifact is skipped with a prominent GitHub Actions warning, so building
+an APK alone is **not proof of a fix**.
+
+At runtime, the Java bootstrap points Geyser's libdatachannel-java JNI
+loader to the packaged Android native library if present. This is a
+focused attempt to bypass glibc/musl auto-detection, **not** a claim that
+NetherNet works on phones. JNI symbol/version mismatch, linker namespace,
+thread/stack, TLS/ICE and network issues may remain. Never force a Linux
+glibc/musl binary into the Android Java process.
+
+To verify on a real device:
+
+1. Back up worlds and server settings before replacing any APK. Updates
+   need the same signing certificate; do not uninstall without a backup.
+2. Open the GitHub Actions build log. Require the message
+   "Bundled verified Android ARM64 libdatachannel-java.so". If the log says
+   "Matching Android WebRTC native not found" or has a checksum warning,
+   this APK does **not** contain the experimental native library.
+3. Start Minecraft and require "Android WebRTC JNI available" in Console.
+   Check that NetherNet startup exceptions are absent.
+4. Verify Geyser actually reports a listening Bedrock port; then test
+   from another Bedrock device on the LAN. Java "Done" is not enough.
+5. Finally test Playit/NetherNet from a different network. Public
+   connectivity depends separately on signaling, TCP/UDP and tunnel setup.
+
+GeyserMC upstream Android support issue:
+https://github.com/GeyserMC/Geyser/issues/6848.
