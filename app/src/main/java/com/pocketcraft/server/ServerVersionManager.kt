@@ -61,7 +61,7 @@ internal object ServerVersionManager {
         if(!current.launcherPresent)
             throw IOException("Fabric server launcher is missing. Install or import Fabric first.")
         val actual=current.version ?: throw IOException(
-            "Fabric is installed but its Minecraft version is unknown. In Mods, tap SERVER VERSION and confirm your installed version. Do not reinstall the server just to fix this message."
+            "Fabric is installed but its Minecraft version is unknown. In Mods, tap CONFIRM EXISTING FABRIC VERSION and select the version your server actually uses. Do not reinstall the server just to fix this message."
         )
         if(actual!=required)
             throw IOException("This modpack requires Minecraft $required, but your Fabric server is $actual. Choose a release matching your server; never mix Minecraft versions.")
