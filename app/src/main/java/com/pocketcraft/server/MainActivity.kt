@@ -285,6 +285,10 @@ class MainActivity : Activity() {
         actions.addView(line())
         actions.addView(actionRow("▧","World vault","Backups, ZIP imports, and active world") {tab=2;render()})
         actions.addView(line())
+        actions.addView(actionRow("▤","Server files","Browse, edit, export and back up your server") {openServerFiles()})
+        actions.addView(line())
+        actions.addView(actionRow("↻","Fix update installation","Backup and secure APK signing instructions") {updateHelp()})
+        actions.addView(line())
         actions.addView(actionRow("ⓘ","About PocketCraft","App version, connection facts and privacy") {about()})
         body.addView(actions)
         body.addView(ui.space(this,14))
@@ -987,6 +991,8 @@ class MainActivity : Activity() {
     private fun modsPage(body:LinearLayout) {
         body.addView(h("Mod library","Manage your Fabric server add-ons"))
         body.addView(ui.space(this,15))
+        body.addView(ui.action(this,"▤  BROWSE SERVER FILES",true) {openServerFiles("mods")})
+        body.addView(ui.space(this,10))
         body.addView(ui.action(this,"+  IMPORT MOD JAR",true) {picker(2)})
         body.addView(ui.space(this,10))
         val packCard=ui.card(this)
@@ -1013,8 +1019,8 @@ class MainActivity : Activity() {
                 .show()
         })
         body.addView(ui.space(this,10))
-        body.addView(ui.action(this,"⚙  EDIT GEYSER / NETHERNET CONFIG",true) {
-            editGeyserConfiguration()
+        body.addView(ui.action(this,"⚙  OPEN GEYSER CONFIG IN FILES",true) {
+            openServerFiles("config/Geyser-Fabric/config.yml")
         })
         body.addView(ui.space(this,8))
         body.addView(ui.action(this,"↶  RESTORE GEYSER CONFIG BACKUP") {
@@ -1069,6 +1075,8 @@ class MainActivity : Activity() {
     private fun worldsPage(body:LinearLayout) {
         body.addView(h("World vault","Protect every block you've placed"))
         body.addView(ui.space(this,15))
+        body.addView(ui.action(this,"▤  SERVER FILES & FULL BACKUP",true) {openServerFiles()})
+        body.addView(ui.space(this,10))
         body.addView(ui.action(this,"+  IMPORT WORLD ZIP",true) {picker(3)})
         body.addView(ui.space(this,16))
         val list=WorldStore.worlds(this)
@@ -1331,6 +1339,25 @@ class MainActivity : Activity() {
                 ServerDownloads.acceptEula(this);toast("EULA acceptance saved")
             }.show()
     }
+    private fun openServerFiles(path: String = "") {
+        startActivity(Intent(this,ServerFilesActivity::class.java).apply {
+            if(path.isNotBlank()) putExtra(ServerFilesActivity.EXTRA_PATH,path)
+        })
+    }
+
+    private fun updateHelp() {
+        AlertDialog.Builder(this)
+            .setTitle("Why won't the APK update?")
+            .setMessage("Android requires the new APK to use the same signing certificate as the installed app. Previous GitHub debug builds used a fresh certificate each time, so Android refuses to update them.\n\n" +
+                "1. Export a complete server ZIP from Server Files before uninstalling.\n" +
+                "2. Add your private POCKETCRAFT_KEYSTORE_BASE64 and POCKETCRAFT_SIGNING_PASSWORD secrets in GitHub Actions settings.\n" +
+                "3. Build a new permanently signed APK. Back up and uninstall the old temporary-key APK once, install the new one, then restore your ZIP.\n" +
+                "4. Future builds using that same permanent key can update without uninstalling.\n\n" +
+                "The application cannot bypass Android's certificate checks. Never upload your signing keystore to a public repository.")
+            .setNeutralButton("BACK UP SERVER") {_,_->openServerFiles()}
+            .setPositiveButton("GOT IT",null).show()
+    }
+
     private fun setup() {
         val crossplay = listOf("fabric-api.jar","Geyser-Fabric.jar","floodgate-fabric.jar")
             .all { File(mods,it).isFile }
