@@ -55,23 +55,24 @@ object PlayitManager {
         } catch (e: Exception) { Log.e("PocketCraft", "Playit log error", e) }
     }
 
+    /**
+     * Android 10+ target 29+ cannot execute ELF binaries copied to writable
+     * filesDir. The package manager extracts executable ELF files under
+     * nativeLibraryDir from lib/arm64-v8a/*.so at install time.
+     */
     private fun executable(c: Context, assetName: String): File {
         if (!android.os.Build.SUPPORTED_ABIS.contains("arm64-v8a"))
             throw IllegalStateException("Playit requires Android ARM64")
-        val dir = root(c)
-        val target = File(dir, assetName)
-        val asset = c.assets.open(assetName)
-        asset.use { input ->
-            if (!target.isFile) {
-                val temp = File(dir, "$assetName.part")
-                temp.outputStream().use { output -> input.copyTo(output) }
-                if (!temp.setExecutable(true, true) || !temp.renameTo(target))
-                    throw IllegalStateException("Could not prepare $assetName")
-            }
+        val libraryName = when (assetName) {
+            "playitd-arm64" -> "libpocketplayitd.so"
+            "playit-cli-arm64" -> "libpocketplayitcli.so"
+            else -> throw IllegalArgumentException("Unknown Playit executable")
         }
-        if (!target.canExecute() && !target.setExecutable(true, true))
-            throw IllegalStateException("$assetName is not executable")
-        return target
+        val file = File(c.applicationInfo.nativeLibraryDir, libraryName)
+        if (!file.isFile || !file.canExecute()) {
+            throw IllegalStateException("Missing native Playit executable: $libraryName. Install the latest ARM64 PocketCraft APK.")
+        }
+        return file
     }
 
     private fun env(c: Context, builder: ProcessBuilder): ProcessBuilder {
