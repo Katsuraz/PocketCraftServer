@@ -1381,8 +1381,8 @@ class MainActivity : Activity() {
         hero.addView(ui.text(this,"Explore, install and manage add-ons. Everything runs on your phone.",12f,ui.MUTED))
         hero.addView(ui.space(this,8))
         hero.addView(WorldArt(this))
-        val activeVersion=getSharedPreferences("pocketcraft",0).getString("gameVersion",null)
-        hero.addView(ui.text(this,"Fabric • " + (activeVersion ?: "Version unknown"),11f,ui.CYAN,true))
+        val fabricInfo=ServerVersionManager.current(this)
+        hero.addView(ui.text(this,"Fabric • " + (fabricInfo.version ?: "Version unknown"),11f,ui.CYAN,true))
         body.addView(hero)
         body.addView(ui.space(this,16))
 
@@ -1394,6 +1394,12 @@ class MainActivity : Activity() {
         discover.addView(ui.action(this,"↗  ADD MODS FROM WEBSITE") { installFromWebsite() })
         discover.addView(ui.space(this,9))
         discover.addView(ui.text(this,"Paste Modrinth mod/modpack pages or trusted direct Fabric JAR / .mrpack download links.",11f,ui.MUTED))
+        discover.addView(ui.space(this,10))
+        discover.addView(ui.action(this,"CONFIRM EXISTING FABRIC VERSION",true) { showServerVersionPrompt() })
+        discover.addView(ui.space(this,7))
+        discover.addView(ui.text(this,
+            "Already have a working server? Confirm its Minecraft version without reinstalling Fabric or changing any server files.",
+            11f,ui.MUTED))
         body.addView(discover)
         body.addView(ui.space(this,16))
 
@@ -1871,6 +1877,89 @@ class MainActivity : Activity() {
         dialog.show()
     }
 
+    /** Record the version of an existing Fabric server without modifying the server JAR. */
+    private fun showServerVersionPrompt(after: (() -> Unit)? = null) {
+        val info=ServerVersionManager.current(this)
+        if(!info.launcherPresent) {
+            AlertDialog.Builder(this).setTitle("Fabric launcher missing")
+                .setMessage("PocketCraft cannot find fabric-server-launch.jar. Import or install Fabric first.")
+                .setPositiveButton("OK",null).show()
+            return
+        }
+        val shell=ui.column(this).apply {
+            setPadding(ui.dp(this@MainActivity,17),ui.dp(this@MainActivity,12),
+                ui.dp(this@MainActivity,17),ui.dp(this@MainActivity,12))
+        }
+        shell.addView(ui.text(this,
+            "Installed Fabric: "+(info.version ?: "Version unknown")+
+            "\nSource: "+info.source,13f,ui.WHITE,true))
+        shell.addView(ui.space(this,9))
+        shell.addView(ui.text(this,
+            "Select the Minecraft version your current server actually uses. See the Console startup log if unsure. This changes only an app setting; it does NOT download, reinstall, or replace Minecraft.",
+            12f,ui.MUTED))
+        shell.addView(ui.space(this,11))
+        val input=android.widget.EditText(this).apply {
+            hint="e.g. 26.3"
+            setSingleLine(true)
+            setText(info.version ?: "")
+            setTextColor(ui.WHITE)
+            setHintTextColor(ui.MUTED)
+            background=ui.shape(this@MainActivity,ui.SURFACE,12,ui.BORDER)
+            setPadding(ui.dp(this@MainActivity,12),ui.dp(this@MainActivity,12),
+                ui.dp(this@MainActivity,12),ui.dp(this@MainActivity,12))
+        }
+        shell.addView(input)
+        shell.addView(ui.space(this,10))
+        val choices=ui.row(this)
+        listOf("26.3","1.21.11","1.20.1").forEach {version->
+            choices.addView(ui.action(this,version) {input.setText(version)},
+                LinearLayout.LayoutParams(0,-2,1f))
+        }
+        shell.addView(choices)
+        val dialog=AlertDialog.Builder(this)
+            .setTitle("Confirm existing Fabric version")
+            .setView(shell)
+            .setNegativeButton("CANCEL",null)
+            .setPositiveButton("SAVE VERSION",null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                try {
+                    val selected=input.text.toString().trim()
+                    if(info.source=="detected in Fabric server console" && info.version!=null &&
+                        selected!=info.version) {
+                        throw IllegalArgumentException(
+                            "Your server console reports Minecraft "+info.version+
+                            ". Please select that version or install the correct launcher.")
+                    }
+                    ServerVersionManager.confirm(this,selected)
+                    dialog.dismiss()
+                    toast("Version recorded; Fabric, worlds, mods and Geyser were not changed.")
+                    render()
+                    after?.invoke()
+                } catch(e:Exception) {
+                    input.error=e.message ?: "Check the Minecraft version"
+                }
+            }
+        }
+        dialog.show()
+    }
+
+    private fun installSelectedModrinthPack(pack:ModrinthDiscovery.Pack) {
+        val info=ServerVersionManager.current(this)
+        if(!info.launcherPresent) {toast("Fabric launcher is missing.");return}
+        if(info.version==null) {
+            showServerVersionPrompt {installSelectedModrinthPack(pack)}
+            return
+        }
+        if(ServerService.running) {toast("Stop Minecraft before installing a modpack");return}
+        downloadAsync("Modrinth: "+pack.title) {
+            val uri=ModrinthDiscovery.downloadLatest(this,pack,info.version)
+            try {ModpackImporter.install(this,uri).description()}
+            finally {uri.path?.let{File(it).delete()}}
+        }
+    }
+
     private fun browseModrinth() {
         val input=android.widget.EditText(this).apply {
             hint="Search Fabric modpacks"
@@ -1931,14 +2020,7 @@ class MainActivity : Activity() {
                         .setNegativeButton("CANCEL",null)
                         .setPositiveButton("INSTALL"){_,_->
                             if(ServerService.running){toast("Stop the server first");return@setPositiveButton}
-                            val version=getSharedPreferences("pocketcraft",0)
-                                .getString("gameVersion",null)
-                            if(version.isNullOrBlank()){toast("Install a Fabric server first");return@setPositiveButton}
-                            downloadAsync("Modrinth: "+pack.title){
-                                val uri=ModrinthDiscovery.downloadLatest(this@MainActivity,pack,version)
-                                try {ModpackImporter.install(this@MainActivity,uri).description()}
-                                finally{File(uri.path ?: "").delete()}
-                            }
+                            installSelectedModrinthPack(pack)
                         }.show()
                 }
             }
@@ -1975,6 +2057,13 @@ class MainActivity : Activity() {
     }
 
     private fun installModpack(uri:android.net.Uri,key:String?) {
+        val info=ServerVersionManager.current(this)
+        if(!info.launcherPresent){toast("Fabric launcher is missing. Import it first.");return}
+        if(info.version==null) {
+            showServerVersionPrompt {installModpack(uri,key)}
+            return
+        }
+        if(ServerService.running){toast("Stop Minecraft before installing");return}
         downloadAsync("Modpack installation") {
             ModpackImporter.install(this,uri,key).description()
         }
@@ -2032,7 +2121,16 @@ class MainActivity : Activity() {
                     if(kind==1 && oldFile.exists()) oldFile.renameTo(target)
                     error("Unable to install imported JAR")
                 }
-                runOnUiThread {toast("Imported "+filename);render()}
+                if(kind==1) {
+                    // Imported server JARs may target a new Minecraft version.
+                    // Do not reuse the old version preference after replacing a launcher.
+                    getSharedPreferences("pocketcraft",0).edit().remove("gameVersion").apply()
+                }
+                runOnUiThread {
+                    toast("Imported "+filename)
+                    render()
+                    if(kind==1)showServerVersionPrompt()
+                }
             } catch(e:Exception) {runOnUiThread {toast("Import failed: "+e.message)}}
             finally {temp.delete()}
         }.start()

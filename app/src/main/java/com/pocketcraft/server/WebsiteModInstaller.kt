@@ -101,10 +101,13 @@ object WebsiteModInstaller {
         } finally { c.disconnect() }
     }
 
-    private fun installedVersion(context: Context): String =
-        context.getSharedPreferences("pocketcraft", 0).getString("gameVersion", null)
-            ?.takeIf { it.isNotBlank() }
-            ?: throw IOException("Select or install a Fabric Minecraft server version first.")
+    private fun installedVersion(context: Context): String {
+        val info = ServerVersionManager.current(context)
+        if(!info.launcherPresent) throw IOException("Fabric launcher is missing. Import or install the Fabric server.")
+        return info.version ?: throw IOException(
+            "Your Fabric server is installed, but PocketCraft cannot read its Minecraft version. In Mods, tap CONFIRM FABRIC VERSION to record the version already running."
+        )
+    }
 
     private fun encode(s: String) = URLEncoder.encode(s, "UTF-8")
     private fun filenamesafe(name: String): String {

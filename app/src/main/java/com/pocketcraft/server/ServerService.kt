@@ -209,6 +209,12 @@ class ServerService : Service() {
                 proc.inputStream.bufferedReader().useLines { lines ->
                     lines.forEach { line ->
                         append(line)
+                        // Store the version reported by the actual running Fabric server.
+                        // A restored/imported launcher may not have a saved app preference.
+                        ServerVersionManager.fromLog(line)?.let { version ->
+                            getSharedPreferences("pocketcraft",0).edit()
+                                .putString("gameVersion",version).apply()
+                        }
                         val previous = status
                         readiness.observe(line)
                         javaReady = readiness.javaReady
