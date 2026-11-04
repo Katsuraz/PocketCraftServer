@@ -47,3 +47,22 @@ jobs:
             -o "$RUNNER_TEMP/floodgate-modrinth.json"
           jq -e 'length > 0 and (.[0].files|any(.filename|endswith(".jar")))' "$RUNNER_TEMP/floodgate-modrinth.json"
           jq '.[0] | {version_number,files:[.files[] | {filename,url,sha256:.hashes.sha256}]}' "$RUNNER_TEMP/floodgate-modrinth.json"
+      - name: Download and validate actual crossplay JAR files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/crossplay"
+          fabric_url="$(jq -r '.[0].files[] | select(.filename|endswith(".jar")) | .url' "$RUNNER_TEMP/fabric-api.json" | head -n 1)"
+          floodgate_url="$(jq -r '.[0].files[] | select(.filename|endswith(".jar")) | .url' "$RUNNER_TEMP/floodgate-modrinth.json" | head -n 1)"
+          geyser_version="$(jq -r '.version' "$RUNNER_TEMP/geyser.json")"
+          geyser_build="$(jq -r '.build' "$RUNNER_TEMP/geyser.json")"
+          geyser_url="https://download.geysermc.org/v2/projects/geyser/versions/$geyser_version/builds/$geyser_build/downloads/fabric"
+          curl -fsSL --retry 2 --max-time 120 "$fabric_url" -o "$RUNNER_TEMP/crossplay/fabric-api.jar"
+          curl -fsSL --retry 2 --max-time 120 "$geyser_url" -o "$RUNNER_TEMP/crossplay/Geyser-Fabric.jar"
+          curl -fsSL --retry 2 --max-time 120 "$floodgate_url" -o "$RUNNER_TEMP/crossplay/floodgate-fabric.jar"
+          for jar in "$RUNNER_TEMP"/crossplay/*.jar; do
+            unzip -tqq "$jar"
+            test "$(stat -c%s "$jar")" -lt 104857600
+            echo "Validated $(basename "$jar"): $(stat -c%s "$jar") bytes"
+          done
+          echo "$(jq -r '.downloads.fabric.sha256' "$RUNNER_TEMP/geyser.json")  $RUNNER_TEMP/crossplay/Geyser-Fabric.jar" | sha256sum -c -
