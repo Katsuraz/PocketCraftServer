@@ -2,6 +2,15 @@
 
 PocketCraft Server is a native Kotlin Android app for managing a Minecraft Java Fabric server, with a custom midnight / block-world UI. It does **not** depend on Termux.
 
+## v0.4: multiplayer controls and refreshed UI
+
+- Redesigned server settings with visible touch-friendly selectors and switches, consistent dark theme, larger tap targets, and clearer sections for identity, access, gameplay and performance.
+- Editable Java TCP port in `server.properties`; the *public* address is **not** changed by editing the app. A saved share hostname is a label/copy shortcut for an already configured domain or tunnel.
+- Optional non-premium Java client access through `online-mode=false` with an explicit warning. This removes account verification and makes nickname impersonation possible. Whitelist alone cannot secure a public offline-mode server. RCON remains forcibly disabled.
+- Quick connection card showing the LAN IP, custom share hostname (if entered), account authentication mode and port.
+- Shared settings are saved only while the server is stopped; world and memory settings continue to work as before.
+- **Still experimental:** a successful APK build does not prove Android JVM execution or public Java/Bedrock reachability. Remote connections still require a real DNS record/tunnel/port forwarding and matching Geyser support.
+
 ## Implemented
 
 - **Dashboard:** setup journey, actual process state, real Start / Stop buttons, accessible LAN addresses and copy action.
