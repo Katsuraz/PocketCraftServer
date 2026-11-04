@@ -29,9 +29,9 @@ internal class ReadinessSignals {
         // Geyser's listener messages vary across versions.
         // Only count the line if it names Geyser and confirms a listening port.
         val lower = line.lowercase(java.util.Locale.ROOT)
-        if (lower.contains("nethernet will not start") &&
-            (lower.contains("webrtc") || lower.contains("native library")) ||
-            lower.contains("cannot identify the jvm\u0027s libc")) {
+        if ((lower.contains("nethernet will not start") &&
+            (lower.contains("webrtc") || lower.contains("native library"))) ||
+            lower.contains("cannot identify the jvm's libc")) {
             nethernetNativeFailure = true
         }
         if (lower.contains("registered with the external signaling service")) {
