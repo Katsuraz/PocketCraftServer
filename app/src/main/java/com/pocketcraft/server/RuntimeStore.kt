@@ -79,31 +79,69 @@ object RuntimeStore {
         } finally { archive.delete() }
     }
 
-    /** Actually starts java -version, so a detected file is not mistaken for a working JVM. */
-    fun probe(c: Context): String {
-        val java = javaFile(c) ?: throw IOException("Install Android Java first")
-        val javaHome = java.parentFile!!.parentFile!!
-        val process = ProcessBuilder(java.absolutePath, "-version")
-            .directory(c.filesDir)
-            .redirectErrorStream(true)
-            .apply {
-                val env = environment()
-                env["JAVA_HOME"] = javaHome.absolutePath
-                env["TMPDIR"] = c.cacheDir.absolutePath
-                env["LD_LIBRARY_PATH"] = listOf(
-                    File(javaHome, "lib").absolutePath,
-                    File(javaHome, "lib/server").absolutePath,
-                    c.applicationInfo.nativeLibraryDir,
-                    env["LD_LIBRARY_PATH"].orEmpty()
-                ).filter { it.isNotBlank() }.joinToString(":")
-            }.start()
-        val text = process.inputStream.bufferedReader().use { it.readText().take(7000) }
-        if (!process.waitFor(12, TimeUnit.SECONDS)) {
-            process.destroyForcibly()
-            throw IOException("Java self-test timed out")
+    /** Native bootstrap and VM libraries are signed APK contents, never writable app data. */
+    fun nativeJavaLauncher(c: Context): File {
+        if (!availableForDevice()) throw IOException("An ARM64 Android device is required")
+        val native = File(c.applicationInfo.nativeLibraryDir)
+        val bootstrap = File(native, "libpocketjava.so")
+        val vm = File(native, "libjvm.so")
+        if (!bootstrap.isFile || !bootstrap.canExecute() || !vm.isFile) {
+            throw IOException("This APK does not contain the Android-safe Java engine. Install the latest ARM64 PocketCraft APK.")
         }
-        if (process.exitValue() != 0) throw IOException("Java self-test failed: " + text.take(450))
-        return text.trim().ifEmpty { "Java binary exited successfully without version output" }
+        return bootstrap
+    }
+
+    /**
+     * The official Fabric launcher carries Main-Class and Class-Path in its
+     * manifest. The embedded JNI launcher uses these to reproduce java -jar.
+     */
+    fun fabricEntryPoint(jar: File): Pair<String, String> {
+        java.util.jar.JarFile(jar).use { archive ->
+            val attrs = archive.manifest?.mainAttributes
+                ?: throw IOException("Fabric JAR has no manifest")
+            val main = attrs.getValue("Main-Class")?.trim().orEmpty()
+            if (!main.matches(Regex("[A-Za-z_$][A-Za-z0-9_.$]*"))) {
+                throw IOException("Fabric JAR has an invalid Main-Class")
+            }
+            val root = jar.parentFile?.canonicalFile
+                ?: throw IOException("Cannot locate Fabric JAR directory")
+            val jars = mutableListOf(jar.absolutePath)
+            attrs.getValue("Class-Path")?.trim()?.split(Regex("\\s+"))
+                ?.filter { it.isNotBlank() }?.forEach { relative ->
+                    val candidate = File(root, relative).canonicalFile
+                    if (candidate.path.startsWith(root.path + File.separator) && candidate.isFile)
+                        jars.add(candidate.absolutePath)
+                }
+            return main to jars.joinToString(File.pathSeparator)
+        }
+    }
+
+    /** Test the exact Android-safe JNI engine used by the server. */
+    fun probe(c: Context): String {
+        val java = javaFile(c) ?: throw IOException("Install Android Java files first")
+        val javaHome = java.parentFile!!.parentFile!!
+        val launch = nativeJavaLauncher(c)
+        val tmp = File(c.cacheDir, "minecraft-java-tmp").apply { mkdirs() }
+        if (!tmp.isDirectory || !tmp.canWrite()) throw IOException("Cannot use Java temporary directory")
+        val process = ProcessBuilder(
+            launch.absolutePath, "--probe", javaHome.absolutePath,
+            c.applicationInfo.nativeLibraryDir, tmp.absolutePath
+        ).directory(c.filesDir).redirectErrorStream(true).apply {
+            val env = environment()
+            env["JAVA_HOME"] = javaHome.absolutePath
+            env["TMPDIR"] = tmp.absolutePath
+            env["LD_LIBRARY_PATH"] = listOf(
+                c.applicationInfo.nativeLibraryDir, env["LD_LIBRARY_PATH"].orEmpty()
+            ).filter { it.isNotBlank() }.joinToString(":")
+        }.start()
+        if (!process.waitFor(18, TimeUnit.SECONDS)) {
+            process.destroyForcibly()
+            throw IOException("Android Java engine test timed out")
+        }
+        val result = process.inputStream.bufferedReader().use { it.readText().take(5000) }
+        if (process.exitValue() != 0) throw IOException(
+            "Android Java engine failed (code ${process.exitValue()}): " + result.takeLast(800))
+        return result.trim().ifEmpty { "Java self-test passed" }
     }
 
     private fun unpack(c: Context, archive: File) {
