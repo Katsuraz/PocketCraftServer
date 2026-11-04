@@ -54,7 +54,8 @@ class ServerService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_TUNNEL_START -> {
-                if (!running && status != "STARTING") begin()
+                // Start the tunnel BEFORE attempting Java. Otherwise a failed JVM start
+                // may stop this foreground service and kill Playit during setup.
                 notice("Setting up online Minecraft hosting")
                 Thread {
                     val javaPort = try {
@@ -63,7 +64,13 @@ class ServerService : Service() {
                         config.getProperty("server-port", "25565").toIntOrNull()?.takeIf { it in 1..65535 } ?: 25565
                     } catch (_: Exception) { 25565 }
                     PlayitManager.goOnline(this, javaPort)
-                    notice(if(PlayitManager.isActive()) "Playit agent active • check PocketCraft for setup" else "Playit startup failed • check diagnostics")
+                    if (!running && status != "STARTING") begin()
+                    val tunnelStarted = PlayitManager.isActive()
+                    if (!tunnelStarted) {
+                        append("Playit failed: ${PlayitManager.detail}; open Internet Hosting diagnostics")
+                    }
+                    notice(if(tunnelStarted) "Playit agent active • check PocketCraft for setup"
+                        else "Playit startup failed • check diagnostics")
                 }.start()
             }
             ACTION_TUNNEL_STOP -> {
