@@ -132,7 +132,9 @@ class ServerService : Service() {
                     throw IllegalStateException("Review and accept the Minecraft EULA first")
                 val java = RuntimeStore.javaFile(this)
                     ?: throw IllegalStateException("Install the Android ARM64 Java runtime first")
-                if (!java.canExecute()) throw IllegalStateException("Java executable is not executable on this Android device")
+                // Android 10+ target API 29+ prohibits exec() from writable app storage.
+                // The signed APK must provide the native Java launcher and JVM shared libs.
+                val nativeJava = RuntimeStore.nativeJavaLauncher(this)
                 val prefs = getSharedPreferences("pocketcraft", 0)
                 val requestedHeap = prefs.getInt("heapMB", 2048).coerceIn(512, 3072)
                 val javaHome = java.parentFile!!.parentFile!!
@@ -144,16 +146,18 @@ class ServerService : Service() {
                 }
                 if (!javaTmp.canWrite()) throw IllegalStateException("Java temporary directory is not writable")
                 append("Java temporary files: ${javaTmp.absolutePath}")
+                val (mainClass, classPath) = RuntimeStore.fabricEntryPoint(launcher)
                 val cmd = listOf(
-                    java.absolutePath,
-                    "-Xms256M",
-                    "-Xmx${requestedHeap}M",
-                    "-Djava.awt.headless=true",
-                    "-Djava.io.tmpdir=${javaTmp.absolutePath}",
-                    "-Djavax.imageio.useCache=false",
-                    "-jar", launcher.name, "nogui"
+                    nativeJava.absolutePath,
+                    "--server",
+                    javaHome.absolutePath,
+                    applicationInfo.nativeLibraryDir,
+                    javaTmp.absolutePath,
+                    requestedHeap.toString(),
+                    classPath,
+                    mainClass
                 )
-                append("Launching Fabric using ${java.absolutePath} (heap max: ${requestedHeap} MB)")
+                append("Launching Fabric through Android-safe packaged JNI Java engine (heap max: ${requestedHeap} MB)")
                 val proc = ProcessBuilder(cmd)
                     .directory(root)
                     .redirectErrorStream(true)
