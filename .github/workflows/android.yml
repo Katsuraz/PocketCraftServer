@@ -37,12 +37,36 @@ jobs:
           mkdir -p app/src/main/jniLibs/arm64-v8a
           cp "$LIB" app/src/main/jniLibs/arm64-v8a/libc++_shared.so
           file app/src/main/jniLibs/arm64-v8a/libc++_shared.so
+      - name: Prepare persistent developer signing key
+        env:
+          POCKETCRAFT_KEYSTORE_BASE64: ${{ secrets.POCKETCRAFT_KEYSTORE_BASE64 }}
+          POCKETCRAFT_SIGNING_PASSWORD: ${{ secrets.POCKETCRAFT_SIGNING_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$POCKETCRAFT_KEYSTORE_BASE64" && -n "$POCKETCRAFT_SIGNING_PASSWORD" ]]; then
+            echo "$POCKETCRAFT_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/pocketcraft-updates.jks"
+            chmod 600 "$RUNNER_TEMP/pocketcraft-updates.jks"
+            keytool -list -keystore "$RUNNER_TEMP/pocketcraft-updates.jks" -storepass "$POCKETCRAFT_SIGNING_PASSWORD" -alias pocketcraft >/dev/null
+            echo "POCKETCRAFT_SIGNING_KEYSTORE=$RUNNER_TEMP/pocketcraft-updates.jks" >> "$GITHUB_ENV"
+            echo "POCKETCRAFT_SIGNING_PASSWORD=$POCKETCRAFT_SIGNING_PASSWORD" >> "$GITHUB_ENV"
+            echo "Persistent APK signing configured from GitHub Secrets"
+          elif [[ -n "$POCKETCRAFT_KEYSTORE_BASE64" || -n "$POCKETCRAFT_SIGNING_PASSWORD" ]]; then
+            echo "::error::Both POCKETCRAFT_KEYSTORE_BASE64 and POCKETCRAFT_SIGNING_PASSWORD must be provided."
+            exit 1
+          else
+            echo "::warning::Persistent signing not configured. Debug APK will use runner-generated key and WILL NOT upgrade an APK signed on a different runner."
+          fi
       - name: Build debug APK
         run: gradle :app:testDebugUnitTest :app:assembleDebug --no-daemon --stacktrace
       - name: Verify ARM64 native runtime exists inside APK
         run: |
           set -euo pipefail
           unzip -l app/build/outputs/apk/debug/app-debug.apk | grep -F 'lib/arm64-v8a/libc++_shared.so'
+      - name: Verify APK signing certificate
+        run: |
+          set -euo pipefail
+          APKSIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          "$APKSIGNER" verify --print-certs app/build/outputs/apk/debug/app-debug.apk
       - uses: actions/upload-artifact@v4
         if: success()
         with:
