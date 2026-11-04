@@ -96,6 +96,9 @@ class MainActivity : Activity() {
     private val mods by lazy { File(base,"mods").apply { mkdirs() } }
     private var tab = 0
     private var pendingBackup: File? = null
+    private var currentScroller: ScrollView? = null
+    private var renderedTab = -1
+    private var scrollOffsets = IntArray(4)
     private val serverJar get() = File(base, "fabric-server-launch.jar")
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -103,11 +106,15 @@ class MainActivity : Activity() {
         window.statusBarColor = ui.BG
         window.navigationBarColor = ui.BG
         window.decorView.systemUiVisibility = 0
-        tab = savedInstanceState?.getInt("tab") ?: 0
+        tab = (savedInstanceState?.getInt("tab") ?: 0).coerceIn(0,3)
+        scrollOffsets = savedInstanceState?.getIntArray("tabScroll")?.takeIf { it.size==4 } ?: IntArray(4)
         render()
     }
     override fun onSaveInstanceState(outState: Bundle) {
-        outState.putInt("tab", tab); super.onSaveInstanceState(outState)
+        if (renderedTab in 0..3) scrollOffsets[renderedTab] = currentScroller?.scrollY ?: 0
+        outState.putInt("tab", tab)
+        outState.putIntArray("tabScroll", scrollOffsets)
+        super.onSaveInstanceState(outState)
     }
     override fun onResume() { super.onResume(); render(); uiHandler.removeCallbacks(updateStatus); uiHandler.post(updateStatus) }
     override fun onPause() { uiHandler.removeCallbacks(updateStatus); super.onPause() }
@@ -122,6 +129,9 @@ class MainActivity : Activity() {
         return item
     }
     private fun render() {
+        if (renderedTab in 0..3) {
+            scrollOffsets[renderedTab] = currentScroller?.scrollY ?: scrollOffsets[renderedTab]
+        }
         val screen = ui.column(this).apply { setBackgroundColor(ui.BG) }
         val brand = ui.row(this).apply {
             setPadding(ui.dp(this@MainActivity,18),ui.dp(this@MainActivity,16),
@@ -217,6 +227,10 @@ class MainActivity : Activity() {
         }
         screen.addView(navbar)
         setContentView(screen)
+        currentScroller = scroller
+        renderedTab = tab
+        val restoreY = scrollOffsets[tab]
+        scroller.post { scroller.scrollTo(0,restoreY) }
     }
     private fun dashboard(body: LinearLayout) {
         body.addView(h("Pocket server","Your Minecraft world, your rules"))
