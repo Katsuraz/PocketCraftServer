@@ -176,3 +176,13 @@ https://github.com/GeyserMC/Geyser/issues/6848.
 - Home connection indicators refresh without resetting page scroll. Pure Kotlin tests cover typical blocked and ready states.
 - PocketCraft remains an independent app. This does **not** reproduce Anvil-MC's automatic tunnel infrastructure, native Bedrock server hosting, UI assets, or other proprietary features.
 - Experimental Android NetherNet support from v0.8.1 remains unverified. Do not uninstall older builds without world backups; APK update signing keys must match.
+
+### Additional Android JNI build fallback
+
+If the matching upstream AAR/classifier is unavailable or unverified, the Android APK
+workflow attempts to compile libdatachannel-java from pinned upstream source commit
+`6be4ad71e1f10dc56a09af6daeac0e1122e23e7a` in the Android ARM64
+cross-build image. For v0.8.2 and later, a missing native binary fails the
+build instead of silently publishing an APK that still has the original
+NetherNet/Bionic failure. **A successful build with this binary is still not
+proof of an operational Bedrock listener; test on a real phone.**
