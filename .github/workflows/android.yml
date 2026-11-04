@@ -37,6 +37,30 @@ jobs:
           mkdir -p app/src/main/jniLibs/arm64-v8a
           cp "$LIB" app/src/main/jniLibs/arm64-v8a/libc++_shared.so
           file app/src/main/jniLibs/arm64-v8a/libc++_shared.so
+      - name: Bundle pinned Android Java 25 native runtime and JNI launcher
+        run: |
+          set -euo pipefail
+          JRE_ARCHIVE="$RUNNER_TEMP/pocketcraft-jre25.tar.xz"
+          JRE_DIR="$RUNNER_TEMP/pocketcraft-jre25"
+          JNI="$GITHUB_WORKSPACE/app/src/main/jniLibs/arm64-v8a"
+          mkdir -p "$JRE_DIR" "$JNI"
+          curl --fail --location --retry 3 --max-time 240 --output "$JRE_ARCHIVE" \
+            https://github.com/AngelAuraMC/angelauramc-openjdk-build/releases/download/download_jre25/jre25-android-arm64.tar.xz
+          echo "d3eb7afe2240c26728a1bb440502c5f18ac3883e932d202dd7f0c9bcbbce4c37  $JRE_ARCHIVE" | sha256sum -c -
+          tar -xJf "$JRE_ARCHIVE" -C "$JRE_DIR"
+          count=0
+          while IFS= read -r -d '' lib; do
+            cp -L "$lib" "$JNI/$(basename "$lib")"
+            count=$((count+1))
+          done < <(find "$JRE_DIR" \( -type f -o -type l \) -name '*.so' -print0)
+          test -s "$JNI/libjvm.so"
+          test "$count" -gt 5
+          echo "Packaged $count JRE native ELF libraries (copied into read-only APK native library directory)"
+          NDK="$ANDROID_HOME/ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64"
+          "$NDK/bin/aarch64-linux-android28-clang" -std=c11 -D_GNU_SOURCE -fPIE -pie \
+            -Wl,-z,relro,-z,now -o "$JNI/libpocketjava.so" \
+            "$GITHUB_WORKSPACE/app/src/main/cpp/pocketcraft_java_bootstrap.c" -ldl
+          file "$JNI/libjvm.so" "$JNI/libpocketjava.so"
       - name: Prepare persistent developer signing key
         env:
           POCKETCRAFT_KEYSTORE_BASE64: ${{ secrets.POCKETCRAFT_KEYSTORE_BASE64 }}
@@ -71,20 +95,22 @@ jobs:
           export AR_aarch64_linux_android="$NDK/llvm-ar"
           export CFLAGS_aarch64_linux_android="--target=aarch64-linux-android28"
           cargo build --release --locked --target aarch64-linux-android -p playit-cli -p playitd
-          mkdir -p "$GITHUB_WORKSPACE/app/src/main/assets"
-          cp target/aarch64-linux-android/release/playit-cli "$GITHUB_WORKSPACE/app/src/main/assets/playit-cli-arm64"
-          cp target/aarch64-linux-android/release/playitd "$GITHUB_WORKSPACE/app/src/main/assets/playitd-arm64"
-          file "$GITHUB_WORKSPACE/app/src/main/assets/"playit*-arm64
+          mkdir -p "$GITHUB_WORKSPACE/app/src/main/jniLibs/arm64-v8a"
+          cp target/aarch64-linux-android/release/playit-cli "$GITHUB_WORKSPACE/app/src/main/jniLibs/arm64-v8a/libpocketplayitcli.so"
+          cp target/aarch64-linux-android/release/playitd "$GITHUB_WORKSPACE/app/src/main/jniLibs/arm64-v8a/libpocketplayitd.so"
+          file "$GITHUB_WORKSPACE/app/src/main/jniLibs/arm64-v8a/"libpocketplayit*.so
       - name: Build debug APK
         run: gradle :app:testDebugUnitTest :app:assembleDebug --no-daemon --stacktrace
       - name: Verify ARM64 native runtime exists inside APK
         run: |
           set -euo pipefail
           unzip -l app/build/outputs/apk/debug/app-debug.apk | grep -F 'lib/arm64-v8a/libc++_shared.so'
+          unzip -l app/build/outputs/apk/debug/app-debug.apk | grep -F 'lib/arm64-v8a/libjvm.so'
+          unzip -l app/build/outputs/apk/debug/app-debug.apk | grep -F 'lib/arm64-v8a/libpocketjava.so'
       - name: Verify bundled tunnel binaries
         run: |
-          unzip -l app/build/outputs/apk/debug/app-debug.apk | grep -F 'assets/playit-cli-arm64'
-          unzip -l app/build/outputs/apk/debug/app-debug.apk | grep -F 'assets/playitd-arm64'
+          unzip -l app/build/outputs/apk/debug/app-debug.apk | grep -F 'lib/arm64-v8a/libpocketplayitcli.so'
+          unzip -l app/build/outputs/apk/debug/app-debug.apk | grep -F 'lib/arm64-v8a/libpocketplayitd.so'
       - name: Verify APK signing certificate
         run: |
           set -euo pipefail
