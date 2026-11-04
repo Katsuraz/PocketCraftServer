@@ -117,19 +117,13 @@ object RuntimeStore {
                         while (true) {
                             val item = tar.nextTarEntry ?: break
                             if (++entries > 12000) throw IOException("Too many JRE archive entries")
-                            val name = item.name.trimStart('/')
-                            if (name.isEmpty()) continue
-                            val file = File(stage, name)
-                            if (!file.canonicalPath.startsWith(stage.canonicalPath + File.separator)) {
-                                throw IOException("Unsafe JRE archive path")
-                            }
+                            val name = ArchiveSafety.relativeEntry(item.name) ?: continue
+                            val file = ArchiveSafety.within(stage, name)
                             when {
                                 item.isDirectory -> if (!file.mkdirs() && !file.isDirectory) throw IOException("Could not create directory")
                                 item.isSymbolicLink -> {
                                     file.parentFile?.mkdirs()
-                                    val linked = File(file.parentFile, item.linkName).canonicalFile
-                                    if (!linked.path.startsWith(stage.canonicalPath + File.separator))
-                                        throw IOException("Unsafe JRE symlink")
+                                    ArchiveSafety.checkedSymlinkTarget(stage, file.parentFile!!, item.linkName)
                                     Files.createSymbolicLink(file.toPath(), java.nio.file.Paths.get(item.linkName))
                                 }
                                 item.isFile -> {
