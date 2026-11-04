@@ -533,7 +533,7 @@ class MainActivity : Activity() {
         shell.addView(ui.space(this,13))
         val field = android.widget.EditText(this).apply {
             hint = "Paste existing agent secret (kept private)"
-            isSingleLine = true
+            setSingleLine(true)
             textSize = 14f
             inputType = android.text.InputType.TYPE_CLASS_TEXT or
                 android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD or
@@ -849,8 +849,12 @@ class MainActivity : Activity() {
         labels.addView(ui.text(this,desc,11f,ui.MUTED))
         row.addView(labels,LinearLayout.LayoutParams(0,-2,1f))
         row.addView(ui.text(this,"›",24f,ui.MUTED))
-        row.setOnClickListener {click()}
-        row.contentDescription=title
+        row.background=ui.pressable(this,ui.shape(this,ui.PANEL,12))
+        row.isClickable=true
+        row.isFocusable=true
+        row.setOnClickListener { click() }
+        row.contentDescription=title+". "+desc
+        row.minimumHeight=ui.dp(this,56)
         return row
     }
     private fun modFiles():List<File> =
@@ -1102,7 +1106,7 @@ class MainActivity : Activity() {
         body.addView(note)
     }
     private fun consolePage(body:LinearLayout) {
-        body.addView(h("Server console","Real logs, no pretend online status"))
+        body.addView(h("Server console","Live server output • refreshes automatically"))
         body.addView(ui.space(this,16))
         val actions=ui.row(this)
         actions.addView(ui.action(this,"↻  Refresh",true){render()},ui.weight(this))
@@ -1119,7 +1123,11 @@ class MainActivity : Activity() {
         }
         log.addView(ui.pill(this,"●  LOCAL LOG",ui.CYAN))
         log.addView(ui.space(this,12))
-        log.addView(ui.text(this,getLog(),12f,0xFFC0D7D7.toInt()))
+        log.addView(ui.text(this,getLog(),12f,0xFFC0D7D7.toInt()).apply {
+            typeface = android.graphics.Typeface.MONOSPACE
+            setTextIsSelectable(true)
+            consoleOutput = this
+        })
         body.addView(log)
         body.addView(ui.space(this,15))
         val entry=android.widget.EditText(this).apply {
@@ -1142,15 +1150,26 @@ class MainActivity : Activity() {
                 .setAction(ServerService.ACTION_COMMAND)
                 .putExtra(ServerService.EXTRA_COMMAND,command))
             entry.text.clear()
-            toast("Command submitted; refresh the console to see results")
+            toast("Command submitted. Console output updates automatically.")
         })
         body.addView(ui.space(this,8))
         body.addView(ui.text(this,if(ServerService.running)"Commands are sent to the running Java process." else "Start the Java server first to enable commands.",12f,ui.MUTED))
     }
     private fun getLog():String {
-        val file=File(base,"console.log")
-        return if(file.exists()) file.readText().takeLast(12000) else
-            "[PocketCraft] No server process has been started.\n[Setup] Android Java runtime is not bundled in this build.\n[Tip] Imported JARs are stored safely for later use."
+        val file = File(base,"console.log")
+        if(!file.isFile) return "[PocketCraft] No server output yet.\\nStart the server to see live status here."
+        return try {
+            // Read the last 16KB rather than loading a multi-megabyte logfile on UI.
+            java.io.RandomAccessFile(file,"r").use { reader ->
+                val count = minOf(reader.length(), 16_384L).toInt()
+                reader.seek(reader.length()-count)
+                val buffer = ByteArray(count)
+                reader.readFully(buffer)
+                String(buffer,Charsets.UTF_8)
+            }
+        } catch(e:Exception) {
+            "[PocketCraft] Could not read console: " + (e.message ?: "storage error")
+        }
     }
     private fun empty(symbol:String,title:String,detail:String):LinearLayout=ui.card(this).apply {
         gravity=Gravity.CENTER_HORIZONTAL
@@ -1307,19 +1326,32 @@ class MainActivity : Activity() {
             }.show()
     }
     private fun setup() {
-        AlertDialog.Builder(this).setTitle("Server engine status")
-            .setMessage("Fabric JAR: "+(if(serverJar.isFile)"Imported" else "Missing")+
-                "\nAndroid Java runtime: "+(if(RuntimeStore.isInstalled(this))"Java binary detected (experimental)" else "Not installed")+
-                "\nEULA acceptance: "+(if(ServerDownloads.eulaAccepted(this))"Recorded" else "Required before launch")+
-                "\nGeyser/Floodgate: Requires compatible Fabric versions"+
-                "\nInternet tunnel: Not configured"+
-                "\n\nServer launch is experimental. A Java binary can be started if Android permits it, but startup and multiplayer have not been verified on your phone.")
+        val crossplay = listOf("fabric-api.jar","Geyser-Fabric.jar","floodgate-fabric.jar")
+            .all { File(mods,it).isFile }
+        val version = getSharedPreferences("pocketcraft",0).getString("gameVersion","unknown")
+        val checks = listOf(
+            "Fabric server: " + (if(serverJar.isFile)"Installed ($version)" else "Not installed"),
+            "Android Java files: " + (if(RuntimeStore.isInstalled(this))"Installed" else "Not installed"),
+            "Minecraft EULA: " + (if(ServerDownloads.eulaAccepted(this))"Accepted" else "Needs acceptance"),
+            "Java multiplayer: " + (if(ServerService.javaReady)"Ready (reported by Minecraft)" else "Not verified"),
+            "Bedrock bridge mods: " + (if(crossplay)"Files present" else "Not all installed"),
+            "Geyser listener: " + (if(ServerService.bedrockReady)"Listening reported" else "Not confirmed"),
+            "NetherNet signaling: " + (if(ServerService.nethernetReady)"Registration reported" else "Not confirmed"),
+            "Playit agent: " + PlayitManager.status
+        )
+        AlertDialog.Builder(this).setTitle("Setup & connection diagnostics")
+            .setMessage(checks.joinToString("\\n")+
+                "\\n\\nInstalled files do not guarantee that the JVM or a public tunnel works. Confirm by joining from the desired network.")
+            .setNeutralButton("OPEN CONSOLE") {_,_->tab=3;render()}
             .setPositiveButton("OK",null).show()
     }
+
     private fun about() {
-        AlertDialog.Builder(this).setTitle("PocketCraft Server 0.3")
-            .setMessage("A dark-mode Minecraft manager with experimental Java 25 runtime installation and real process controls. This build is not tested on your phone; internet tunneling and verified multiplayer are still under development.")
-            .setPositiveButton("Got it",null).show()
+        val v=runCatching{packageManager.getPackageInfo(packageName,0).versionName}
+            .getOrNull() ?: "unknown"
+        AlertDialog.Builder(this).setTitle("PocketCraft Server · v$v")
+            .setMessage("A phone-first Minecraft Fabric server studio. LAN hosting runs on your device; internet tunnels are optional. Java, Bedrock and NetherNet readiness are checked separately.\\n\\nMinecraft, Fabric, Geyser and Playit are independent third-party projects. On-device and remote gameplay still depends on your device, server and network.")
+            .setPositiveButton("GOT IT",null).show()
     }
     private fun picker(code:Int) {
         val intent=Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
