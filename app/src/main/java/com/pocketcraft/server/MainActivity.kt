@@ -103,21 +103,23 @@ class MainActivity : Activity() {
             ui.run { padding(this@MainActivity,20,18,20,18) }
         }
         val header = ui.row(this)
-        header.addView(ui.pill(this,"●  OFFLINE",ui.RED))
+        header.addView(ui.pill(this,if(ServerService.running)"●  JVM ACTIVE" else "●  OFFLINE",if(ServerService.running)ui.GREEN else ui.RED))
         header.addView(View(this),LinearLayout.LayoutParams(0,1,1f))
         header.addView(ui.pill(this,"FABRIC  •  JAVA + BEDROCK",ui.CYAN))
         hero.addView(header)
         hero.addView(ui.space(this,10))
         hero.addView(ui.text(this,"Your next adventure\nstarts here.",25f,ui.WHITE,true))
         hero.addView(WorldArt(this))
-        hero.addView(ui.text(this,"Server engine setup required",13f,ui.WHITE,true))
+        hero.addView(ui.text(this,if(ServerService.running)"Minecraft process launched" else "Server engine setup",13f,ui.WHITE,true))
         hero.addView(ui.space(this,6))
-        hero.addView(ui.text(this,"Android needs a native Java runtime before Fabric can actually start. Importing JARs alone is not enough.",12f,0xFFB7CFE0.toInt()))
+        hero.addView(ui.text(this,if(ServerService.running)"Java process is active. Check the Console tab to confirm Minecraft has fully started." else "Install the ARM64 Java runtime, Fabric, and crossplay files before starting. Startup on Android is experimental.",12f,0xFFB7CFE0.toInt()))
         hero.addView(ui.space(this,16))
         hero.addView(ui.action(this,"VIEW SETUP STATUS  →",true) { setup() })
         body.addView(hero)
         body.addView(ui.space(this,16))
         body.addView(setupJourney())
+        body.addView(ui.space(this,14))
+        body.addView(enginePanel())
         body.addView(ui.space(this,19))
         body.addView(h("Overview"))
         body.addView(ui.space(this,11))
@@ -162,7 +164,7 @@ class MainActivity : Activity() {
         val steps = listOf(
             Triple("01", "Fabric server launcher", serverJar.isFile),
             Triple("02", "Minecraft EULA accepted", ServerDownloads.eulaAccepted(this)),
-            Triple("03", "Android Java runtime", false),
+            Triple("03", "Android Java runtime", RuntimeStore.isInstalled(this)),
             Triple("04", "Crossplay and internet access", false)
         )
         val ready = steps.count { it.third }
@@ -198,8 +200,8 @@ class MainActivity : Activity() {
             val subtitle=when(index) {
                 0 -> if(step.third) "Installed • ${version ?: "version not recorded"}" else "Choose a Minecraft version"
                 1 -> if(step.third) "Agreement recorded" else "Review and accept before hosting"
-                2 -> "Native runtime integration required"
-                else -> "Geyser, Floodgate and tunnel not verified"
+                2 -> if(step.third) "ARM64 Java 25 files detected • launch experimental" else "Tap Install Java 25 on the dashboard"
+                else -> "Geyser, Floodgate and internet tunnel not verified"
             }
             details.addView(ui.space(this,4))
             details.addView(ui.text(this,subtitle,11f,ui.MUTED))
@@ -217,6 +219,55 @@ class MainActivity : Activity() {
             }
         })
         return card
+    }
+
+
+    /** Live local process controls. A JVM process is not proof that the game server is ready. */
+    private fun enginePanel(): LinearLayout {
+        val box = ui.card(this)
+        val state = ServerService.status
+        box.addView(ui.text(this,"HOST CONTROLS",11f,ui.GREEN,true))
+        box.addView(ui.space(this,9))
+        box.addView(ui.text(this,if(ServerService.running)"Java process running" else "Your server is offline",18f,ui.WHITE,true))
+        box.addView(ui.space(this,5))
+        box.addView(ui.text(this,"Engine status: $state. Minecraft readiness is confirmed in Console.",12f,ui.MUTED))
+        if(ServerService.failure.isNotBlank()) {
+            box.addView(ui.space(this,7))
+            box.addView(ui.text(this,"Last error: "+ServerService.failure,12f,ui.RED))
+        }
+        box.addView(ui.space(this,15))
+        val buttons = ui.row(this)
+        buttons.addView(ui.action(this,"▶  START",true,!ServerService.running) {
+            val intent = Intent(this,ServerService::class.java).setAction(ServerService.ACTION_START)
+            startForegroundService(intent)
+            toast("Starting process; watch the Console for Minecraft startup")
+            tab=3; render()
+        },ui.weight(this))
+        buttons.addView(ui.action(this,"■  STOP",false,ServerService.running) {
+            startService(Intent(this,ServerService::class.java).setAction(ServerService.ACTION_STOP))
+            toast("Requesting graceful server stop")
+            render()
+        },LinearLayout.LayoutParams(0,-2,1f))
+        box.addView(buttons)
+        box.addView(ui.space(this,9))
+        box.addView(ui.action(this,if(RuntimeStore.isInstalled(this))"☕  REINSTALL JAVA 25" else "☕  INSTALL JAVA 25") {
+            installJavaPrompt()
+        })
+        box.addView(ui.space(this,8))
+        box.addView(ui.text(this,"Experimental: on-device execution and Java compatibility require phone testing. Stop the server before changing worlds or mods.",11f,ui.MUTED))
+        return box
+    }
+
+    private fun installJavaPrompt() {
+        if(!RuntimeStore.availableForDevice()) { toast("Java 25 installer supports ARM64 devices only"); return }
+        if(ServerService.running) { toast("Stop the server before installing Java"); return }
+        AlertDialog.Builder(this)
+            .setTitle("Install Android OpenJDK 25?")
+            .setMessage("Downloads roughly 36 MB from AngelAuraMC's Android Java release and checks the published SHA-256 before unpacking. Java files require extra storage. You are choosing to install and run third-party Java code; functionality is experimental and your Minecraft world should be backed up first.")
+            .setNegativeButton("Cancel",null)
+            .setPositiveButton("Install"){_,_ ->
+                downloadAsync("Android Java 25") { RuntimeStore.install(this) { } }
+            }.show()
     }
 
     private fun stat(value:String, label:String, symbol:String):LinearLayout {
@@ -381,7 +432,30 @@ class MainActivity : Activity() {
         log.addView(ui.text(this,getLog(),12f,0xFFC0D7D7.toInt()))
         body.addView(log)
         body.addView(ui.space(this,15))
-        body.addView(ui.text(this,"Command input becomes available when a compatible server runtime is integrated and running.",12f,ui.MUTED))
+        val entry=android.widget.EditText(this).apply {
+            hint = "Type server command, e.g. list"
+            setSingleLine(true)
+            textSize = 14f
+            setTextColor(ui.WHITE)
+            setHintTextColor(ui.MUTED)
+            background = ui.shape(this@MainActivity,ui.SURFACE,12,0xFF31415D.toInt())
+            setPadding(ui.dp(this@MainActivity,14),ui.dp(this@MainActivity,13),
+                ui.dp(this@MainActivity,14),ui.dp(this@MainActivity,13))
+            isEnabled = ServerService.running
+        }
+        body.addView(entry)
+        body.addView(ui.space(this,8))
+        body.addView(ui.action(this,"SEND COMMAND →",true,ServerService.running) {
+            val command=entry.text.toString().trim().removePrefix("/")
+            if(command.isBlank()) {toast("Enter a command");return@action}
+            startService(Intent(this,ServerService::class.java)
+                .setAction(ServerService.ACTION_COMMAND)
+                .putExtra(ServerService.EXTRA_COMMAND,command))
+            entry.text.clear()
+            toast("Command submitted; refresh the console to see results")
+        })
+        body.addView(ui.space(this,8))
+        body.addView(ui.text(this,if(ServerService.running)"Commands are sent to the running Java process." else "Start the Java server first to enable commands.",12f,ui.MUTED))
     }
     private fun getLog():String {
         val file=File(base,"console.log")
@@ -448,16 +522,16 @@ class MainActivity : Activity() {
     private fun setup() {
         AlertDialog.Builder(this).setTitle("Server engine status")
             .setMessage("Fabric JAR: "+(if(serverJar.isFile)"Imported" else "Missing")+
-                "\nAndroid Java runtime: Not integrated"+
+                "\nAndroid Java runtime: "+(if(RuntimeStore.isInstalled(this))"Java binary detected (experimental)" else "Not installed")+
                 "\nEULA acceptance: "+(if(ServerDownloads.eulaAccepted(this))"Recorded" else "Required before launch")+
                 "\nGeyser/Floodgate: Requires compatible Fabric versions"+
                 "\nInternet tunnel: Not configured"+
-                "\n\nThis APK is an offline file manager and server control foundation. It cannot host Minecraft yet.")
+                "\n\nServer launch is experimental. A Java binary can be started if Android permits it, but startup and multiplayer have not been verified on your phone.")
             .setPositiveButton("OK",null).show()
     }
     private fun about() {
-        AlertDialog.Builder(this).setTitle("PocketCraft Server 0.2")
-            .setMessage("A native, dark-mode Minecraft server manager for Android. File imports, mod activation, world backups, and server property editing work offline. Running a Java server, player telemetry, internet tunneling, and crossplay are still under development.")
+        AlertDialog.Builder(this).setTitle("PocketCraft Server 0.3")
+            .setMessage("A dark-mode Minecraft manager with experimental Java 25 runtime installation and real process controls. This build is not tested on your phone; internet tunneling and verified multiplayer are still under development.")
             .setPositiveButton("Got it",null).show()
     }
     private fun picker(code:Int) {
