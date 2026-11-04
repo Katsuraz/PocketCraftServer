@@ -82,7 +82,7 @@ int main(int argc, char **argv) {
     }
 
     JavaVMInitArgs vm_args = { 0 };
-    vm_args.version = JNI_VERSION_1_8;
+    vm_args.version = JNI_VERSION_1_6;
     vm_args.nOptions = count;
     vm_args.options = opts;
     vm_args.ignoreUnrecognized = JNI_FALSE;
