@@ -721,6 +721,34 @@ class MainActivity : Activity() {
         dialog.show()
     }
 
+    private fun restoreGeyserBackup() {
+        if (ServerService.running) {
+            toast("Stop Minecraft before restoring the Geyser configuration.")
+            return
+        }
+        val config = File(base,"config/Geyser-Fabric/config.yml")
+        val backup = File(config.parentFile,"config.yml.pocketcraft.bak")
+        if (!backup.isFile) {
+            toast("No Geyser configuration backup found yet.")
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Restore Geyser settings?")
+            .setMessage("This replaces your current Geyser configuration with the version PocketCraft backed up before your first edit. The current configuration will be saved separately.")
+            .setNegativeButton("CANCEL",null)
+            .setPositiveButton("RESTORE") {_,_->
+                try {
+                    val previous = File(config.parentFile,"config.yml.before-restore.bak")
+                    if(config.isFile) config.copyTo(previous,overwrite=true)
+                    backup.copyTo(config,overwrite=true)
+                    toast("Original Geyser configuration restored. Restart Minecraft.")
+                } catch(e:Exception) {
+                    toast("Could not restore Geyser backup: "+e.message)
+                }
+            }
+            .show()
+    }
+
     private fun modsPage(body:LinearLayout) {
         body.addView(h("Mod library","Manage your Fabric server add-ons"))
         body.addView(ui.space(this,15))
@@ -752,6 +780,10 @@ class MainActivity : Activity() {
         body.addView(ui.space(this,10))
         body.addView(ui.action(this,"⚙  EDIT GEYSER / NETHERNET CONFIG",true) {
             editGeyserConfiguration()
+        })
+        body.addView(ui.space(this,8))
+        body.addView(ui.action(this,"↶  RESTORE GEYSER CONFIG BACKUP") {
+            restoreGeyserBackup()
         })
         body.addView(ui.space(this,12))
         val list=modFiles()
