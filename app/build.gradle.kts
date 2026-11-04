@@ -9,8 +9,8 @@ android {
         applicationId = "com.pocketcraft.server"
         minSdk = 26
         targetSdk = 34
-        versionCode = 10
-        versionName = "0.6.2"
+        versionCode = 11
+        versionName = "0.6.3"
     }
     signingConfigs {
         create("pocketcraftUpdates") {
@@ -29,6 +29,16 @@ android {
             if (!System.getenv("POCKETCRAFT_SIGNING_KEYSTORE").isNullOrBlank()) {
                 signingConfig = signingConfigs.getByName("pocketcraftUpdates")
             }
+        }
+    }
+    packaging {
+        jniLibs {
+            // Executables masquerading as native libraries must be extracted
+            // and remain unstripped; Android 10+ forbids executing app-data ELF.
+            useLegacyPackaging = true
+            keepDebugSymbols.add("**/libpocketjava.so")
+            keepDebugSymbols.add("**/libpocketplayitcli.so")
+            keepDebugSymbols.add("**/libpocketplayitd.so")
         }
     }
     compileOptions {
