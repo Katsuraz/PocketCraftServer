@@ -9,10 +9,13 @@ internal class ReadinessSignals {
         private set
     var bedrockListener: Boolean = false
         private set
+    var nethernetRegistered: Boolean = false
+        private set
 
     fun reset() {
         javaReady = false
         bedrockListener = false
+        nethernetRegistered = false
     }
 
     fun observe(line: String) {
@@ -23,6 +26,9 @@ internal class ReadinessSignals {
         // Geyser's listener messages vary across versions.
         // Only count the line if it names Geyser and confirms a listening port.
         val lower = line.lowercase(java.util.Locale.ROOT)
+        if (lower.contains("registered with the external signaling service")) {
+            nethernetRegistered = true
+        }
         if (lower.contains("geyser") && (
             (lower.contains("started") && lower.contains("port")) ||
             (lower.contains("listening") && lower.contains("19132")) ||
