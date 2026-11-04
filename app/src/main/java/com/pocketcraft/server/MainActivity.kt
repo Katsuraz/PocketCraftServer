@@ -447,7 +447,7 @@ class MainActivity : Activity() {
                 toast("Starting Playit and checking your Minecraft server. See status below.")
             })
             card.addView(ui.space(this,8))
-            card.addView(ui.text(this,"First time only: approve PocketCraft in Playit. After approval, the app requests free Minecraft tunnels automatically where allowed.",11f,ui.MUTED))
+            card.addView(ui.text(this,"Approve PocketCraft in Playit once. For remote access, assign Minecraft Java (and Bedrock if supported) tunnels in your Playit dashboard. This avoids rejected automatic API requests.",11f,ui.MUTED))
         } else {
             if(!PlayitManager.accountConnected) {
                 card.addView(ui.action(this,
@@ -480,11 +480,15 @@ class MainActivity : Activity() {
                         toast("Bedrock address copied")
                     })
                 }
-                if(PlayitManager.creationNeedsHelp || (javaAddress==null && PlayitManager.status=="SETUP HELP NEEDED")) {
+                if(javaAddress==null || bedrockAddress==null) {
                     card.addView(ui.space(this,9))
-                    card.addView(ui.action(this,"RETRY FREE TUNNEL SETUP",true) {
-                        PlayitManager.retryTunnel(this)
-                        toast("Retrying Playit configuration")
+                    card.addView(ui.text(this,
+                        "Use the Playit dashboard to assign tunnels to THIS phone's running agent. Java: 127.0.0.1:25565. Bedrock: 127.0.0.1:19132 where supported.",
+                        11f,ui.MUTED))
+                    card.addView(ui.space(this,8))
+                    card.addView(ui.action(this,"OPEN PLAYIT TUNNELS",true) {
+                        startActivity(Intent(Intent.ACTION_VIEW,
+                            android.net.Uri.parse("https://playit.gg/account/tunnels")))
                     })
                 }
             }
