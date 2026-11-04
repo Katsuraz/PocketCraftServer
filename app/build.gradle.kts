@@ -9,8 +9,27 @@ android {
         applicationId = "com.pocketcraft.server"
         minSdk = 26
         targetSdk = 28
-        versionCode = 6
-        versionName = "0.5.0"
+        versionCode = 7
+        versionName = "0.5.1"
+    }
+    signingConfigs {
+        create("pocketcraftUpdates") {
+            val keyPath = System.getenv("POCKETCRAFT_SIGNING_KEYSTORE")
+            val password = System.getenv("POCKETCRAFT_SIGNING_PASSWORD")
+            if (!keyPath.isNullOrBlank() && !password.isNullOrBlank()) {
+                storeFile = file(keyPath)
+                storePassword = password
+                keyAlias = "pocketcraft"
+                keyPassword = password
+            }
+        }
+    }
+    buildTypes {
+        getByName("debug") {
+            if (!System.getenv("POCKETCRAFT_SIGNING_KEYSTORE").isNullOrBlank()) {
+                signingConfig = signingConfigs.getByName("pocketcraftUpdates")
+            }
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
