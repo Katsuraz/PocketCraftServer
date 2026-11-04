@@ -65,10 +65,16 @@ class ServerService : Service() {
     private val lock = Any()
     private var restartAfterStop = false
     private var lastListRequest = 0L
+    private var previousPlayitActive = false
     private val notificationHandler = Handler(Looper.getMainLooper())
     private val pulse = object : Runnable {
         override fun run() {
             if (running || PlayitManager.isActive()) {
+                val tunnelActive=PlayitManager.isActive()
+                if(previousPlayitActive && !tunnelActive) {
+                    event("Playit agent stopped. Internet connections may no longer work.")
+                }
+                previousPlayitActive=tunnelActive
                 refreshNotification()
                 if (javaReady && System.currentTimeMillis()-lastListRequest >= 60_000L) {
                     lastListRequest=System.currentTimeMillis()
@@ -109,6 +115,7 @@ class ServerService : Service() {
                 }.start()
             }
             ACTION_TUNNEL_STOP -> {
+                previousPlayitActive=false
                 PlayitManager.stop()
                 if (!running) { stopForeground(STOP_FOREGROUND_REMOVE); stopSelf() }
                 else notice("Minecraft server running on LAN")
@@ -197,7 +204,9 @@ class ServerService : Service() {
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .addAction(Notification.Action.Builder(android.R.drawable.ic_menu_view,
-                "CONSOLE",activityAction(MainActivity.ACTION_OPEN_CONSOLE,61)).build())
+                if(running)"RESTART" else "CONSOLE",
+                if(running) commandAction(ACTION_RESTART,61)
+                else activityAction(MainActivity.ACTION_OPEN_CONSOLE,61)).build())
             .addAction(Notification.Action.Builder(android.R.drawable.ic_media_pause,
                 if(running)"STOP" else "START",
                 commandAction(if(running)ACTION_STOP else ACTION_START,62)).build())
@@ -355,11 +364,15 @@ class ServerService : Service() {
                         append(line)
                         observePlayers(line)
                         val previous = status
+                        val hadJava=javaReady
+                        val hadBedrock=bedrockReady
                         readiness.observe(line)
                         javaReady = readiness.javaReady
                         bedrockReady = readiness.bedrockListener
                         nethernetReady = readiness.nethernetRegistered
                         nethernetNativeFailure = readiness.nethernetNativeFailure
+                        if(!hadJava && javaReady) event("Minecraft Java server is ready")
+                        if(!hadBedrock && bedrockReady) event("Geyser Bedrock listener is ready")
                         if (javaReady) {
                             status = readiness.state()
                             if (previous != status) {
