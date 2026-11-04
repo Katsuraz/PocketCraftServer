@@ -1523,6 +1523,10 @@ class MainActivity : Activity() {
         body.addView(ui.space(this,15))
         body.addView(ui.action(this,"▤  SERVER FILES & FULL BACKUP",true) {openServerFiles()})
         body.addView(ui.space(this,10))
+        body.addView(ui.action(this,"▥  RECOVERY SNAPSHOTS") {
+            openServerFiles("pocketcraft-backups")
+        })
+        body.addView(ui.space(this,10))
         body.addView(ui.action(this,"+  IMPORT WORLD ZIP",true) {picker(3)})
         body.addView(ui.space(this,16))
         val list=WorldStore.worlds(this)
