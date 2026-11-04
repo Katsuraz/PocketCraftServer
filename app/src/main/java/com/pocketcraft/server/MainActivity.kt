@@ -5,6 +5,9 @@ import android.app.AlertDialog
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.res.ColorStateList
+import android.widget.ImageView
+import android.widget.FrameLayout
 import android.content.Intent
 import android.database.Cursor
 import android.graphics.Color
@@ -24,8 +27,13 @@ class MainActivity : Activity() {
     private val uiHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private var readyText: TextView? = null
     private var heroState: TextView? = null
-    private var onlineHost: android.widget.FrameLayout? = null
+    private var onlineHost: FrameLayout? = null
     private var lastOnlineSignature = ""
+    private var phoneHost: FrameLayout? = null
+    private var lastPhoneSignature = ""
+    private var consoleOutput: TextView? = null
+    private var lastConsoleSize = -1L
+    private var lastConsoleModified = -1L
     private val updateStatus = object: Runnable {
         override fun run() {
             val state = ServerService.status
@@ -40,6 +48,29 @@ class MainActivity : Activity() {
                 ServerService.javaReady && ServerService.bedrockReady -> "●  JAVA + BEDROCK"
                 ServerService.javaReady -> "●  JAVA READY"
                 else -> "●  STARTING"
+            }
+            // Keep live hosting state up to date without redrawing the entire
+            // page or unexpectedly resetting the user's scroll position.
+            if (tab == 0) {
+                val signature = listOf(ServerService.running, ServerService.status,
+                    ServerService.javaReady, ServerService.bedrockReady,
+                    ServerService.nethernetReady, NetworkInfo.lanAddress().orEmpty()
+                ).joinToString("|")
+                if (signature != lastPhoneSignature) {
+                    lastPhoneSignature = signature
+                    phoneHost?.let { host ->
+                        host.removeAllViews()
+                        host.addView(phoneOnlyPanel())
+                    }
+                }
+            } else if (tab == 3) {
+                val file = File(base, "console.log")
+                if (file.length() != lastConsoleSize ||
+                    file.lastModified() != lastConsoleModified) {
+                    lastConsoleSize = file.length()
+                    lastConsoleModified = file.lastModified()
+                    consoleOutput?.text = getLog()
+                }
             }
             // Refresh just the online hosting panel when the Playit worker changes
             // state, including account claim URL and process-launch errors.
@@ -166,9 +197,13 @@ class MainActivity : Activity() {
         body.addView(ui.space(this,14))
         body.addView(connectionPanel())
         body.addView(ui.space(this,14))
-        body.addView(phoneOnlyPanel())
+        val localHost = FrameLayout(this)
+        localHost.addView(phoneOnlyPanel())
+        phoneHost = localHost
+        lastPhoneSignature = ""
+        body.addView(localHost)
         body.addView(ui.space(this,14))
-        val host = android.widget.FrameLayout(this)
+        val host = FrameLayout(this)
         host.addView(internetPanel())
         onlineHost = host
         lastOnlineSignature = ""
