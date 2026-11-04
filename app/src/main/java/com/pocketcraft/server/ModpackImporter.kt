@@ -155,7 +155,7 @@ object ModpackImporter {
             }
         } catch (e:Exception) {
             created.forEach { it.delete() }
-            throw IOException("Import failed; newly copied files rolled back: \${e.message}",e)
+            throw IOException("Import failed; newly copied files rolled back: ${e.message}",e)
         }
         return created.size to already
     }
@@ -231,7 +231,7 @@ object ModpackImporter {
                     break
                 } catch (e: Exception) { lastError = e }
             }
-            if (!downloaded) throw IOException("All download mirrors failed for $path: \${lastError?.message}",lastError)
+            if (!downloaded) throw IOException("All download mirrors failed for $path: ${lastError?.message}",lastError)
         }
         InstallProgress.emit("Unpacking server overrides…")
         stageOverrides(zip,stage,"overrides/")
