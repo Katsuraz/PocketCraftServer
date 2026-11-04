@@ -100,6 +100,17 @@ object ServerDownloads {
         val installer=latestStable(readJsonArray(FABRIC_META+"/installer"))
         val url=FABRIC_META+"/loader/"+encoded(version)+"/"+encoded(loader)+"/"+encoded(installer)+"/server/jar"
         val base=WorldStore.root(context)
+        val currentVersion=context.getSharedPreferences("pocketcraft",0)
+            .getString("gameVersion",null)
+        if(currentVersion!=null && currentVersion!=version) {
+            // Minecraft version changes can make existing world data unusable.
+            // Back up the active world before replacing the server launcher.
+            val world=File(base,WorldStore.active(context))
+            if(File(world,"level.dat").isFile) {
+                InstallProgress.emit("Saving world recovery snapshot…")
+                WorldSafety.snapshot(context,world)
+            }
+        }
         download(url,File(base,"fabric-server-launch.jar"))
         context.getSharedPreferences("pocketcraft",0).edit().putString("gameVersion",version).apply()
         val props=File(base,"server.properties")
