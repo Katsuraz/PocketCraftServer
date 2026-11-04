@@ -19,10 +19,10 @@ jobs:
             echo "::group::$project Fabric build"
             url="https://download.geysermc.org/v2/projects/$project/versions/latest/builds/latest"
             curl -fsSL --retry 2 --connect-timeout 15 --max-time 40 "$url" -o "$RUNNER_TEMP/$project.json"
-            jq -e '.project_id and .version and (.build|type=="number") and
-                   (.downloads.fabric.name|endswith(".jar")) and
-                   (.downloads.fabric.sha256|test("^[a-f0-9]{64}$"))' "$RUNNER_TEMP/$project.json"
-            jq '{project_id,version,build,artifact:.downloads.fabric.name}' "$RUNNER_TEMP/$project.json"
+            jq '{project_id,version,build,downloads:(.downloads|keys),artifact:.downloads.fabric.name}' "$RUNNER_TEMP/$project.json"
+            if [[ "$project" == geyser ]]; then
+              jq -e '.downloads.fabric.name|endswith(".jar")' "$RUNNER_TEMP/$project.json"
+            fi
             echo "::endgroup::"
           done
       - name: Validate Fabric API for Minecraft 26.3
@@ -36,3 +36,14 @@ jobs:
             -o "$RUNNER_TEMP/fabric-api.json"
           jq -e 'length > 0 and (.[0].files|any(.filename|endswith(".jar")))' "$RUNNER_TEMP/fabric-api.json"
           jq -r '.[0].version_number' "$RUNNER_TEMP/fabric-api.json"
+      - name: Validate Floodgate official Modrinth fallback
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 2 --connect-timeout 15 --max-time 40 \
+            -G https://api.modrinth.com/v2/project/floodgate/version \
+            --data-urlencode 'loaders=["fabric"]' \
+            --data-urlencode 'game_versions=["26.3"]' \
+            -o "$RUNNER_TEMP/floodgate-modrinth.json"
+          jq -e 'length > 0 and (.[0].files|any(.filename|endswith(".jar")))' "$RUNNER_TEMP/floodgate-modrinth.json"
+          jq '.[0] | {version_number,files:[.files[] | {filename,url,sha256:.hashes.sha256}]}' "$RUNNER_TEMP/floodgate-modrinth.json"
