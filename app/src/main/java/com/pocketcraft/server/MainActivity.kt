@@ -21,6 +21,27 @@ import java.util.Locale
 
 /** PocketCraft's offline-first dashboard. Does not pretend that a JVM is available on Android. */
 class MainActivity : Activity() {
+    private val uiHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var readyText: TextView? = null
+    private var heroState: TextView? = null
+    private val updateStatus = object: Runnable {
+        override fun run() {
+            val state = ServerService.status
+            readyText?.text = when {
+                !ServerService.running -> if(state=="ERROR") "Server error • open Console" else "Server offline"
+                ServerService.javaReady && ServerService.bedrockReady -> "Java + Bedrock listener detected"
+                ServerService.javaReady -> "Java server ready • Geyser unverified"
+                else -> "Starting Minecraft • not joinable yet"
+            }
+            heroState?.text = when {
+                !ServerService.running -> "●  OFFLINE"
+                ServerService.javaReady && ServerService.bedrockReady -> "●  JAVA + BEDROCK"
+                ServerService.javaReady -> "●  JAVA READY"
+                else -> "●  STARTING"
+            }
+            uiHandler.postDelayed(this, 2000)
+        }
+    }
     private val ui = PocketUi
     private val base by lazy { WorldStore.root(this) }
     private val mods by lazy { File(base,"mods").apply { mkdirs() } }
@@ -39,7 +60,8 @@ class MainActivity : Activity() {
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putInt("tab", tab); super.onSaveInstanceState(outState)
     }
-    override fun onResume() { super.onResume(); render() }
+    override fun onResume() { super.onResume(); render(); uiHandler.removeCallbacks(updateStatus); uiHandler.post(updateStatus) }
+    override fun onPause() { uiHandler.removeCallbacks(updateStatus); super.onPause() }
 
     private fun h(label: String, sub: String? = null): LinearLayout {
         val item = ui.column(this)
@@ -106,7 +128,7 @@ class MainActivity : Activity() {
             ui.run { padding(this@MainActivity,20,18,20,18) }
         }
         val header = ui.row(this)
-        header.addView(ui.pill(this,if(ServerService.running)"●  JVM ACTIVE" else "●  OFFLINE",if(ServerService.running)ui.GREEN else ui.RED))
+        header.addView(ui.pill(this,if(ServerService.javaReady)"●  JAVA READY" else if(ServerService.running)"●  STARTING" else "●  OFFLINE",if(ServerService.javaReady)ui.GREEN else if(ServerService.running)ui.CYAN else ui.RED).also { heroState = it })
         header.addView(View(this),LinearLayout.LayoutParams(0,1,1f))
         header.addView(ui.pill(this,"FABRIC HOST",ui.CYAN))
         hero.addView(header)
@@ -125,6 +147,8 @@ class MainActivity : Activity() {
         body.addView(enginePanel())
         body.addView(ui.space(this,14))
         body.addView(connectionPanel())
+        body.addView(ui.space(this,14))
+        body.addView(internetPanel())
         body.addView(ui.space(this,19))
         body.addView(h("Overview"))
         body.addView(ui.space(this,11))
@@ -276,14 +300,34 @@ class MainActivity : Activity() {
         return box
     }
 
+    private fun internetPanel(): LinearLayout {
+        val card = ui.card(this)
+        card.addView(ui.text(this,"WORLDWIDE MULTIPLAYER",11f,ui.PURPLE,true))
+        card.addView(ui.space(this,9))
+        card.addView(ui.text(this,"Internet hosting",18f,ui.WHITE,true))
+        card.addView(ui.space(this,8))
+        card.addView(ui.pill(this,"NOT CONNECTED",ui.RED))
+        card.addView(ui.space(this,8))
+        card.addView(ui.text(this,"LAN hosting works without a tunnel. To invite friends on other networks, an Android-compatible agent must first be running and connected to a tunnel provider.",12f,ui.MUTED))
+        card.addView(ui.space(this,10))
+        card.addView(ui.text(this,"Java: TCP 25565 (or your configured server port)\nBedrock NetherNet: TCP + UDP 19132",12f,ui.WHITE))
+        card.addView(ui.space(this,13))
+        card.addView(ui.action(this,"OPEN PLAYIT.GG SETUP →",true) {
+            startActivity(Intent(Intent.ACTION_VIEW,android.net.Uri.parse("https://playit.gg/")))
+        })
+        card.addView(ui.space(this,8))
+        card.addView(ui.text(this,"A public URL entered in Server Settings is only a label, not proof of a working tunnel. Native Android tunnel integration is being tested separately.",11f,ui.MUTED))
+        return card
+    }
+
     private fun enginePanel(): LinearLayout {
         val box = ui.card(this)
         val state = ServerService.status
         box.addView(ui.text(this,"HOST CONTROLS",11f,ui.GREEN,true))
         box.addView(ui.space(this,9))
-        box.addView(ui.text(this,if(ServerService.running)"Java process running" else "Your server is offline",18f,ui.WHITE,true))
+        box.addView(ui.text(this,if(ServerService.javaReady)"Minecraft server ready" else if(ServerService.running)"Minecraft is starting" else "Your server is offline",18f,ui.WHITE,true).also { readyText = it })
         box.addView(ui.space(this,5))
-        box.addView(ui.text(this,"Engine status: $state. Minecraft readiness is confirmed in Console.",12f,ui.MUTED))
+        box.addView(ui.text(this,"Process status: $state. Java readiness requires the Minecraft Done message; Bedrock needs Geyser listener confirmation.",12f,ui.MUTED))
         if(ServerService.failure.isNotBlank()) {
             box.addView(ui.space(this,7))
             box.addView(ui.text(this,"Last error: "+ServerService.failure,12f,ui.RED))
