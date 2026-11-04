@@ -175,9 +175,11 @@ class ServerService : Service() {
                         env["TMPDIR"] = javaTmp.absolutePath
                         env["TMP"] = javaTmp.absolutePath
                         env["TEMP"] = javaTmp.absolutePath
-                        // Never load executable .so from writable runtime25 under
-                        // targetSdk 34; all JRE native libraries ship in the APK.
+                        // The Java VM must see its normal JRE layout. The native
+                        // launcher itself is APK-installed and executable on Android.
                         val libs = listOf(
+                            File(javaHome, "lib").absolutePath,
+                            File(javaHome, "lib/server").absolutePath,
                             applicationInfo.nativeLibraryDir,
                             env["LD_LIBRARY_PATH"].orEmpty()
                         ).filter { it.isNotBlank() }
