@@ -2,6 +2,9 @@ package com.pocketcraft.server
 
 import android.content.Context
 import org.json.JSONArray
+import org.json.JSONObject
+import java.security.MessageDigest
+import java.util.jar.JarFile
 import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -41,11 +44,12 @@ object ServerDownloads {
         }
         throw IOException("No stable versions published")
     }
-    private fun download(url: String, destination: File) {
+    private fun download(url: String, destination: File, expectedSha256: String? = null) {
         val temp = File(destination.parentFile,destination.name+".part")
         InstallProgress.emit("Connecting to download server…")
         val c=connection(url)
         try {
+            val digest=MessageDigest.getInstance("SHA-256")
             if(c.contentLengthLong > MAX_JAR_BYTES) throw IOException("File exceeds safe size limit")
             var bytes=0L
             c.inputStream.use {input ->
@@ -55,6 +59,7 @@ object ServerDownloads {
                         val n=input.read(buffer)
                         if(n<0)break
                         bytes+=n
+                        digest.update(buffer,0,n)
                         InstallProgress.emit("Downloading "+destination.name,bytes,c.contentLengthLong)
                         if(bytes>MAX_JAR_BYTES) throw IOException("Download exceeded safe size limit")
                         output.write(buffer,0,n)
@@ -62,10 +67,15 @@ object ServerDownloads {
                 }
             }
             InstallProgress.emit("Verifying "+destination.name)
-            temp.inputStream().use {
-                val magic=ByteArray(2)
-                if(it.read(magic)!=2 || magic[0]!=0x50.toByte() || magic[1]!=0x4B.toByte())
-                    throw IOException("The server returned a file that is not a JAR")
+            val actual=digest.digest().joinToString("") { "%02x".format(it) }
+            if(expectedSha256 != null && !actual.equals(expectedSha256,ignoreCase=true))
+                throw IOException("SHA-256 mismatch for "+destination.name+" (download corrupted)")
+            try {
+                JarFile(temp).use { jar ->
+                    if(!jar.entries().hasMoreElements()) throw IOException("Downloaded JAR is empty")
+                }
+            } catch(e: Exception) {
+                throw IOException("Invalid JAR returned for "+destination.name+": "+e.message,e)
             }
             val old=File(destination.parentFile,destination.name+".old")
             if(destination.exists()) {
@@ -106,29 +116,114 @@ object ServerDownloads {
         return "Fabric "+version+" launcher downloaded (loader "+loader+"). Java runtime is still required."
     }
 
-    fun installCrossplay(context: Context): String {
-        if (ServerService.running) throw IOException("Stop the Minecraft server before updating mods")
-        val version=context.getSharedPreferences("pocketcraft",0).getString("gameVersion",null)
-        if(version!="26.3") throw IOException("Auto-install supports only Java 26.3. Older Fabric needs a compatible proxy.")
-        InstallProgress.emit("Resolving crossplay dependencies…")
-        val mods=File(WorldStore.root(context),"mods").apply {mkdirs()}
-        val loaders=encoded("[\"fabric\"]")
-        val versions=encoded("[\"26.3\"]")
-        val apiVersions=readJsonArray("https://api.modrinth.com/v2/project/P7dR8mSH/version?loaders="+loaders+"&game_versions="+versions)
-        if(apiVersions.length()==0) throw IOException("No Fabric API version was found for Minecraft 26.3")
-        val candidates=apiVersions.getJSONObject(0).getJSONArray("files")
-        if(candidates.length()==0) throw IOException("Fabric API has no downloadable files")
-        var file=candidates.getJSONObject(0)
+    private fun readJsonObject(url: String): JSONObject {
+        val c = connection(url)
+        return try {
+            val body = c.inputStream.bufferedReader().use { it.readText().take(1_000_000) }
+            JSONObject(body)
+        } finally { c.disconnect() }
+    }
+
+    private data class CrossplayFile(val url: String, val sha256: String?)
+
+    /** Resolves the Fabric-specific artifact from the GeyserMC build metadata. */
+    private fun geyserFabric(project: String): CrossplayFile {
+        val base = GEYSER_DOWNLOADS + project + "/versions/latest/builds/latest"
+        val info = readJsonObject(base)
+        val version = info.getString("version")
+        val build = info.getInt("build")
+        val file = info.optJSONObject("downloads")?.optJSONObject("fabric")
+            ?: throw IOException("GeyserMC " + project + " latest build has no Fabric download")
+        val name = file.getString("name")
+        if (!name.endsWith(".jar", ignoreCase=true))
+            throw IOException("Unexpected " + project + " artifact name: " + name)
+        val sha = file.optString("sha256").takeIf { it.matches(Regex("[a-fA-F0-9]{64}")) }
+            ?: throw IOException("GeyserMC " + project + " metadata has no valid SHA-256")
+        val url = GEYSER_DOWNLOADS + project + "/versions/" +
+            encoded(version) + "/builds/" + build + "/downloads/fabric"
+        return CrossplayFile(url, sha)
+    }
+
+    /** Modrinth version metadata supplies official Fabric API release checksum. */
+    private fun fabricApi26_3(): CrossplayFile {
+        val loaders = encoded("[\"fabric\"]")
+        val versions = encoded("[\"26.3\"]")
+        val list = readJsonArray("https://api.modrinth.com/v2/project/P7dR8mSH/version?loaders=" +
+            loaders + "&game_versions=" + versions)
+        if (list.length() == 0) throw IOException("Modrinth has no Fabric API build for Minecraft 26.3")
+        val candidates = list.getJSONObject(0).getJSONArray("files")
+        var chosen: JSONObject? = null
         for(i in 0 until candidates.length()) {
-            val candidate=candidates.getJSONObject(i)
-            if(candidate.optBoolean("primary")) {file=candidate;break}
+            val f = candidates.getJSONObject(i)
+            if (f.optString("filename").endsWith(".jar",true) && (chosen == null || f.optBoolean("primary")))
+                chosen = f
         }
-        download(file.getString("url"),File(mods,"fabric-api.jar"))
-        download(GEYSER_DOWNLOADS+"geyser/versions/latest/builds/latest/downloads/fabric",
-            File(mods,"Geyser-Fabric.jar"))
-        download(GEYSER_DOWNLOADS+"floodgate/versions/latest/builds/latest/downloads/fabric",
-            File(mods,"floodgate-fabric.jar"))
-        return "Fabric API, Geyser-Fabric, and Floodgate downloaded. Crossplay still needs a compatible Android JVM and server test."
+        val jar = chosen ?: throw IOException("Modrinth Fabric API release does not contain a JAR")
+        val sha = jar.optJSONObject("hashes")?.optString("sha256")
+            ?.takeIf { it.matches(Regex("[a-fA-F0-9]{64}")) }
+        return CrossplayFile(jar.getString("url"), sha)
+    }
+
+    fun installCrossplay(context: Context): String {
+        if (ServerService.running) throw IOException("Stop Minecraft before changing its mods")
+        val version = context.getSharedPreferences("pocketcraft",0).getString("gameVersion",null)
+        if (version != "26.3")
+            throw IOException("Automatic Geyser-Fabric installation requires Minecraft 26.3; selected: " +
+                (version ?: "none") + ". Install the 26.3 Fabric launcher first.")
+
+        // Resolve all three remote artifacts before touching installed mods.
+        val targets = listOf("fabric-api.jar","Geyser-Fabric.jar","floodgate-fabric.jar")
+        val mods = File(WorldStore.root(context),"mods").apply { mkdirs() }
+        val stage = File(mods,".crossplay-installing")
+        stage.deleteRecursively()
+        if (!stage.mkdirs()) throw IOException("Unable to create crossplay staging directory")
+        try {
+            val downloads = listOf(
+                "Fabric API" to { fabricApi26_3() },
+                "Geyser-Fabric" to { geyserFabric("geyser") },
+                "Floodgate-Fabric" to { geyserFabric("floodgate") }
+            )
+            downloads.forEachIndexed { i, entry ->
+                InstallProgress.check()
+                InstallProgress.emit("Resolving "+entry.first+"…")
+                try {
+                    val source = entry.second.invoke()
+                    InstallProgress.emit("Downloading "+entry.first+"…")
+                    download(source.url, File(stage,targets[i]),source.sha256)
+                } catch (e: Exception) {
+                    throw IOException(entry.first+" installation failed: "+(e.message ?: e.javaClass.simpleName),e)
+                }
+            }
+            // Commit only when every artifact has downloaded and passed validation.
+            // On errors, restore previously installed files instead of leaving a
+            // half-updated mod set behind.
+            val backups = File(stage,"backups").apply { mkdirs() }
+            val committed = mutableListOf<Int>()
+            try {
+                targets.forEachIndexed { i, name ->
+                    val output = File(mods,name)
+                    val old = File(backups,name)
+                    if (output.exists() && !output.renameTo(old))
+                        throw IOException("Could not back up existing "+name)
+                    if (!File(stage,name).renameTo(output)) {
+                        if(old.exists())old.renameTo(output)
+                        throw IOException("Could not install downloaded "+name)
+                    }
+                    committed.add(i)
+                }
+            } catch (e: Exception) {
+                committed.reversed().forEach { i ->
+                    val output = File(mods,targets[i])
+                    val old = File(backups,targets[i])
+                    output.delete()
+                    if(old.exists())old.renameTo(output)
+                }
+                throw e
+            }
+            return "Minecraft 26.3 crossplay files installed: Fabric API, Geyser-Fabric, Floodgate. Start the server, then confirm the Geyser listener on port 19132."
+        } finally {
+            stage.deleteRecursively()
+        }
     }
 
     fun acceptEula(context:Context) {
