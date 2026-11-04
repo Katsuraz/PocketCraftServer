@@ -498,22 +498,72 @@ class MainActivity : Activity() {
         addView(ui.space(this@MainActivity,7))
         addView(ui.text(this@MainActivity,detail,12f,ui.MUTED).apply {gravity=Gravity.CENTER})
     }
+    /**
+     * Android AlertDialog's message panel hides setItems on some Android builds.
+     * Use explicit themed buttons instead, so selection stays visible on realme UI.
+     */
     private fun installFabricPrompt() {
-        val versions=arrayOf("26.3  •  latest, Java 25","1.21.11  •  Java 21","1.20.1  •  Java 17")
-        val values=arrayOf("26.3","1.21.11","1.20.1")
-        AlertDialog.Builder(this)
-            .setTitle("Choose Minecraft version")
-            .setMessage("Downloads the official Fabric server launcher. This does not install an Android Java runtime.")
-            .setItems(versions) {_,which->
-                val version=values[which]
-                AlertDialog.Builder(this).setTitle("Install Fabric "+version+"?")
-                    .setMessage("The launcher will be downloaded from meta.fabricmc.net into PocketCraft app storage. An existing launcher JAR will be replaced. Your worlds and mods will not be deleted.")
-                    .setNegativeButton("Cancel",null)
-                    .setPositiveButton("Install") {_,_->
-                        downloadAsync("Fabric "+version) {ServerDownloads.installFabric(this,version)}
-                    }.show()
-            }.show()
+        val popup = ui.column(this).apply {
+            setPadding(ui.dp(this@MainActivity,18),ui.dp(this@MainActivity,10),
+                ui.dp(this@MainActivity,18),ui.dp(this@MainActivity,14))
+        }
+        popup.addView(ui.text(this,"Select a Minecraft version",17f,ui.WHITE,true))
+        popup.addView(ui.space(this,8))
+        popup.addView(ui.text(this,
+            "Choose the Fabric server version to download. The separate Java runtime must also be installed.",
+            12f,ui.MUTED))
+        popup.addView(ui.space(this,16))
+        val dialog=AlertDialog.Builder(this)
+            .setTitle("Install Fabric server")
+            .setView(popup)
+            .setNegativeButton("CANCEL",null)
+            .create()
+        val versions=listOf(
+            Triple("26.3", "Minecraft 26.3", "Recommended for Geyser crossplay • Java 25"),
+            Triple("1.21.11", "Minecraft 1.21.11", "Requires Java 21 • check older crossplay support"),
+            Triple("1.20.1", "Minecraft 1.20.1", "Requires Java 17 • older modpacks")
+        )
+        versions.forEach { (version,title,subtitle) ->
+            val item=ui.column(this).apply {
+                background=ui.shape(this@MainActivity,ui.SURFACE,14,0xFF344A61.toInt())
+                setPadding(ui.dp(this@MainActivity,15),ui.dp(this@MainActivity,14),
+                    ui.dp(this@MainActivity,15),ui.dp(this@MainActivity,14))
+                isClickable=true
+                isFocusable=true
+                contentDescription="$title. $subtitle"
+                setOnClickListener {
+                    dialog.dismiss()
+                    confirmFabricInstall(version)
+                }
+            }
+            val heading=ui.row(this)
+            heading.addView(ui.text(this,title,15f,ui.WHITE,true),LinearLayout.LayoutParams(0,-2,1f))
+            heading.addView(ui.text(this,"›",22f,ui.GREEN,true))
+            item.addView(heading)
+            item.addView(ui.space(this,5))
+            item.addView(ui.text(this,subtitle,11f,ui.MUTED))
+            popup.addView(item)
+            popup.addView(ui.space(this,9))
+        }
+        dialog.setOnShowListener {
+            dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+            dialog.window?.setBackgroundDrawable(ui.shape(this,ui.PANEL,22))
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.setTextColor(ui.CYAN)
+        }
+        dialog.show()
     }
+
+    private fun confirmFabricInstall(version:String) {
+        AlertDialog.Builder(this)
+            .setTitle("Install Fabric $version?")
+            .setMessage("Downloads the official Fabric server launcher from meta.fabricmc.net. This replaces only the server JAR, keeping your worlds and mods. A compatible Java runtime is also required.")
+            .setNegativeButton("CANCEL",null)
+            .setPositiveButton("INSTALL") {_,_->
+                downloadAsync("Fabric $version") {ServerDownloads.installFabric(this,version)}
+            }
+            .show()
+    }
+
     private fun downloadAsync(label:String, action:()->String) {
         val waiting=AlertDialog.Builder(this).setTitle("Downloading "+label)
             .setMessage("Retrieving files from the official project. Network connection required.")
