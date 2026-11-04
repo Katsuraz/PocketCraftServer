@@ -10,6 +10,7 @@
         android:icon="@drawable/pocket_logo"
         android:theme="@style/PocketCraftTheme"
         android:usesCleartextTraffic="false">
+        <activity android:name=".ModrinthModsActivity" android:exported="false"/>
         <activity android:name=".SettingsActivity" android:exported="false"/>
         <activity android:name=".ServerFilesActivity" android:exported="false"/>
         <activity android:name=".MainActivity" android:exported="true">
