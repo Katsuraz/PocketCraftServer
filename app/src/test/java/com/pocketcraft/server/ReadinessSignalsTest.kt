@@ -15,6 +15,16 @@ class ReadinessSignalsTest {
         assertEquals("JAVA READY",r.state())
     }
 
+    @Test fun netherNetSignalingRequiresExplicitRegistrationLog() {
+        val r=ReadinessSignals()
+        r.observe("[Geyser-Fabric] Initializing NetherNet signaling")
+        assertFalse(r.nethernetRegistered)
+        r.observe("[Geyser-Fabric] Registered with the external signaling service")
+        assertTrue(r.nethernetRegistered)
+        r.reset()
+        assertFalse(r.nethernetRegistered)
+    }
+
     @Test fun geyserListenerIsDifferentFromJavaStartup() {
         val r=ReadinessSignals()
         r.observe("[Geyser-Fabric] Loading resources")
