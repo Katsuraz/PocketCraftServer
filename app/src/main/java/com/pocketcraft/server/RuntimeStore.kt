@@ -75,6 +75,33 @@ object RuntimeStore {
         } finally { archive.delete() }
     }
 
+    /** Actually starts java -version, so a detected file is not mistaken for a working JVM. */
+    fun probe(c: Context): String {
+        val java = javaFile(c) ?: throw IOException("Install Android Java first")
+        val javaHome = java.parentFile!!.parentFile!!
+        val process = ProcessBuilder(java.absolutePath, "-version")
+            .directory(c.filesDir)
+            .redirectErrorStream(true)
+            .apply {
+                val env = environment()
+                env["JAVA_HOME"] = javaHome.absolutePath
+                env["TMPDIR"] = c.cacheDir.absolutePath
+                env["LD_LIBRARY_PATH"] = listOf(
+                    File(javaHome, "lib").absolutePath,
+                    File(javaHome, "lib/server").absolutePath,
+                    c.applicationInfo.nativeLibraryDir,
+                    env["LD_LIBRARY_PATH"].orEmpty()
+                ).filter { it.isNotBlank() }.joinToString(":")
+            }.start()
+        val text = process.inputStream.bufferedReader().use { it.readText().take(7000) }
+        if (!process.waitFor(12, java.util.concurrent.TimeUnit.SECONDS)) {
+            process.destroyForcibly()
+            throw IOException("Java self-test timed out")
+        }
+        if (process.exitValue() != 0) throw IOException("Java self-test failed: " + text.take(450))
+        return text.trim().ifEmpty { "Java binary exited successfully without version output" }
+    }
+
     private fun unpack(c: Context, archive: File) {
         val target = root(c)
         val stage = File(c.filesDir, "runtime25-installing")
