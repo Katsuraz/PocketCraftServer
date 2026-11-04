@@ -196,9 +196,7 @@ object ModpackImporter {
     }
 
     private fun checkVersion(context:Context,required:String) {
-        val current=context.getSharedPreferences("pocketcraft",0).getString("gameVersion",null)
-        if(current.isNullOrBlank())throw IOException("Minecraft version is unknown. Install or select the Fabric $required server in PocketCraft before importing this pack.")
-        if(current!=required)throw IOException("Modpack requires Minecraft $required, but the current Fabric server is $current. Switch versions before importing.")
+        ServerVersionManager.requireMatching(context,required)
     }
 
     private fun installMrpack(context:Context,zip:ZipFile,manifest:java.util.zip.ZipEntry,stage:File,base:File):Summary {
