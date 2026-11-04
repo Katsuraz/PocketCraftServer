@@ -449,11 +449,7 @@ class MainActivity : Activity() {
         card.addView(ui.action(this,
             if(ServerService.running) "✓  SERVER PROCESS ACTIVE" else "▶  HOST ON THIS PHONE — NO PLAYIT",
             true,!ServerService.running) {
-            startForegroundService(Intent(this,ServerService::class.java)
-                .setAction(ServerService.ACTION_START))
-            toast("Starting local Minecraft server. No external service used.")
-            tab=3
-            render()
+            startMinecraft()
         })
         if(local != null) {
             card.addView(ui.space(this,9))
@@ -614,6 +610,55 @@ class MainActivity : Activity() {
         return card
     }
 
+    /** Centralized guarded start for the hero, local-host and control actions. */
+    private fun startMinecraft() {
+        if (ServerService.running || ServerService.status == "STARTING") {
+            toast("Minecraft is already starting or running")
+            return
+        }
+        when {
+            !serverJar.isFile -> {
+                AlertDialog.Builder(this).setTitle("Fabric server needed")
+                    .setMessage("Install a Fabric server before starting your world.")
+                    .setNegativeButton("NOT NOW",null)
+                    .setPositiveButton("CHOOSE VERSION") {_,_->installFabricPrompt()}
+                    .show()
+                return
+            }
+            !RuntimeStore.isInstalled(this) -> {
+                installJavaPrompt()
+                return
+            }
+            !ServerDownloads.eulaAccepted(this) -> {
+                offerEula()
+                return
+            }
+        }
+        try {
+            startForegroundService(Intent(this,ServerService::class.java)
+                .setAction(ServerService.ACTION_START))
+            toast("Starting Minecraft. Live output is in the Console.")
+            tab=3
+            render()
+        } catch (e: Exception) {
+            AlertDialog.Builder(this).setTitle("Could not start Minecraft")
+                .setMessage(e.message ?: "Android prevented the server service from starting.")
+                .setPositiveButton("OK",null).show()
+        }
+    }
+
+    private fun confirmStopMinecraft() {
+        if (!ServerService.running) return
+        AlertDialog.Builder(this).setTitle("Stop your Minecraft server?")
+            .setMessage("Connected players will be disconnected. PocketCraft will request a graceful world save before stopping.")
+            .setNegativeButton("KEEP RUNNING",null)
+            .setPositiveButton("STOP SERVER") {_,_->
+                startService(Intent(this,ServerService::class.java).setAction(ServerService.ACTION_STOP))
+                toast("Graceful server shutdown requested")
+                render()
+            }.show()
+    }
+
     private fun enginePanel(): LinearLayout {
         val box = ui.card(this)
         val state = ServerService.status
@@ -628,16 +673,12 @@ class MainActivity : Activity() {
         }
         box.addView(ui.space(this,15))
         val buttons = ui.row(this)
-        buttons.addView(ui.action(this,"▶  START",true,!ServerService.running) {
-            val intent = Intent(this,ServerService::class.java).setAction(ServerService.ACTION_START)
-            startForegroundService(intent)
-            toast("Starting process; watch the Console for Minecraft startup")
-            tab=3; render()
+        buttons.addView(ui.action(this,"▶  START SERVER",true,
+            !ServerService.running && ServerService.status != "STARTING") {
+            startMinecraft()
         },ui.weight(this))
         buttons.addView(ui.action(this,"■  STOP",false,ServerService.running) {
-            startService(Intent(this,ServerService::class.java).setAction(ServerService.ACTION_STOP))
-            toast("Requesting graceful server stop")
-            render()
+            confirmStopMinecraft()
         },LinearLayout.LayoutParams(0,-2,1f))
         box.addView(buttons)
         box.addView(ui.space(this,9))
