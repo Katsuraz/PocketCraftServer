@@ -136,7 +136,9 @@ class MainActivity : Activity() {
             startActivity(Intent(this, SettingsActivity::class.java))
         })
         actions.addView(line())
-        actions.addView(actionRow("↓","Import Fabric server","Choose a Fabric server launcher JAR") { picker(1) })
+        actions.addView(actionRow("✦","Download Fabric server","Official Fabric download • select Minecraft version") { installFabricPrompt() })
+        actions.addView(line())
+        actions.addView(actionRow("↓","Import Fabric server","Choose an existing Fabric server launcher JAR") { picker(1) })
         actions.addView(line())
         actions.addView(actionRow("◈","Manage mod library","Import, disable, and remove JAR files") {tab=1;render()})
         actions.addView(line())
@@ -193,6 +195,14 @@ class MainActivity : Activity() {
         body.addView(h("Mod library","Manage your Fabric server add-ons"))
         body.addView(ui.space(this,15))
         body.addView(ui.action(this,"+  IMPORT MOD JAR",true) {picker(2)})
+        body.addView(ui.space(this,10))
+        body.addView(ui.action(this,"↓  DOWNLOAD GEYSER + FLOODGATE") {
+            AlertDialog.Builder(this).setTitle("Install crossplay bridge?")
+                .setMessage("Downloads the latest Geyser-Fabric and Floodgate JARs for Minecraft Java 26.3. Fabric API and a working Android JVM are also required. Existing matching JARs may be replaced.")
+                .setNegativeButton("Cancel",null)
+                .setPositiveButton("Download") {_,_-> downloadAsync("crossplay") {ServerDownloads.installCrossplay(this)} }
+                .show()
+        })
         body.addView(ui.space(this,12))
         val list=modFiles()
         body.addView(ui.text(this,list.size.toString() + " total  •  " + list.count {it.name.endsWith(".jar")} + " enabled",12f,ui.MUTED))
@@ -317,10 +327,60 @@ class MainActivity : Activity() {
         addView(ui.space(this@MainActivity,7))
         addView(ui.text(this@MainActivity,detail,12f,ui.MUTED).apply {gravity=Gravity.CENTER})
     }
+    private fun installFabricPrompt() {
+        val versions=arrayOf("26.3  •  latest, Java 25","1.21.11  •  Java 21","1.20.1  •  Java 17")
+        val values=arrayOf("26.3","1.21.11","1.20.1")
+        AlertDialog.Builder(this)
+            .setTitle("Choose Minecraft version")
+            .setMessage("Downloads the official Fabric server launcher. This does not install an Android Java runtime.")
+            .setItems(versions) {_,which->
+                val version=values[which]
+                AlertDialog.Builder(this).setTitle("Install Fabric "+version+"?")
+                    .setMessage("The launcher will be downloaded from meta.fabricmc.net into PocketCraft app storage. An existing launcher JAR will be replaced. Your worlds and mods will not be deleted.")
+                    .setNegativeButton("Cancel",null)
+                    .setPositiveButton("Install") {_,_->
+                        downloadAsync("Fabric "+version) {ServerDownloads.installFabric(this,version)}
+                    }.show()
+            }.show()
+    }
+    private fun downloadAsync(label:String, action:()->String) {
+        val waiting=AlertDialog.Builder(this).setTitle("Downloading "+label)
+            .setMessage("Retrieving files from the official project. Network connection required.")
+            .setCancelable(false).create()
+        waiting.show()
+        Thread {
+            val outcome=try {Result.success(action())}catch(e:Exception){Result.failure<String>(e)}
+            runOnUiThread {
+                waiting.dismiss()
+                outcome.onSuccess {message->
+                    AlertDialog.Builder(this).setTitle("Download complete")
+                        .setMessage(message).setPositiveButton("OK",null).show()
+                    render()
+                    if(label.startsWith("Fabric") && !ServerDownloads.eulaAccepted(this)) offerEula()
+                }.onFailure {error->
+                    AlertDialog.Builder(this).setTitle("Download failed")
+                        .setMessage(error.message ?: "Please check your connection and try again.")
+                        .setPositiveButton("OK",null).show()
+                }
+            }
+        }.start()
+    }
+    private fun offerEula() {
+        AlertDialog.Builder(this).setTitle("Minecraft EULA")
+            .setMessage("Before starting a Minecraft server, review and agree to Mojang's EULA at minecraft.net/en-us/eula. The app will only write eula=true if you explicitly agree.")
+            .setNeutralButton("Read EULA") {_,_->
+                startActivity(Intent(Intent.ACTION_VIEW,android.net.Uri.parse("https://www.minecraft.net/en-us/eula")))
+            }
+            .setNegativeButton("Not now",null)
+            .setPositiveButton("I have read and agree") {_,_->
+                ServerDownloads.acceptEula(this);toast("EULA acceptance saved")
+            }.show()
+    }
     private fun setup() {
         AlertDialog.Builder(this).setTitle("Server engine status")
             .setMessage("Fabric JAR: "+(if(serverJar.isFile)"Imported" else "Missing")+
                 "\nAndroid Java runtime: Not integrated"+
+                "\nEULA acceptance: "+(if(ServerDownloads.eulaAccepted(this))"Recorded" else "Required before launch")+
                 "\nGeyser/Floodgate: Requires compatible Fabric versions"+
                 "\nInternet tunnel: Not configured"+
                 "\n\nThis APK is an offline file manager and server control foundation. It cannot host Minecraft yet.")
