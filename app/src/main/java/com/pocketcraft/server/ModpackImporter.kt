@@ -173,22 +173,28 @@ object ModpackImporter {
                 val mr=zip.getEntry("modrinth.index.json")
                 val cf=zip.getEntry("manifest.json")
                 return when {
-                    mr!=null -> installMrpack(zip,mr,extracted,base)
-                    cf!=null -> installCurse(zip,cf,extracted,base,apiKey)
+                    mr!=null -> installMrpack(context,zip,mr,extracted,base)
+                    cf!=null -> installCurse(context,zip,cf,extracted,base,apiKey)
                     else -> throw IOException("No modrinth.index.json or CurseForge manifest.json found")
                 }
             }
         } finally {staging.deleteRecursively()}
     }
 
-    private fun installMrpack(zip:ZipFile,manifest:java.util.zip.ZipEntry,stage:File,base:File):Summary {
+    private fun checkVersion(context:Context,required:String) {
+        val current=context.getSharedPreferences("pocketcraft",0).getString("gameVersion",null)
+        if(current.isNullOrBlank())throw IOException("Install the matching Fabric server version before importing a modpack ($required).")
+        if(current!=required)throw IOException("Modpack requires Minecraft $required, but the current Fabric server is $current. Switch versions before importing.")
+    }
+
+    private fun installMrpack(context:Context,zip:ZipFile,manifest:java.util.zip.ZipEntry,stage:File,base:File):Summary {
         val index=JSONObject(zip.getInputStream(manifest).bufferedReader().use{it.readText()})
         if(index.optString("game")!="minecraft")throw IOException("Only Minecraft modpacks are supported")
         val deps=index.getJSONObject("dependencies")
         val version=deps.optString("minecraft")
         val loader=deps.optString("fabric-loader")
         if(loader.isBlank())throw IOException("This pack is not Fabric. Forge/NeoForge/Quilt cannot run in PocketCraft Fabric.")
-        val current=base.parentFile?.let{null} // Version is checked against the saved server setting below.
+        checkVersion(context,version)
         val files=index.getJSONArray("files")
         if(files.length()>MAX_FILES)throw IOException("Too many modpack files")
         var skipped=0
@@ -212,7 +218,7 @@ object ModpackImporter {
         return Summary(index.optString("name","Modrinth pack"),"Modrinth",version,"Fabric $loader",installed,skipped)
     }
 
-    private fun installCurse(zip:ZipFile,manifest:java.util.zip.ZipEntry,stage:File,base:File,key:String?):Summary {
+    private fun installCurse(context:Context,zip:ZipFile,manifest:java.util.zip.ZipEntry,stage:File,base:File,key:String?):Summary {
         val index=JSONObject(zip.getInputStream(manifest).bufferedReader().use{it.readText()})
         if(index.optString("manifestType")!="minecraftModpack") throw IOException("Not a CurseForge Minecraft modpack")
         val mc=index.getJSONObject("minecraft")
@@ -224,6 +230,7 @@ object ModpackImporter {
             if(id.startsWith("fabric-")) {loader=id;break}
         }
         if(loader.isBlank())throw IOException("Only Fabric CurseForge modpacks are supported")
+        checkVersion(context,version)
         val files=index.getJSONArray("files")
         if(files.length()>MAX_FILES)throw IOException("Too many CurseForge mods")
         if(files.length()>0 && key.isNullOrBlank())
