@@ -42,6 +42,8 @@ class ServerService : Service() {
             private set
         @Volatile var nethernetReady = false
             private set
+        @Volatile var nethernetNativeFailure = false
+            private set
     }
     private val readiness = ReadinessSignals()
     private var server: Process? = null
@@ -134,6 +136,7 @@ class ServerService : Service() {
         javaReady = false
         bedrockReady = false
         nethernetReady = false
+        nethernetNativeFailure = false
         Thread {
             try {
                 val launcher = File(root, "fabric-server-launch.jar")
@@ -167,6 +170,11 @@ class ServerService : Service() {
                     classPath,
                     mainClass
                 )
+                if (File(applicationInfo.nativeLibraryDir, "libdatachannel-java.so").isFile) {
+                    append("Experimental Android ARM64 WebRTC JNI is packaged; NetherNet startup still needs verification.")
+                } else {
+                    append("Android ARM64 WebRTC JNI is not packaged; Geyser NetherNet is expected to fail on bionic.")
+                }
                 append("Launching Fabric through Android-safe packaged JNI Java engine (heap max: ${requestedHeap} MB)")
                 val proc = ProcessBuilder(cmd)
                     .directory(root)
@@ -206,6 +214,7 @@ class ServerService : Service() {
                         javaReady = readiness.javaReady
                         bedrockReady = readiness.bedrockListener
                         nethernetReady = readiness.nethernetRegistered
+                        nethernetNativeFailure = readiness.nethernetNativeFailure
                         if (javaReady) {
                             status = readiness.state()
                             if (previous != status) {
@@ -253,6 +262,7 @@ class ServerService : Service() {
         javaReady = false
         bedrockReady = false
         nethernetReady = false
+        nethernetNativeFailure = false
         readiness.reset()
         status = if (failure.isBlank()) "OFFLINE" else "ERROR"
         try { wakeLock?.takeIf { it.isHeld }?.release() } catch (_: Exception) {}
