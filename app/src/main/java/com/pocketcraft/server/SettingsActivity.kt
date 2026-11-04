@@ -105,6 +105,26 @@ class SettingsActivity : Activity() {
             }
             body.addView(section)
         }
+        body.addView(ui.space(this,21))
+        body.addView(ui.text(this,"JAVA RUNTIME PLAN",11f,ui.GREEN,true))
+        body.addView(ui.space(this,10))
+        val resources=ui.card(this)
+        resources.addView(ui.text(this,"Maximum RAM (MB)",13f,ui.WHITE,true))
+        resources.addView(ui.space(this,6))
+        val memoryInput=EditText(this).apply {
+            setSingleLine(true)
+            textSize=14f
+            inputType=InputType.TYPE_CLASS_NUMBER
+            setTextColor(ui.WHITE)
+            setText(getSharedPreferences("pocketcraft",0).getInt("heapMB",2048).toString())
+            background=ui.shape(this@SettingsActivity,ui.SURFACE,12,0xFF34455F.toInt())
+            setPadding(ui.dp(this@SettingsActivity,14),ui.dp(this@SettingsActivity,11),
+                ui.dp(this@SettingsActivity,14),ui.dp(this@SettingsActivity,11))
+        }
+        resources.addView(memoryInput)
+        resources.addView(ui.space(this,9))
+        resources.addView(ui.text(this,"512–4096 MB. Saved for the future Android JVM integration; it does not allocate RAM in this prototype.",11f,ui.MUTED))
+        body.addView(resources)
         scroll.addView(body)
         screen.addView(scroll,LinearLayout.LayoutParams(-1,0,1f))
         val footer=ui.column(this).apply {
@@ -128,9 +148,15 @@ class SettingsActivity : Activity() {
                     }
                 }
             }
+            val heap=memoryInput.text.toString().toIntOrNull()
+            if(heap==null || heap !in 512..4096) {
+                Toast.makeText(this,"RAM must be 512–4096 MB",Toast.LENGTH_LONG).show()
+                return@action
+            }
             groups.values.flatten().forEach {field->
                 properties.setProperty(field.key,controls[field.key]!!.text.toString().trim())
             }
+            getSharedPreferences("pocketcraft",0).edit().putInt("heapMB",heap).apply()
             file.outputStream().use {properties.store(it,"PocketCraft Server configuration")}
             Toast.makeText(this,"Server settings saved",Toast.LENGTH_SHORT).show()
             finish()
