@@ -1389,11 +1389,17 @@ class MainActivity : Activity() {
         body.addView(ui.text(this,"Discover",16f,ui.WHITE,true))
         body.addView(ui.space(this,8))
         val discover=ui.card(this)
-        discover.addView(ui.action(this,"⌕  BROWSE MODRINTH PACKS",true) { browseModrinth() })
+        discover.addView(ui.action(this,"⌕  BROWSE & INSTALL MODS",true) {
+            startActivity(Intent(this,ModrinthModsActivity::class.java))
+        })
         discover.addView(ui.space(this,9))
-        discover.addView(ui.action(this,"↗  ADD MODS FROM WEBSITE") { installFromWebsite() })
+        discover.addView(ui.action(this,"▧  BROWSE MODPACKS") { browseModrinth() })
         discover.addView(ui.space(this,9))
-        discover.addView(ui.text(this,"Paste Modrinth mod/modpack pages or trusted direct Fabric JAR / .mrpack download links.",11f,ui.MUTED))
+        discover.addView(ui.text(this,
+            "Find mods by name or category inside PocketCraft, check Fabric compatibility, and install without copying URLs.",
+            11f,ui.MUTED))
+        discover.addView(ui.space(this,9))
+        discover.addView(ui.action(this,"ADVANCED: INSTALL DIRECT LINK") {installFromWebsite()})
         discover.addView(ui.space(this,10))
         discover.addView(ui.action(this,"CONFIRM EXISTING FABRIC VERSION",true) { showServerVersionPrompt() })
         discover.addView(ui.space(this,7))
