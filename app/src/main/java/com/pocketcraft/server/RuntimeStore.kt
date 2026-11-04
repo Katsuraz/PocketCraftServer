@@ -45,6 +45,7 @@ object RuntimeStore {
         val archive = File(c.cacheDir, "jre25-android-arm64.tar.xz")
         try {
             progress("Downloading Java 25 (about 36 MB)")
+            InstallProgress.emit("Downloading Java 25…")
             val conn = URL(ARCHIVE_URL).openConnection() as HttpURLConnection
             try {
                 conn.connectTimeout = 25000
@@ -61,6 +62,7 @@ object RuntimeStore {
                             val count = input.read(buffer)
                             if (count < 0) break
                             length += count
+                            InstallProgress.emit("Downloading Java 25",length,conn.contentLengthLong)
                             if (length > LIMIT_DOWNLOAD) throw IOException("Java archive exceeded 100 MB limit")
                             digest.update(buffer, 0, count)
                             out.write(buffer, 0, count)
@@ -71,6 +73,7 @@ object RuntimeStore {
                 if (actual != ARCHIVE_SHA256) throw IOException("Java archive checksum mismatch; installation cancelled")
             } finally { conn.disconnect() }
             progress("Verifying and unpacking Android Java 25")
+            InstallProgress.emit("Verifying and extracting Java 25…")
             unpack(c, archive)
             return "Java 25 files installed. Launch support is experimental: use Console to check JVM output."
         } finally { archive.delete() }
@@ -116,6 +119,7 @@ object RuntimeStore {
                     TarArchiveInputStream(xz).use { tar ->
                         while (true) {
                             val item = tar.nextTarEntry ?: break
+                            InstallProgress.check()
                             if (++entries > 12000) throw IOException("Too many JRE archive entries")
                             val name = ArchiveSafety.relativeEntry(item.name) ?: continue
                             val file = ArchiveSafety.within(stage, name)
@@ -134,6 +138,7 @@ object RuntimeStore {
                                             val n = tar.read(buffer)
                                             if (n < 0) break
                                             total += n
+                                            InstallProgress.emit("Unpacking Java runtime",total,-1)
                                             if (total > LIMIT_EXTRACT) throw IOException("JRE unpacked size too large")
                                             out.write(buffer, 0, n)
                                         }
