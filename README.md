@@ -69,3 +69,31 @@ Build uses Gradle/JDK 17 for the Android app; the phone separately downloads the
 - Apache Commons Compress (Apache-2.0) and XZ for Java (public domain) perform runtime extraction.
 
 PocketCraft is an experimental community project, not an official Minecraft product, and is not affiliated with Mojang, Microsoft, GeyserMC, or AngelAuraMC. Only run trusted mods; mods are executable code and can access server files.
+
+
+## Java ImageIO / Geyser Android temporary directory fix
+The Android host explicitly creates `cacheDir/minecraft-java-tmp` and launches Java with
+`-Djava.io.tmpdir=<the private writable path>` plus `TMPDIR`, `TMP` and `TEMP` pointing to it.
+This avoids the `NoSuchFileException: /tmp/imageio*.tmp` / `Can't create cache file!` failure
+when Geyser loads client skin textures. A server being ready does not prove Bedrock
+connectivity: check Geyser startup messages and ensure port 19132 is reachable.
+
+## Installing APK updates without uninstalling
+Android requires every update to use **the same signing certificate**, package ID,
+and a nondecreasing versionCode. GitHub's per-run default debug keys do not meet this
+requirement. This project now optionally accepts repository Actions secrets:
+
+- `POCKETCRAFT_KEYSTORE_BASE64`: base64 encoding of a privately held PKCS12
+  keystore whose key alias is `pocketcraft`.
+- `POCKETCRAFT_SIGNING_PASSWORD`: the keystore and key password.
+
+Configure both secrets in GitHub → Settings → Secrets and variables → Actions.
+Builds with these secrets use the stable key and verify the resulting APK using
+`apksigner`. A build without secrets still produces a **temporary debug-signed**
+APK, and a warning is shown; it cannot be relied on for upgrade compatibility.
+
+**Keep the signing key secret, and back it up.** Never commit it to a public repo.
+Existing builds signed using disposable debug keys cannot be retroactively upgraded
+with this new certificate. Export important worlds and configurations before the
+one-time migration to a permanently signed build. Thereafter, installing a later
+APK signed with the same key can update the app without uninstalling it.
