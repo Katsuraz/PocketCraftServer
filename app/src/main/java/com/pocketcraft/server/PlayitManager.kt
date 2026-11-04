@@ -119,10 +119,10 @@ object PlayitManager {
     @Synchronized fun goOnline(c: Context, javaPort: Int, bedrockPort: Int = 19132, enableBedrock: Boolean = true) {
         requestedJavaPort = javaPort.coerceIn(1, 65535)
         requestedBedrockPort = bedrockPort.coerceIn(1, 65535)
-        autoBedrockRequested = enableBedrock
+        autoBedrockRequested = false // Existing Bedrock tunnels are still detected
         bedrockCreationAttempted = false
         bedrockCreationNeedsHelp = false
-        autoCreateRequested = true
+        autoCreateRequested = false
         autoCreationAttempted = false
         creationNeedsHelp = false
         if (isActive()) {
@@ -240,53 +240,29 @@ object PlayitManager {
                 claimUrl = null
                 status = "CHECKING"
                 detail = "Finding your Minecraft Java address..."
-                var state = PlayitApiBridge.fetch(c)
-                if (state.javaTunnelCount == 0 && state.pendingJavaCount == 0 && autoCreateRequested && !autoCreationAttempted) {
-                    autoCreationAttempted = true
-                    status = "CREATING FREE TUNNEL"
-                    detail = "Requesting a free Minecraft Java tunnel from Playit..."
-                    try {
-                        PlayitApiBridge.createJava(c, state.agentId, requestedJavaPort)
-                        append(c, "Requested free Java tunnel for port $requestedJavaPort")
-                        // Allocations can take a moment; a later refresh will display the address.
-                        state = PlayitApiBridge.fetch(c)
-                    } catch (e:Exception) {
-                        creationNeedsHelp = true
-                        detail = "Automatic Java tunnel setup was rejected. Tap Finish Setup."
-                        append(c, "Automatic tunnel creation failed: ${e.message}")
-                    }
-                }
-                if (autoBedrockRequested && state.bedrockTunnelCount == 0 &&
-                    state.pendingBedrockCount == 0 && !bedrockCreationAttempted) {
-                    bedrockCreationAttempted = true
-                    status = "CONFIGURING BEDROCK"
-                    detail = "Requesting a free Bedrock NetherNet tunnel..."
-                    try {
-                        PlayitApiBridge.createBedrock(c, state.agentId, requestedBedrockPort)
-                        append(c, "Requested Bedrock tunnel for port $requestedBedrockPort")
-                        state = PlayitApiBridge.fetch(c)
-                    } catch (e:Exception) {
-                        bedrockCreationNeedsHelp = true
-                        append(c, "Automatic Bedrock tunnel creation failed: ${e.message}")
-                    }
-                }
+                // The agent key may not be allowed to CREATE tunnels
+                // through the API. Discover tunnels the user assigned in
+                // Playit's account dashboard; don't generate repeated 403s.
+                val state = PlayitApiBridge.fetch(c)
                 if (accountBlocked) return@Thread
                 javaAddress = state.javaAddress
                 bedrockAddress = state.bedrockAddress
+                creationNeedsHelp = javaAddress == null && state.pendingJavaCount == 0
                 status = when {
-                    javaAddress != null && (!autoBedrockRequested || bedrockAddress != null) -> "ADDRESSES ASSIGNED"
+                    javaAddress != null && bedrockAddress != null -> "ADDRESSES ASSIGNED"
                     javaAddress != null -> "JAVA ADDRESS ASSIGNED"
-                    creationNeedsHelp -> "SETUP HELP NEEDED"
-                    else -> "CONFIGURING"
+                    state.pendingJavaCount > 0 -> "WAITING FOR TUNNEL"
+                    else -> "SETUP HELP NEEDED"
                 }
-                if (javaAddress != null) {
-                    detail = if (bedrockCreationNeedsHelp)
-                        "Java address assigned. Bedrock tunnel requires provider setup."
-                    else if (autoBedrockRequested && bedrockAddress == null)
-                        "Java ready; waiting for your Bedrock address."
-                    else "Public address assigned. Test joining from another network."
-                } else if (!creationNeedsHelp) {
-                    detail = if (state.pendingJavaCount > 0) "Playit is allocating your free Java address..." else "No Java tunnel yet. Tap Finish Setup if automatic creation is unavailable."
+                detail = when {
+                    javaAddress != null && bedrockAddress != null ->
+                        "Public Java and Bedrock addresses assigned. Verify both from another network."
+                    javaAddress != null ->
+                        "Java address ready. Create or assign a supported Bedrock tunnel in Playit dashboard."
+                    state.pendingJavaCount > 0 ->
+                        "Waiting for your Playit Java tunnel address to be allocated."
+                    else ->
+                        "Playit agent connected, but has no Minecraft Java tunnel. Create one in Playit dashboard to 127.0.0.1:$requestedJavaPort. Bedrock needs a supported tunnel to 127.0.0.1:$requestedBedrockPort."
                 }
             } catch(e:Exception) {
                 val message = e.message.orEmpty()
@@ -307,7 +283,7 @@ object PlayitManager {
         accountBlocked = false
         status = "CHECKING"
         detail = "Retrying Playit account status…"
-        autoCreateRequested = true
+        autoCreateRequested = false
         autoCreationAttempted = false
         bedrockCreationAttempted = false
         bedrockCreationNeedsHelp = false
