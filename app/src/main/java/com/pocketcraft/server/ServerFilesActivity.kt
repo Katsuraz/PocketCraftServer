@@ -333,12 +333,20 @@ class ServerFilesActivity : Activity() {
         val geyser=mods.any{it.contains("geyser")&&it.endsWith(".jar")}
         val floodgate=mods.any{it.contains("floodgate")&&it.endsWith(".jar")}
         val fabric=mods.any{it.contains("fabric-api")&&it.endsWith(".jar")}
+        val geyserYml=if(conf.isFile && conf.length()<ServerFileOps.MAX_EDIT_BYTES)
+            runCatching{conf.readText(Charsets.UTF_8)}.getOrDefault("") else ""
+        val bedrockPort=Regex("""(?m)^ *port: *([0-9]{1,5}) *$""")
+            .find(geyserYml)?.groupValues?.get(1) ?: "not detected"
+        val authType=Regex("""(?m)^ *auth-type: *([a-zA-Z_-]+)""")
+            .find(geyserYml)?.groupValues?.get(1) ?: "not detected"
         val body=listOf(
             "Minecraft Java: "+if(ServerService.javaReady)"Ready" else "Not ready",
             "Geyser-Fabric JAR: "+if(geyser)"Present" else "Missing",
             "Floodgate JAR: "+if(floodgate)"Present" else "Missing",
             "Fabric API JAR: "+if(fabric)"Present" else "Missing",
             "Geyser config: "+if(conf.isFile)"Found" else "Missing",
+            "Bedrock port in config: "+bedrockPort,
+            "Geyser auth mode: "+authType,
             "Bedrock listener: "+if(ServerService.bedrockReady)"Reported" else "Not confirmed",
             "NetherNet signaling: "+if(ServerService.nethernetReady)"Registered" else "Not confirmed",
             "Playit agent: "+PlayitManager.status,
@@ -351,7 +359,12 @@ class ServerFilesActivity : Activity() {
         ).joinToString("\n")
         AlertDialog.Builder(this).setTitle("Bedrock connection diagnostics")
             .setMessage(body)
-            .setNeutralButton("OPEN GEYSER CONFIG"){_,_->openPath(conf)}
+            .setNeutralButton("COPY SAFE REPORT"){_,_->
+                (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
+                    .setPrimaryClip(ClipData.newPlainText("PocketCraft Bedrock checks",body))
+                toast("Copied diagnostic summary without secrets. You can share it for help.")
+            }
+            .setNegativeButton("GEYSER CONFIG"){_,_->openPath(conf)}
             .setPositiveButton("DONE",null).show()
     }
 }
