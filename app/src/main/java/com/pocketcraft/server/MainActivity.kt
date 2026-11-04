@@ -2056,86 +2056,286 @@ class MainActivity : Activity() {
         }
         startActivityForResult(intent,code)
     }
-    private fun browseModrinth() {
-        val input=android.widget.EditText(this).apply {
-            hint="Search Fabric modpacks"
+
+    private fun showServerVersionPrompt() {
+        val info=ServerVersionManager.current(this)
+        if(!info.launcherPresent) {
+            AlertDialog.Builder(this).setTitle("Fabric launcher missing")
+                .setMessage("Fabric must be installed or imported before modpack installation.")
+                .setNegativeButton("CANCEL",null)
+                .setPositiveButton("INSTALL FABRIC"){_,_->installFabricPrompt()}.show()
+            return
+        }
+        if(ServerService.running || ServerService.status=="STARTING") {
+            toast("Stop Minecraft before recording its version")
+            return
+        }
+        val box=ui.column(this).apply {
+            setPadding(ui.dp(this@MainActivity,18),ui.dp(this@MainActivity,12),
+                ui.dp(this@MainActivity,18),ui.dp(this@MainActivity,12))
+        }
+        box.addView(ui.text(this,"Detected version: "+(info.version ?: "UNKNOWN")+
+            "\nSource: "+info.source,13f,ui.WHITE,true))
+        box.addView(ui.space(this,9))
+        box.addView(ui.text(this,
+            "Confirm the Minecraft version of your existing Fabric server. This changes only PocketCraft's saved setting; it does not download Fabric. Check Console before selecting.",
+            12f,ui.MUTED))
+        box.addView(ui.space(this,11))
+        val field=android.widget.EditText(this).apply {
+            hint="e.g. 26.3"
+            setText(info.version ?: "")
             setSingleLine(true)
-            textSize=16f
-            setTextColor(ui.WHITE);setHintTextColor(ui.MUTED)
-            background=ui.shape(this@MainActivity,ui.SURFACE,12)
-            setPadding(ui.dp(this@MainActivity,14),ui.dp(this@MainActivity,14),
-                ui.dp(this@MainActivity,14),ui.dp(this@MainActivity,14))
+            setTextColor(ui.WHITE)
+            setHintTextColor(ui.MUTED)
+            background=ui.shape(this@MainActivity,ui.SURFACE,12,ui.BORDER)
+            setPadding(ui.dp(this@MainActivity,12),ui.dp(this@MainActivity,12),
+                ui.dp(this@MainActivity,12),ui.dp(this@MainActivity,12))
         }
-        val shell=ui.column(this).apply{
-            setPadding(ui.dp(this@MainActivity,20),ui.dp(this@MainActivity,12),
-                ui.dp(this@MainActivity,20),ui.dp(this@MainActivity,15))
-            addView(input)
+        box.addView(field)
+        box.addView(ui.space(this,9))
+        val versions=ui.row(this)
+        listOf("26.3","1.21.11","1.20.1").forEach {ver->
+            versions.addView(ui.action(this,ver){field.setText(ver)},
+                LinearLayout.LayoutParams(0,-2,1f))
         }
-        AlertDialog.Builder(this).setTitle("Explore Modrinth")
-            .setMessage("Discover Fabric modpacks. Only releases matching your installed Minecraft server can be installed.")
-            .setView(shell).setNegativeButton("CANCEL",null)
-            .setPositiveButton("SEARCH") {_,_->
-                val query=input.text.toString().trim()
-                if(query.isBlank())toast("Enter a search term") else {
-                    val wait=AlertDialog.Builder(this).setTitle("Searching Modrinth")
-                        .setMessage("Finding compatible Fabric modpacks…").setCancelable(false).create()
-                    wait.show()
-                    Thread{
-                        val result=runCatching{ModrinthDiscovery.find(query)}
-                        runOnUiThread {
-                            wait.dismiss()
-                            result.onSuccess {showModrinthPacks(it)}
-                                .onFailure {toast("Search failed: "+it.message)}
-                        }
-                    }.start()
-                }
+        box.addView(versions)
+        val dialog=AlertDialog.Builder(this).setTitle("Existing Fabric server version")
+            .setView(box).setNegativeButton("CANCEL",null)
+            .setPositiveButton("CONFIRM",null).create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                try {
+                    ServerVersionManager.confirm(this,field.text.toString().trim())
+                    dialog.dismiss()
+                    toast("Minecraft version saved. No server files changed.")
+                    render()
+                }catch(e:Exception){field.error=e.message}
+            }
+        }
+        dialog.show()
+    }
+
+    private fun browseModrinth() {
+        val current=ServerVersionManager.current(this)
+        val form=ui.column(this).apply {
+            setPadding(ui.dp(this@MainActivity,18),ui.dp(this@MainActivity,10),
+                ui.dp(this@MainActivity,18),ui.dp(this@MainActivity,13))
+        }
+        form.addView(ui.text(this,"Browse real Fabric modpacks",17f,ui.WHITE,true))
+        form.addView(ui.space(this,7))
+        form.addView(ui.text(this,
+            "Minecraft version: "+(current.version ?: "unknown")+
+            ". Browsing is available even without a configured server. Geyser compatibility is not guaranteed.",
+            12f,ui.MUTED))
+        form.addView(ui.space(this,10))
+        val input=android.widget.EditText(this).apply {
+            hint="Search, or leave blank for popular packs"
+            setSingleLine(true)
+            setTextColor(ui.WHITE)
+            setHintTextColor(ui.MUTED)
+            background=ui.shape(this@MainActivity,ui.SURFACE,12,ui.BORDER)
+            setPadding(ui.dp(this@MainActivity,12),ui.dp(this@MainActivity,12),
+                ui.dp(this@MainActivity,12),ui.dp(this@MainActivity,12))
+        }
+        form.addView(input)
+        form.addView(ui.space(this,9))
+        form.addView(ui.text(this,"SEARCH IDEAS",11f,ui.CYAN,true))
+        val examples=listOf("vanilla","smp","adventure","worldgen","performance","cozy")
+        for(i in 0..1) {
+            val quick=ui.row(this)
+            examples.drop(i*3).take(3).forEach{word->
+                quick.addView(ui.action(this,word.uppercase(Locale.ROOT)) {
+                    input.setText(word)
+                },LinearLayout.LayoutParams(0,-2,1f))
+            }
+            form.addView(ui.space(this,6))
+            form.addView(quick)
+        }
+        form.addView(ui.space(this,9))
+        val match=android.widget.CheckBox(this).apply {
+            text=if(current.version==null)"Server version unknown — showing all"
+                else "Only Minecraft "+current.version+" releases"
+            setTextColor(ui.WHITE)
+            isChecked=current.version!=null
+            isEnabled=current.version!=null
+        }
+        form.addView(match)
+        form.addView(ui.space(this,8))
+        val sorting=listOf("POPULAR" to "downloads","UPDATED" to "updated",
+            "RELEVANCE" to "relevance","NEWEST" to "newest")
+        var selectedSort="downloads"
+        lateinit var sortButton:TextView
+        sortButton=ui.action(this,"SORT: POPULAR") {
+            AlertDialog.Builder(this).setTitle("Sort modpacks")
+                .setItems(sorting.map{it.first}.toTypedArray()){_,i->
+                    selectedSort=sorting[i].second
+                    sortButton.text="SORT: "+sorting[i].first
+                }.setNegativeButton("CANCEL",null).show()
+        }
+        form.addView(sortButton)
+        form.addView(ui.space(this,10))
+        form.addView(ui.text(this,
+            "Crossplay note: most Java modpacks are not automatically compatible with Geyser. Packs with custom Java blocks, items, or mandatory client mods require manual assessment.",
+            11f,ui.MUTED))
+        AlertDialog.Builder(this).setTitle("Modrinth")
+            .setView(ScrollView(this).apply{addView(form)})
+            .setNegativeButton("CANCEL",null)
+            .setNeutralButton("SERVER VERSION"){_,_->showServerVersionPrompt()}
+            .setPositiveButton("BROWSE"){_,_->
+                searchModrinth(input.text.toString(),if(match.isChecked)current.version else null,
+                    selectedSort,0)
             }.show()
     }
 
-    private fun showModrinthPacks(packs:List<ModrinthDiscovery.Pack>) {
-        if(packs.isEmpty()){toast("No Fabric modpacks found");return}
+    private fun searchModrinth(query:String,version:String?,sort:String,offset:Int) {
+        val waiting=AlertDialog.Builder(this).setTitle("Modrinth search")
+            .setMessage("Searching Fabric modpacks…").setCancelable(false).create()
+        waiting.show()
+        Thread {
+            val result=runCatching{ModrinthDiscovery.find(query,version,sort,offset)}
+            runOnUiThread {
+                if(isFinishing)return@runOnUiThread
+                waiting.dismiss()
+                result.onSuccess {showModrinthPacks(it,query,version,sort)}
+                    .onFailure {
+                        AlertDialog.Builder(this).setTitle("Search failed")
+                            .setMessage(it.message ?: "Check your connection.")
+                            .setPositiveButton("OK",null).show()
+                    }
+            }
+        }.start()
+    }
+
+    private fun showModrinthPacks(
+        page:ModrinthDiscovery.Page,query:String,version:String?,sort:String
+    ) {
         val screen=ui.column(this).apply {
             setPadding(ui.dp(this@MainActivity,15),ui.dp(this@MainActivity,8),
                 ui.dp(this@MainActivity,15),ui.dp(this@MainActivity,16))
         }
+        val first=if(page.packs.isEmpty())0 else page.offset+1
+        val last=page.offset+page.packs.size
+        screen.addView(ui.pill(this,if(version==null)"ALL FABRIC VERSIONS"
+            else "MINECRAFT "+version,ui.CYAN))
+        screen.addView(ui.space(this,9))
+        screen.addView(ui.text(this,
+            "Showing "+first+"–"+last+" of "+page.total+" results",13f,ui.WHITE,true))
+        screen.addView(ui.space(this,8))
+        screen.addView(ui.text(this,
+            "Modrinth support is not proof of Geyser crossplay. Check whether a pack uses client-only mods, new blocks or custom items.",
+            11f,ui.MUTED))
+        screen.addView(ui.space(this,12))
         lateinit var dialog:AlertDialog
-        packs.forEach { pack ->
-            val item=ui.column(this).apply{
-                background=ui.shape(this@MainActivity,ui.SURFACE,13)
-                setPadding(ui.dp(this@MainActivity,15),ui.dp(this@MainActivity,13),
-                    ui.dp(this@MainActivity,15),ui.dp(this@MainActivity,13))
-                isClickable=true
-                addView(ui.text(this@MainActivity,pack.title,15f,ui.WHITE,true))
-                addView(ui.space(this@MainActivity,5))
-                addView(ui.text(this@MainActivity,pack.description,11f,ui.MUTED))
-                setOnClickListener {
-                    dialog.dismiss()
-                    AlertDialog.Builder(this@MainActivity)
-                        .setTitle("Install "+pack.title+"?")
-                        .setMessage("The app downloads the matching .mrpack, checks its server dependencies and installs allowed server files. The server must be stopped. Existing files won't be overwritten.")
-                        .setNegativeButton("CANCEL",null)
-                        .setPositiveButton("INSTALL"){_,_->
-                            if(ServerService.running){toast("Stop the server first");return@setPositiveButton}
-                            val version=getSharedPreferences("pocketcraft",0)
-                                .getString("gameVersion",null)
-                            if(version.isNullOrBlank()){toast("Install a Fabric server first");return@setPositiveButton}
-                            downloadAsync("Modrinth: "+pack.title){
-                                val uri=ModrinthDiscovery.downloadLatest(this@MainActivity,pack,version)
-                                try {ModpackImporter.install(this@MainActivity,uri).description()}
-                                finally{File(uri.path ?: "").delete()}
-                            }
-                        }.show()
-                }
-            }
+        page.packs.forEach {pack->
+            val item=ui.card(this)
+            item.addView(ui.text(this,pack.title,15f,ui.WHITE,true))
+            item.addView(ui.space(this,5))
+            item.addView(ui.text(this,pack.description,12f,ui.MUTED))
+            item.addView(ui.space(this,7))
+            val downloads=if(pack.downloads>=1000000)
+                String.format(Locale.ROOT,"%.1fM",pack.downloads/1000000.0)
+                else if(pack.downloads>=1000)
+                    String.format(Locale.ROOT,"%.1fK",pack.downloads/1000.0)
+                else pack.downloads.toString()
+            item.addView(ui.text(this,
+                downloads+" downloads • "+pack.gameVersions.take(4).joinToString(", "),
+                11f,ui.MUTED))
+            item.addView(ui.space(this,8))
+            item.addView(ui.pill(this,if(pack.clientOnly)"CLIENT-ONLY"
+                else "GEYSER UNVERIFIED",if(pack.clientOnly)ui.RED else ui.CYAN))
+            item.addView(ui.space(this,9))
+            item.addView(ui.action(this,"DETAILS & INSTALL",true) {
+                dialog.dismiss()
+                showModrinthDetail(pack)
+            })
             screen.addView(item)
-            screen.addView(ui.space(this,9))
+            screen.addView(ui.space(this,10))
         }
-        val scroll=ScrollView(this).apply {addView(screen)}
+        if(page.packs.isEmpty()) screen.addView(ui.text(this,
+            "No matching Fabric packs found. Try a different search or browse all versions.",
+            13f,ui.MUTED))
+        val nav=ui.row(this)
+        if(page.offset>0) nav.addView(ui.action(this,"‹ PREVIOUS") {
+            dialog.dismiss()
+            searchModrinth(query,version,sort,
+                (page.offset-ModrinthDiscovery.PAGE_SIZE).coerceAtLeast(0))
+        },ui.weight(this))
+        if(page.packs.isNotEmpty() && page.offset+page.packs.size<page.total) {
+            nav.addView(ui.action(this,"NEXT ›",true) {
+                dialog.dismiss()
+                searchModrinth(query,version,sort,page.offset+ModrinthDiscovery.PAGE_SIZE)
+            },LinearLayout.LayoutParams(0,-2,1f))
+        }
+        if(nav.childCount>0)screen.addView(nav)
+        screen.addView(ui.space(this,10))
+        screen.addView(ui.action(this,"NEW SEARCH") {
+            dialog.dismiss()
+            browseModrinth()
+        })
         dialog=AlertDialog.Builder(this).setTitle("Modrinth modpacks")
-            .setView(scroll).setNegativeButton("CLOSE",null).create()
+            .setView(ScrollView(this).apply{addView(screen)})
+            .setNegativeButton("CLOSE",null).create()
         dialog.show()
-        dialog.window?.setLayout((resources.displayMetrics.widthPixels*0.94).toInt(),
-            (resources.displayMetrics.heightPixels*0.75).toInt())
+        dialog.window?.setLayout((resources.displayMetrics.widthPixels*.94).toInt(),
+            (resources.displayMetrics.heightPixels*.78).toInt())
+    }
+
+    private fun showModrinthDetail(pack:ModrinthDiscovery.Pack) {
+        val info=ServerVersionManager.current(this)
+        val matches=info.version!=null &&
+            (pack.gameVersions.isEmpty() || info.version in pack.gameVersions)
+        val panel=ui.column(this).apply {
+            setPadding(ui.dp(this@MainActivity,17),ui.dp(this@MainActivity,11),
+                ui.dp(this@MainActivity,17),ui.dp(this@MainActivity,12))
+        }
+        panel.addView(ui.text(this,pack.title,18f,ui.WHITE,true))
+        panel.addView(ui.space(this,8))
+        panel.addView(ui.text(this,pack.description,12f,ui.MUTED))
+        panel.addView(ui.space(this,11))
+        panel.addView(ui.text(this,"Installed Fabric: "+(info.version ?: "UNKNOWN")+
+            "\nSource: "+info.source+"\nPack versions: "+
+            pack.gameVersions.take(12).joinToString(", ").ifBlank{"Not listed"}+
+            "\nServer environment: "+pack.serverSupport,12f,ui.WHITE))
+        panel.addView(ui.space(this,11))
+        val warning=when {
+            !info.launcherPresent -> "Fabric server launcher is missing."
+            info.version==null -> "Fabric is installed, but its version is unknown. Confirm the version; you do not need to reinstall Fabric."
+            pack.clientOnly -> "This pack is listed as client-only, not suitable for a server installation."
+            !matches -> "This pack does not list your server version. Choose a matching release or modpack."
+            else -> "Matching version listed. Actual Geyser compatibility and phone performance remain unverified."
+        }
+        panel.addView(ui.text(this,warning,12f,
+            if(matches && !pack.clientOnly)ui.CYAN else ui.RED))
+        panel.addView(ui.space(this,11))
+        panel.addView(ui.action(this,"VIEW ON MODRINTH") {
+            startActivity(Intent(Intent.ACTION_VIEW,android.net.Uri.parse(pack.link)))
+        })
+        if(info.launcherPresent && info.version==null) {
+            panel.addView(ui.space(this,9))
+            panel.addView(ui.action(this,"CONFIRM FABRIC VERSION",true) {
+                showServerVersionPrompt()
+            })
+        }
+        if(matches && !pack.clientOnly) {
+            panel.addView(ui.space(this,10))
+            panel.addView(ui.action(this,"DOWNLOAD & INSTALL",true,!ServerService.running) {
+                AlertDialog.Builder(this).setTitle("Install "+pack.title+"?")
+                    .setMessage("Only the exact Minecraft "+info.version+
+                        " Fabric release will be downloaded and verified. Existing files will not be overwritten. Export a full server ZIP before importing large packs. Bedrock/Geyser crossplay is not guaranteed.")
+                    .setNegativeButton("CANCEL",null)
+                    .setPositiveButton("INSTALL"){_,_->
+                        if(ServerService.running)toast("Stop Minecraft first")
+                        else downloadAsync("Modrinth: "+pack.title) {
+                            val uri=ModrinthDiscovery.downloadLatest(this,pack,info.version!!)
+                            try{ModpackImporter.install(this,uri).description()}
+                            finally{uri.path?.let{File(it).delete()}}
+                        }
+                    }.show()
+            })
+        }
+        AlertDialog.Builder(this).setTitle("Pack details")
+            .setView(ScrollView(this).apply{addView(panel)})
+            .setPositiveButton("CLOSE",null).show()
     }
 
     private fun askCurseForgeKey(uri:android.net.Uri) {
