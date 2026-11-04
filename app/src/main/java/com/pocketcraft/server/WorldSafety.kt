@@ -30,7 +30,7 @@ internal object WorldSafety {
         if(entries.size>MAX_FILE_COUNT)throw IOException("World has too many files for automatic backup")
         var bytes=0L
         for(file in entries) {
-            if (file.canonicalPath != file.absolutePath ||
+            if (java.nio.file.Files.isSymbolicLink(file.toPath()) ||
                 !file.canonicalPath.startsWith(source.canonicalPath+File.separator)) {
                 throw IOException("World contains linked or unsafe files")
             }
