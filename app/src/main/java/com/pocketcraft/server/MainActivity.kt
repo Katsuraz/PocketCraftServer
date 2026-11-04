@@ -142,6 +142,8 @@ class MainActivity : Activity() {
         actions.addView(line())
         actions.addView(actionRow("✦","Download Fabric server","Official Fabric download • select Minecraft version") { installFabricPrompt() })
         actions.addView(line())
+        actions.addView(actionRow("☕","Install Android Java 25","36 MB verified ARM64 runtime download") { installJavaPrompt() })
+        actions.addView(line())
         actions.addView(actionRow("↓","Import Fabric server","Choose an existing Fabric server launcher JAR") { picker(1) })
         actions.addView(line())
         actions.addView(actionRow("◈","Manage mod library","Import, disable, and remove JAR files") {tab=1;render()})
