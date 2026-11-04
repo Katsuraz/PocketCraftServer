@@ -300,48 +300,98 @@ class MainActivity : Activity() {
         return box
     }
 
+    /** One-tap Playit setup: first use requires a one-time external account approval. */
     private fun internetPanel(): LinearLayout {
         val card = ui.card(this)
-        card.addView(ui.text(this,"WORLDWIDE MULTIPLAYER",11f,ui.PURPLE,true))
+        val active = PlayitManager.isActive()
+        val javaAddress = PlayitManager.javaAddress
+        val bedrockAddress = PlayitManager.bedrockAddress
+        val approval = PlayitManager.claimUrl
+        card.addView(ui.text(this,"INTERNET HOSTING",11f,ui.CYAN,true))
+        card.addView(ui.space(this,8))
+        card.addView(ui.text(this,"Play with friends anywhere",18f,ui.WHITE,true))
+        card.addView(ui.space(this,8))
+        card.addView(ui.pill(this,
+            if(!active) "●  OFFLINE" else if(javaAddress!=null || bedrockAddress!=null) "●  ADDRESS ASSIGNED" else "●  SETTING UP",
+            if(javaAddress!=null || bedrockAddress!=null)ui.GREEN else if(active)ui.CYAN else ui.MUTED))
         card.addView(ui.space(this,9))
-        card.addView(ui.text(this,"Internet hosting",18f,ui.WHITE,true))
-        card.addView(ui.space(this,8))
-        val agentActive = PlayitManager.isActive()
-        card.addView(ui.pill(this,if(agentActive)"AGENT ACTIVE • NOT VERIFIED" else PlayitManager.status,
-            if(agentActive)ui.CYAN else ui.RED))
-        card.addView(ui.space(this,8))
         card.addView(ui.text(this,PlayitManager.detail,12f,ui.MUTED))
+        card.addView(ui.space(this,12))
+        if(!active) {
+            card.addView(ui.action(this,"▶  GO ONLINE — JAVA + BEDROCK",true) {
+                startForegroundService(Intent(this,ServerService::class.java)
+                    .setAction(ServerService.ACTION_TUNNEL_START))
+                toast("Connecting your Minecraft server to Playit")
+                render()
+            })
+            card.addView(ui.space(this,8))
+            card.addView(ui.text(this,"First time only: approve PocketCraft in Playit. After approval, the app requests free Minecraft tunnels automatically where allowed.",11f,ui.MUTED))
+        } else {
+            if(!PlayitManager.accountConnected) {
+                card.addView(ui.action(this,
+                    if(approval!=null)"①  CONNECT PLAYIT ACCOUNT" else "①  PREPARING ACCOUNT LINK...",true,approval!=null) {
+                    startActivity(Intent(Intent.ACTION_VIEW,android.net.Uri.parse(approval)))
+                })
+                card.addView(ui.space(this,8))
+                card.addView(ui.text(this,"Approve the one-time connection in your browser; then come back here. You do not need to share a password with PocketCraft.",11f,ui.MUTED))
+            } else {
+                card.addView(ui.text(this,"✓  PLAYIT ACCOUNT CONNECTED",12f,ui.GREEN,true))
+                card.addView(ui.space(this,10))
+                card.addView(ui.text(this,"JAVA EDITION",11f,ui.MUTED,true))
+                card.addView(ui.text(this,javaAddress ?: "Requesting Java address...",15f,ui.WHITE,true))
+                if(javaAddress!=null) {
+                    card.addView(ui.space(this,6))
+                    card.addView(ui.action(this,"COPY JAVA ADDRESS",true) {
+                        (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
+                            .setPrimaryClip(ClipData.newPlainText("Java server",javaAddress))
+                        toast("Java address copied")
+                    })
+                }
+                card.addView(ui.space(this,12))
+                card.addView(ui.text(this,"BEDROCK EDITION",11f,ui.MUTED,true))
+                card.addView(ui.text(this,bedrockAddress ?: "Requesting Bedrock address...",15f,ui.WHITE,true))
+                if(bedrockAddress!=null) {
+                    card.addView(ui.space(this,6))
+                    card.addView(ui.action(this,"COPY BEDROCK ADDRESS",true) {
+                        (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
+                            .setPrimaryClip(ClipData.newPlainText("Bedrock server",bedrockAddress))
+                        toast("Bedrock address copied")
+                    })
+                }
+                if(PlayitManager.creationNeedsHelp || (javaAddress==null && PlayitManager.status=="SETUP HELP NEEDED")) {
+                    card.addView(ui.space(this,9))
+                    card.addView(ui.action(this,"RETRY FREE TUNNEL SETUP",true) {
+                        PlayitManager.retryTunnel(this)
+                        toast("Retrying Playit configuration")
+                    })
+                }
+            }
+            card.addView(ui.space(this,9))
+            card.addView(ui.action(this,"↻  REFRESH STATUS") {
+                PlayitManager.refreshAsync(this)
+                render()
+            })
+            card.addView(ui.space(this,8))
+            card.addView(ui.action(this,"■  GO OFFLINE") {
+                startService(Intent(this,ServerService::class.java)
+                    .setAction(ServerService.ACTION_TUNNEL_STOP))
+                toast("Stopping internet tunnel")
+                render()
+            })
+        }
         card.addView(ui.space(this,10))
-        card.addView(ui.text(this,"Java TCP: your server port (usually 25565)\nBedrock NetherNet: TCP + UDP port 19132",12f,ui.WHITE))
-        card.addView(ui.space(this,13))
-        val controls = ui.row(this)
-        controls.addView(ui.action(this,"▶ START TUNNEL",true,!agentActive) {
-            startForegroundService(Intent(this,ServerService::class.java).setAction(ServerService.ACTION_TUNNEL_START))
-            toast("Starting Playit agent. Refresh to get its account-claim link.")
-        },ui.weight(this))
-        controls.addView(ui.action(this,"■ STOP",false,agentActive) {
-            startService(Intent(this,ServerService::class.java).setAction(ServerService.ACTION_TUNNEL_STOP))
-            toast("Tunnel stop requested")
-            render()
-        },LinearLayout.LayoutParams(0,-2,1f))
-        card.addView(controls)
-        card.addView(ui.space(this,9))
-        val url=PlayitManager.claimUrl
-        card.addView(ui.action(this,if(url!=null)"CLAIM AGENT ACCOUNT →" else "OPEN PLAYIT DASHBOARD →") {
-            startActivity(Intent(Intent.ACTION_VIEW,android.net.Uri.parse(url ?: "https://playit.gg/")))
-        })
-        card.addView(ui.space(this,8))
-        card.addView(ui.action(this,"↻ REFRESH TUNNEL STATUS") { render() })
-        card.addView(ui.space(this,8))
-        card.addView(ui.action(this,"VIEW TUNNEL LOG") {
+        card.addView(ui.action(this,"ADVANCED SETUP / DIAGNOSTICS") {
             AlertDialog.Builder(this)
-                .setTitle("Playit agent output")
-                .setMessage(PlayitManager.recentLog(this).takeLast(5000))
-                .setPositiveButton("OK",null)
+                .setTitle("Internet hosting diagnostics")
+                .setMessage(PlayitManager.recentLog(this).takeLast(4500))
+                .setNeutralButton("Playit dashboard") {_,_->
+                    startActivity(Intent(Intent.ACTION_VIEW,android.net.Uri.parse("https://playit.gg/")))
+                }
+                .setPositiveButton("CLOSE",null)
                 .show()
         })
-        card.addView(ui.space(this,11))
-        card.addView(ui.text(this,"After claiming, create a Java TCP tunnel and a Bedrock tunnel supporting TCP + UDP in the Playit dashboard. Share only provider-assigned addresses. An active agent is not proof that friends can connect.",11f,ui.MUTED))
+        card.addView(ui.space(this,8))
+        card.addView(ui.text(this,"Internet access is confirmed only by a successful remote connection. Playit may require additional account approval or manual setup, especially for Bedrock.",11f,ui.MUTED))
         return card
     }
 
