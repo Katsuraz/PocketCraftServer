@@ -15,6 +15,7 @@ import android.widget.ScrollView
 import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
+import android.util.AtomicFile
 import java.io.File
 import java.util.Properties
 
@@ -149,6 +150,16 @@ class SettingsActivity : Activity() {
         hero.addView(ui.space(this,7))
         hero.addView(ui.text(this,"Custom multiplayer options, connection details and privacy controls. Changes apply after a server restart.",12f,0xFFD7E9F8.toInt()))
         body.addView(hero)
+        if(ServerService.running) {
+            body.addView(ui.space(this,12))
+            val notice=ui.card(this)
+            notice.addView(ui.text(this,"SERVER CURRENTLY RUNNING",12f,ui.RED,true))
+            notice.addView(ui.space(this,6))
+            notice.addView(ui.text(this,
+                "You can review settings, but stop the Minecraft server before saving changes.",
+                12f,ui.MUTED))
+            body.addView(notice)
+        }
 
         section(body,"Multiplayer identity","Name and share your Minecraft world") { card ->
             input(card,"motd","Server message (MOTD)","PocketCraft Server","Shown to Minecraft Java players in their server list")
@@ -228,7 +239,9 @@ class SettingsActivity : Activity() {
             setPadding(ui.dp(this@SettingsActivity,18),ui.dp(this@SettingsActivity,12),
                 ui.dp(this@SettingsActivity,18),ui.dp(this@SettingsActivity,17))
         }
-        footer.addView(ui.action(this,"✓  SAVE & APPLY AFTER RESTART",true) { save() })
+        footer.addView(ui.action(this,
+            if(ServerService.running)"STOP SERVER BEFORE SAVING" else "✓  SAVE SERVER SETTINGS",
+            true,!ServerService.running) { save() })
         screen.addView(footer)
         setContentView(screen)
     }
@@ -252,7 +265,12 @@ class SettingsActivity : Activity() {
             }
         }
         val ram=heap.text.toString().toIntOrNull()
-        if(ram==null || ram !in 512..3072) {toast("Java memory must be 512–3072 MB");return}
+        if(ram==null || ram !in 512..3072) {
+            heap.error="Java memory must be between 512 and 3072 MB"
+            heap.requestFocus()
+            toast("Please check Java memory")
+            return
+        }
         val world=value("level-name")
         if(!Regex("[A-Za-z0-9._-]{1,64}").matches(world) || world=="." || world=="..") {
             toast("World name must be a simple folder name");return
@@ -285,11 +303,16 @@ class SettingsActivity : Activity() {
         props.setProperty("server-ip","")
         file.parentFile?.mkdirs()
         try {
-            val temp=File(file.parentFile,"server.properties.tmp")
-            temp.outputStream().use { props.store(it,"PocketCraft Server settings") }
-            if(!temp.renameTo(file)) {
-                file.outputStream().use { props.store(it,"PocketCraft Server settings") }
-                temp.delete()
+            // Android's AtomicFile restores the previous server.properties if a
+            // write fails or the app loses power during the save.
+            val atomic=AtomicFile(file)
+            val stream=atomic.startWrite()
+            try {
+                props.store(stream,"PocketCraft Server settings")
+                atomic.finishWrite(stream)
+            } catch(e:Exception) {
+                atomic.failWrite(stream)
+                throw e
             }
             getSharedPreferences("pocketcraft",0).edit()
                 .putInt("heapMB",ram).putString("shareAddress",share).apply()
