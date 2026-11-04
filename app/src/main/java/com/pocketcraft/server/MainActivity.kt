@@ -421,16 +421,39 @@ class MainActivity : Activity() {
         val target=if(kind==1) serverJar else File(mods,filename)
         if(kind==2 && target.exists()) {toast("Mod already imported");return}
         Thread {
+            val temp=File(base,"import-"+System.currentTimeMillis()+".tmp")
             try {
-                val source=contentResolver.openInputStream(uri) ?: error("Cannot open file")
-                source.use { input ->
-                    val prefix=ByteArray(2)
-                    if(input.read(prefix)!=2 || prefix[0]!=0x50.toByte() || prefix[1]!=0x4B.toByte())
+                var length=0L
+                val input=contentResolver.openInputStream(uri) ?: error("Cannot open file")
+                input.use { source ->
+                    temp.outputStream().use { output ->
+                        val data=ByteArray(32768)
+                        while(true) {
+                            val n=source.read(data)
+                            if(n<0) break
+                            length+=n
+                            if(length>250L*1024L*1024L) error("JAR exceeds 250 MB import limit")
+                            output.write(data,0,n)
+                        }
+                    }
+                }
+                temp.inputStream().use { stream ->
+                    val magic=ByteArray(2)
+                    if(stream.read(magic)!=2 || magic[0]!=0x50.toByte() || magic[1]!=0x4B.toByte())
                         error("Not a valid JAR/ZIP file")
                 }
-                contentResolver.openInputStream(uri)!!.use { input -> target.outputStream().use { input.copyTo(it) } }
+                val oldFile=File(base,"previous-fabric-server.jar")
+                if(kind==1 && target.exists()) {
+                    oldFile.delete()
+                    if(!target.renameTo(oldFile)) error("Could not preserve previous server JAR")
+                }
+                if(!temp.renameTo(target)) {
+                    if(kind==1 && oldFile.exists()) oldFile.renameTo(target)
+                    error("Unable to install imported JAR")
+                }
                 runOnUiThread {toast("Imported "+filename);render()}
-            } catch(e:Exception) {target.delete();runOnUiThread {toast("Import failed: "+e.message)}}
+            } catch(e:Exception) {runOnUiThread {toast("Import failed: "+e.message)}}
+            finally {temp.delete()}
         }.start()
     }
     @Deprecated("Activity result callback")
