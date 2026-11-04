@@ -24,7 +24,7 @@ internal object PlayitApiBridge {
         if (!file.isFile || file.length() > 4096) return null
         val raw = file.readText().trim()
         val value = if (raw.startsWith("secret_key")) {
-            Regex("""(?m)^secret_key\\s*=\\s*["']([a-fA-F0-9]{32,})["']\\s*$""")
+            Regex("""(?m)^secret_key\s*=\s*["']([a-fA-F0-9]{32,})["']\s*$""")
                 .find(raw)?.groupValues?.get(1)
         } else raw
         return value?.takeIf { it.length in 32..512 && it.length % 2 == 0 &&
