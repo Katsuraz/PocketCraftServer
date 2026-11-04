@@ -1013,6 +1013,97 @@ class MainActivity : Activity() {
      * Geyser runs inside app-private Android storage. Let users apply NetherNet
      * settings without a file manager, root, or sharing private tunnel tokens.
      */
+
+    /** Paste Playit's Geyser snippet while keeping unrelated settings. */
+    private fun pastePlayitGeyserSettings() {
+        if (ServerService.running) {
+            toast("Stop Minecraft before editing Geyser. Restart afterward.")
+            return
+        }
+        val config = File(base, "config/Geyser-Fabric/config.yml")
+        if (!config.isFile || config.length() > 256000L) {
+            AlertDialog.Builder(this).setTitle("Geyser config unavailable")
+                .setMessage("Install Geyser, run the server once to generate config.yml, then stop it.")
+                .setPositiveButton("OK",null).show()
+            return
+        }
+        val entry = android.widget.EditText(this).apply {
+            hint = "Paste Playit Configuration help → Geyser → Copy"
+            setSingleLine(false)
+            minLines = 6
+            maxLines = 12
+            textSize = 13f
+        }
+        val dialog = AlertDialog.Builder(this).setTitle("Connect Playit to Geyser")
+            .setMessage("Copy the FULL Geyser settings from your Minecraft Bedrock (NetherNet) tunnel in Playit. Paste here. A Playit agent secret alone is not a Geyser config.")
+            .setView(entry).setNegativeButton("CANCEL",null)
+            .setPositiveButton("APPLY",null).create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                try {
+                    val updated = mergePlayitGeyserSettings(config.readText(Charsets.UTF_8), entry.text.toString())
+                    val backup = File(config.parentFile,"config.yml.pocketcraft.bak")
+                    if (!backup.exists()) config.copyTo(backup)
+                    val tmp = File(config.parentFile,"config.yml.pocketcraft.part")
+                    tmp.writeText(updated,Charsets.UTF_8)
+                    if (!tmp.renameTo(config)) {
+                        tmp.delete()
+                        error("Unable to activate updated config")
+                    }
+                    dialog.dismiss()
+                    toast("Playit settings saved! Restart Minecraft.")
+                } catch (e: Exception) {
+                    AlertDialog.Builder(this).setTitle("Not applied")
+                        .setMessage(e.message ?: "Invalid settings")
+                        .setPositiveButton("OK",null).show()
+                }
+            }
+        }
+        dialog.show()
+    }
+
+    private fun mergePlayitGeyserSettings(original: String, paste: String): String {
+        require(paste.length in 20..32768) { "Paste the full Geyser settings snippet, not only a token." }
+        val topLevel = Regex("(?m)^([a-zA-Z][a-zA-Z0-9_-]*):\\s*(?:#.*)?$")
+        fun collect(text: String): Map<String,String> {
+            val matches = topLevel.findAll(text).toList()
+            return matches.mapIndexed { index, match ->
+                val end = matches.getOrNull(index+1)?.range?.first ?: text.length
+                match.groupValues[1] to text.substring(match.range.last+1,end)
+            }.toMap()
+        }
+        val snippets = collect(paste.replace("\r\n","\n"))
+        require("bedrock" in snippets) { "Expected bedrock: settings from Playit's Geyser tab." }
+        require(snippets.keys.all { it == "bedrock" || it == "java" }) {
+            "Only the Geyser bedrock: and java: sections can be imported."
+        }
+        var result = original.replace("\r\n","\n")
+        for (section in listOf("bedrock","java")) {
+            val source = snippets[section] ?: continue
+            val fields = Regex("(?m)^  ([a-zA-Z][a-zA-Z0-9_-]*):[^\\n]*(?:\\n(?: {4,}[^\\n]*|\\s*)\\n?)*")
+                .findAll(source).toList()
+            require(fields.isNotEmpty()) { "No settings found in " + section + ":. Check YAML indentation." }
+            for (field in fields) {
+                val key = field.groupValues[1]
+                val sectionMatch = Regex("(?m)^" + section + ":\\s*(?:#.*)?$")
+                    .find(result) ?: error("Existing Geyser config lacks " + section + ":")
+                val nextSection = topLevel.find(result,sectionMatch.range.last+1)
+                val end = nextSection?.range?.first ?: result.length
+                val start = sectionMatch.range.last+1
+                val body = result.substring(start,end)
+                val matching = Regex("(?m)^  " + Regex.escape(key) + ":[^\\n]*(?:\\n(?: {4,}[^\\n]*|\\s*)\\n?)*")
+                    .find(body)
+                val replacement = "\n" + field.value.trimEnd('\n') + "\n"
+                val newBody = if (matching == null)
+                    body.trimEnd('\n') + replacement
+                else body.replaceRange(matching.range, replacement)
+                result = result.replaceRange(start,end,newBody)
+            }
+        }
+        require(result.length <= 256000) { "Updated config too large" }
+        return result
+    }
+
     private fun editGeyserConfiguration() {
         if (ServerService.running) {
             AlertDialog.Builder(this).setTitle("Stop Minecraft first")
@@ -1155,6 +1246,14 @@ class MainActivity : Activity() {
                 .setNegativeButton("Cancel",null)
                 .setPositiveButton("Download") {_,_-> downloadAsync("crossplay") {ServerDownloads.installCrossplay(this)} }
                 .show()
+        })
+        body.addView(ui.space(this,10))
+        body.addView(ui.action(this,"⎘  PASTE PLAYIT GEYSER CONFIG",true) {
+            pastePlayitGeyserSettings()
+        })
+        body.addView(ui.space(this,10))
+        body.addView(ui.action(this,"⚙  EDIT GEYSER CONFIG IN APP",true) {
+            editGeyserConfiguration()
         })
         body.addView(ui.space(this,10))
         body.addView(ui.action(this,"⚙  OPEN GEYSER CONFIG IN FILES",true) {
