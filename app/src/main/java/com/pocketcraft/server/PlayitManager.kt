@@ -188,7 +188,7 @@ object PlayitManager {
                 status = "CHECKING"
                 detail = "Finding your Minecraft Java address..."
                 var state = PlayitApiBridge.fetch(c)
-                if (state.javaTunnelCount == 0 && autoCreateRequested && !autoCreationAttempted) {
+                if (state.javaTunnelCount == 0 && state.pendingJavaCount == 0 && autoCreateRequested && !autoCreationAttempted) {
                     autoCreationAttempted = true
                     status = "CREATING FREE TUNNEL"
                     detail = "Requesting a free Minecraft Java tunnel from Playit..."
@@ -212,7 +212,7 @@ object PlayitManager {
                 if (javaAddress != null) {
                     detail = "Playit assigned a Java address. Invite a friend to test from another network."
                 } else if (!creationNeedsHelp) {
-                    detail = "Playit account connected; waiting for Java tunnel allocation."
+                    detail = if (state.pendingJavaCount > 0) "Playit is allocating your free Java address..." else "No Java tunnel yet. Tap Finish Setup if automatic creation is unavailable."
                 }
             } catch(e:Exception) {
                 if (accountConnected) {
