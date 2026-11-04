@@ -1550,11 +1550,34 @@ class MainActivity : Activity() {
             card.addView(ui.text(this,"Delete world",12f,ui.RED).apply {
                 gravity=Gravity.END
                 setOnClickListener {
+                    if (ServerService.running) {
+                        toast("Stop Minecraft before deleting or backing up any world")
+                        return@setOnClickListener
+                    }
                     AlertDialog.Builder(this@MainActivity).setTitle("Delete this world?")
-                        .setMessage("This permanently deletes "+file.name+". Export a backup first.")
-                        .setNegativeButton("Cancel",null)
-                        .setPositiveButton("Delete") {_,_->if(file.deleteRecursively()) render() else toast("Could not delete world")}
-                        .show()
+                        .setMessage("PocketCraft will first create a complete ZIP recovery snapshot (up to 512 MB) in Server Files → pocketcraft-backups. If backup fails, deletion is blocked. Export the ZIP before uninstalling the app.")
+                        .setNegativeButton("CANCEL",null)
+                        .setPositiveButton("BACK UP & DELETE") {_,_->
+                            Thread {
+                                try {
+                                    val recovery=WorldSafety.snapshot(this@MainActivity,file)
+                                    val deleted=file.deleteRecursively()
+                                    runOnUiThread {
+                                        if(deleted) toast("World deleted safely. Backup: "+recovery.name)
+                                        else toast("Backup saved but deletion failed. World preserved.")
+                                        render()
+                                    }
+                                } catch(e:Exception) {
+                                    runOnUiThread {
+                                        AlertDialog.Builder(this@MainActivity)
+                                            .setTitle("Deletion cancelled")
+                                            .setMessage("Could not back up the world: "+e.message+
+                                                "\nNo files were deleted.")
+                                            .setPositiveButton("OK",null).show()
+                                    }
+                                }
+                            }.start()
+                        }.show()
                 }
             })
             body.addView(card);body.addView(ui.space(this,10))
