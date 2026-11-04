@@ -24,6 +24,8 @@ class MainActivity : Activity() {
     private val uiHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private var readyText: TextView? = null
     private var heroState: TextView? = null
+    private var onlineHost: android.widget.FrameLayout? = null
+    private var lastOnlineSignature = ""
     private val updateStatus = object: Runnable {
         override fun run() {
             val state = ServerService.status
@@ -38,6 +40,22 @@ class MainActivity : Activity() {
                 ServerService.javaReady && ServerService.bedrockReady -> "●  JAVA + BEDROCK"
                 ServerService.javaReady -> "●  JAVA READY"
                 else -> "●  STARTING"
+            }
+            // Refresh just the online hosting panel when the Playit worker changes
+            // state, including account claim URL and process-launch errors.
+            if (tab == 0) {
+                val signature = listOf(
+                    PlayitManager.status, PlayitManager.detail, PlayitManager.claimUrl.orEmpty(),
+                    PlayitManager.javaAddress.orEmpty(), PlayitManager.bedrockAddress.orEmpty(),
+                    PlayitManager.accountConnected.toString(), PlayitManager.isActive().toString()
+                ).joinToString("|")
+                if (signature != lastOnlineSignature) {
+                    lastOnlineSignature = signature
+                    onlineHost?.let { host ->
+                        host.removeAllViews()
+                        host.addView(internetPanel())
+                    }
+                }
             }
             uiHandler.postDelayed(this, 2000)
         }
@@ -148,7 +166,11 @@ class MainActivity : Activity() {
         body.addView(ui.space(this,14))
         body.addView(connectionPanel())
         body.addView(ui.space(this,14))
-        body.addView(internetPanel())
+        val host = android.widget.FrameLayout(this)
+        host.addView(internetPanel())
+        onlineHost = host
+        lastOnlineSignature = ""
+        body.addView(host)
         body.addView(ui.space(this,19))
         body.addView(h("Overview"))
         body.addView(ui.space(this,11))
@@ -312,8 +334,10 @@ class MainActivity : Activity() {
         card.addView(ui.text(this,"Play with friends anywhere",18f,ui.WHITE,true))
         card.addView(ui.space(this,8))
         card.addView(ui.pill(this,
-            if(!active) "●  OFFLINE" else if(javaAddress!=null || bedrockAddress!=null) "●  ADDRESS ASSIGNED" else "●  SETTING UP",
-            if(javaAddress!=null || bedrockAddress!=null)ui.GREEN else if(active)ui.CYAN else ui.MUTED))
+            if(PlayitManager.status=="ERROR") "●  ERROR" else if(!active) "●  OFFLINE"
+            else if(javaAddress!=null || bedrockAddress!=null) "●  ADDRESS ASSIGNED" else "●  SETTING UP",
+            if(PlayitManager.status=="ERROR")ui.RED else if(javaAddress!=null || bedrockAddress!=null)ui.GREEN
+            else if(active)ui.CYAN else ui.MUTED))
         card.addView(ui.space(this,9))
         card.addView(ui.text(this,PlayitManager.detail,12f,ui.MUTED))
         card.addView(ui.space(this,12))
@@ -321,8 +345,7 @@ class MainActivity : Activity() {
             card.addView(ui.action(this,"▶  GO ONLINE — JAVA + BEDROCK",true) {
                 startForegroundService(Intent(this,ServerService::class.java)
                     .setAction(ServerService.ACTION_TUNNEL_START))
-                toast("Connecting your Minecraft server to Playit")
-                render()
+                toast("Starting Playit and checking your Minecraft server. See status below.")
             })
             card.addView(ui.space(this,8))
             card.addView(ui.text(this,"First time only: approve PocketCraft in Playit. After approval, the app requests free Minecraft tunnels automatically where allowed.",11f,ui.MUTED))
