@@ -61,8 +61,28 @@ jobs:
               fi
             fi
           done
+          # Some upstream versions publish the Android classifier JAR rather
+          # than the combined AAR; its JNI binary is identical for our ABI.
+          zip_member="jni/arm64-v8a/libdatachannel-java.so"
           if [ -z "$found" ]; then
-            echo "::warning::Matching Android WebRTC AAR not found. APK builds without NetherNet JNI; Bedrock remains unsupported."
+            NAME="libdatachannel-java-$VERSION-android-arm64-v8a.jar"
+            OUT="$RUNNER_TEMP/$NAME"
+            for url in \
+              "$URL_BASE/main/dev/opencollab/libdatachannel-java/$SNAPSHOT/$NAME" \
+              "$URL_BASE/maven-snapshots/dev/opencollab/libdatachannel-java/$SNAPSHOT/$NAME" \
+              "$URL_BASE/main/dev/opencollab/libdatachannel-java/$VERSION/$NAME"; do
+              echo "Checking Android JNI classifier: $url"
+              if curl --fail --location --retry 2 --connect-timeout 15 --max-time 75 -o "$OUT" "$url" && unzip -tq "$OUT" >/dev/null; then
+                if unzip -Z1 "$OUT" | grep -Fxq "native/libdatachannel-java.so"; then
+                  found="$url"
+                  zip_member="native/libdatachannel-java.so"
+                  break
+                fi
+              fi
+            done
+          fi
+          if [ -z "$found" ]; then
+            echo "::warning::Matching Android WebRTC native not found. APK builds without NetherNet JNI; Bedrock remains unsupported."
             rm -f "$OUT"
           else
             if ! curl --fail --location --connect-timeout 15 --max-time 30 -o "$OUT.sha256" "$found.sha256"; then
@@ -77,7 +97,7 @@ jobs:
                   echo "::error::Android WebRTC native AAR checksum mismatch"
                   exit 1
                 fi
-                unzip -p "$OUT" jni/arm64-v8a/libdatachannel-java.so > "$JNI/libdatachannel-java.so"
+                unzip -p "$OUT" "$zip_member" > "$JNI/libdatachannel-java.so"
                 test -s "$JNI/libdatachannel-java.so"
                 file "$JNI/libdatachannel-java.so"
                 readelf -h "$JNI/libdatachannel-java.so" | grep -q 'Machine:.*AArch64'
