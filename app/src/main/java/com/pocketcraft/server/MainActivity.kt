@@ -1456,9 +1456,27 @@ class MainActivity : Activity() {
                     render()
                     if(label.startsWith("Fabric") && !ServerDownloads.eulaAccepted(this)) offerEula()
                 }.onFailure {error->
-                    AlertDialog.Builder(this).setTitle(if(cancelled.get())"Installation cancelled" else "Installation failed")
-                        .setMessage(error.message ?: "Check your connection and available storage.")
-                        .setPositiveButton("OK",null).show()
+                    val wasCancelled = cancelled.get()
+                    val reason = error.message?.take(1300)
+                        ?: "Check your internet connection, storage, and installed Minecraft version."
+                    val builder = AlertDialog.Builder(this)
+                        .setTitle(if(wasCancelled)"Installation cancelled" else "Installation failed")
+                        .setMessage(if(wasCancelled)"The installer was stopped. Your existing world and server settings were not intentionally changed."
+                            else "$label could not finish.\n\n$reason")
+                        .setNegativeButton("CLOSE",null)
+                    if (!wasCancelled) {
+                        builder.setNeutralButton("COPY ERROR") {_,_->
+                            (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
+                                .setPrimaryClip(ClipData.newPlainText("PocketCraft installer failure",
+                                    "$label: $reason"))
+                            toast("Error copied for troubleshooting")
+                        }
+                        if (label.startsWith("Fabric ") || label == "crossplay" ||
+                            label == "Android Java 25") {
+                            builder.setPositiveButton("TRY AGAIN") {_,_->downloadAsync(label,action)}
+                        }
+                    }
+                    builder.show()
                 }
             }
         }.start()
