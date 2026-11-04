@@ -19,7 +19,7 @@ import java.io.File
 import java.util.Properties
 
 /**
- * PocketCraft v0.4 settings. Clear labels and touch-friendly choices replace raw string inputs.
+ * PocketCraft server settings. Clear labels and touch-friendly choices replace raw string inputs.
  * All Minecraft values persist to server.properties. Share address is a UI hint ONLY.
  */
 class SettingsActivity : Activity() {
@@ -59,6 +59,7 @@ class SettingsActivity : Activity() {
             setHintTextColor(ui.MUTED)
             setText(props.getProperty(key, default))
             if (numeric) inputType = InputType.TYPE_CLASS_NUMBER
+            if (key=="level-name") { isEnabled = false; alpha = 0.72f }
             background = ui.shape(this@SettingsActivity, ui.SURFACE, 12, 0xFF304862.toInt())
             setPadding(ui.dp(this@SettingsActivity,14),ui.dp(this@SettingsActivity,13),
                 ui.dp(this@SettingsActivity,14),ui.dp(this@SettingsActivity,13))
@@ -129,8 +130,8 @@ class SettingsActivity : Activity() {
             setPadding(0,0,ui.dp(this@SettingsActivity,19),0)
         })
         toolbar.addView(ui.column(this).apply {
-            addView(ui.text(this@SettingsActivity,"SERVER CONTROL",20f,ui.WHITE,true))
-            addView(ui.text(this@SettingsActivity,"PLAY • CONNECT • CREATE",10f,ui.MUTED,true))
+            addView(ui.text(this@SettingsActivity,"Server settings",20f,ui.WHITE,true))
+            addView(ui.text(this@SettingsActivity,"YOUR WORLD  •  YOUR RULES",10f,ui.MUTED,true))
         })
         screen.addView(toolbar)
         val scroll=ScrollView(this).apply { isVerticalScrollBarEnabled=false; isFillViewport=true }
@@ -200,7 +201,7 @@ class SettingsActivity : Activity() {
             toggle(card,"generate-structures","Generate structures","Villages and other world structures",true)
         }
 
-        section(body,"World & performance","Keep your realme 7 Pro responsive") { card ->
+        section(body,"World & performance","Keep your device responsive") { card ->
             input(card,"level-name","Active world folder","world","Switch worlds from the World vault instead")
             input(card,"level-seed","Seed for new worlds","","Does not regenerate existing chunks")
             input(card,"view-distance","View distance (chunks)","5","Lower values save RAM and CPU",true)
@@ -243,7 +244,12 @@ class SettingsActivity : Activity() {
         )
         for((key,range) in ranges) {
             val n=value(key).toIntOrNull()
-            if(n==null || n !in range) {toast("Invalid $key");return}
+            if(n==null || n !in range) {
+                editors[key]?.error="Enter a number from ${range.first} to ${range.last}"
+                editors[key]?.requestFocus()
+                toast("Please check ${key.replace('-', ' ')}")
+                return
+            }
         }
         val ram=heap.text.toString().toIntOrNull()
         if(ram==null || ram !in 512..3072) {toast("Java memory must be 512–3072 MB");return}
