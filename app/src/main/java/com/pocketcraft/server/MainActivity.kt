@@ -306,17 +306,42 @@ class MainActivity : Activity() {
         card.addView(ui.space(this,9))
         card.addView(ui.text(this,"Internet hosting",18f,ui.WHITE,true))
         card.addView(ui.space(this,8))
-        card.addView(ui.pill(this,"NOT CONNECTED",ui.RED))
+        val agentActive = PlayitManager.isActive()
+        card.addView(ui.pill(this,if(agentActive)"AGENT ACTIVE • NOT VERIFIED" else PlayitManager.status,
+            if(agentActive)ui.CYAN else ui.RED))
         card.addView(ui.space(this,8))
-        card.addView(ui.text(this,"LAN hosting works without a tunnel. To invite friends on other networks, an Android-compatible agent must first be running and connected to a tunnel provider.",12f,ui.MUTED))
+        card.addView(ui.text(this,PlayitManager.detail,12f,ui.MUTED))
         card.addView(ui.space(this,10))
-        card.addView(ui.text(this,"Java: TCP 25565 (or your configured server port)\nBedrock NetherNet: TCP + UDP 19132",12f,ui.WHITE))
+        card.addView(ui.text(this,"Java TCP: your server port (usually 25565)\nBedrock NetherNet: TCP + UDP port 19132",12f,ui.WHITE))
         card.addView(ui.space(this,13))
-        card.addView(ui.action(this,"OPEN PLAYIT.GG SETUP →",true) {
-            startActivity(Intent(Intent.ACTION_VIEW,android.net.Uri.parse("https://playit.gg/")))
+        val controls = ui.row(this)
+        controls.addView(ui.action(this,"▶ START TUNNEL",true,!agentActive) {
+            startForegroundService(Intent(this,ServerService::class.java).setAction(ServerService.ACTION_TUNNEL_START))
+            toast("Starting Playit agent. Refresh to get its account-claim link.")
+        },ui.weight(this))
+        controls.addView(ui.action(this,"■ STOP",false,agentActive) {
+            startService(Intent(this,ServerService::class.java).setAction(ServerService.ACTION_TUNNEL_STOP))
+            toast("Tunnel stop requested")
+            render()
+        },LinearLayout.LayoutParams(0,-2,1f))
+        card.addView(controls)
+        card.addView(ui.space(this,9))
+        val url=PlayitManager.claimUrl
+        card.addView(ui.action(this,if(url!=null)"CLAIM AGENT ACCOUNT →" else "OPEN PLAYIT DASHBOARD →") {
+            startActivity(Intent(Intent.ACTION_VIEW,android.net.Uri.parse(url ?: "https://playit.gg/")))
         })
         card.addView(ui.space(this,8))
-        card.addView(ui.text(this,"A public URL entered in Server Settings is only a label, not proof of a working tunnel. Native Android tunnel integration is being tested separately.",11f,ui.MUTED))
+        card.addView(ui.action(this,"↻ REFRESH TUNNEL STATUS") { render() })
+        card.addView(ui.space(this,8))
+        card.addView(ui.action(this,"VIEW TUNNEL LOG") {
+            AlertDialog.Builder(this)
+                .setTitle("Playit agent output")
+                .setMessage(PlayitManager.recentLog(this).takeLast(5000))
+                .setPositiveButton("OK",null)
+                .show()
+        })
+        card.addView(ui.space(this,11))
+        card.addView(ui.text(this,"After claiming, create a Java TCP tunnel and a Bedrock tunnel supporting TCP + UDP in the Playit dashboard. Share only provider-assigned addresses. An active agent is not proof that friends can connect.",11f,ui.MUTED))
         return card
     }
 
