@@ -33,10 +33,14 @@ object WorldStore {
     }
     fun backup(c: Context, world: File, uri: Uri) {
         if (!File(world, "level.dat").exists()) throw IOException("No level.dat found")
+        if (world.parentFile?.canonicalFile != root(c).canonicalFile)
+            throw IOException("World is outside managed storage")
         val output = c.contentResolver.openOutputStream(uri) ?: throw IOException("Cannot write destination")
         output.use { stream ->
             ZipOutputStream(stream).use { zip ->
                 world.walkTopDown().filter { it.isFile }.forEach { item ->
+                    if (!item.canonicalPath.startsWith(world.canonicalPath + File.separator))
+                        throw IOException("World contains an unsafe linked file")
                     // Preserves world folder; re-import supports either root/world or root/level.dat.
                     val path = world.name + "/" + item.relativeTo(world).invariantSeparatorsPath
                     zip.putNextEntry(ZipEntry(path))
