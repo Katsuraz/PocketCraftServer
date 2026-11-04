@@ -40,6 +40,8 @@ class ServerService : Service() {
             private set
         @Volatile var bedrockReady = false
             private set
+        @Volatile var nethernetReady = false
+            private set
     }
     private val readiness = ReadinessSignals()
     private var server: Process? = null
@@ -131,6 +133,7 @@ class ServerService : Service() {
         readiness.reset()
         javaReady = false
         bedrockReady = false
+        nethernetReady = false
         Thread {
             try {
                 val launcher = File(root, "fabric-server-launch.jar")
@@ -202,6 +205,7 @@ class ServerService : Service() {
                         readiness.observe(line)
                         javaReady = readiness.javaReady
                         bedrockReady = readiness.bedrockListener
+                        nethernetReady = readiness.nethernetRegistered
                         if (javaReady) {
                             status = readiness.state()
                             if (previous != status) {
@@ -248,6 +252,7 @@ class ServerService : Service() {
         running = false
         javaReady = false
         bedrockReady = false
+        nethernetReady = false
         readiness.reset()
         status = if (failure.isBlank()) "OFFLINE" else "ERROR"
         try { wakeLock?.takeIf { it.isHeld }?.release() } catch (_: Exception) {}
