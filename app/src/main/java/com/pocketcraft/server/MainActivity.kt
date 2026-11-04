@@ -632,6 +632,95 @@ class MainActivity : Activity() {
         mods.listFiles()?.filter {it.isFile && (it.name.endsWith(".jar") || it.name.endsWith(".jar.disabled"))}
             ?.sortedBy { it.name.lowercase(Locale.ROOT) } ?: emptyList()
 
+    /**
+     * Geyser runs inside app-private Android storage. Let users apply NetherNet
+     * settings without a file manager, root, or sharing private tunnel tokens.
+     */
+    private fun editGeyserConfiguration() {
+        if (ServerService.running) {
+            AlertDialog.Builder(this).setTitle("Stop Minecraft first")
+                .setMessage("Stop the Minecraft server before changing Geyser settings. Restart afterward to apply the changes.")
+                .setPositiveButton("OK",null).show()
+            return
+        }
+        val config = File(base,"config/Geyser-Fabric/config.yml")
+        if (!config.isFile) {
+            AlertDialog.Builder(this).setTitle("Geyser configuration not created yet")
+                .setMessage("Install Geyser-Fabric under Mods, start Minecraft once so Geyser creates config/Geyser-Fabric/config.yml, then stop the server and come back here. Check the Console if Geyser failed to start.")
+                .setPositiveButton("OK",null).show()
+            return
+        }
+        if(config.length() > 256_000L) {
+            toast("Geyser configuration is unexpectedly large. Cannot edit safely.")
+            return
+        }
+        val original = try { config.readText(Charsets.UTF_8) } catch(e:Exception) {
+            toast("Cannot read Geyser config: " + e.message)
+            return
+        }
+        val body = ui.column(this).apply {
+            setPadding(ui.dp(this@MainActivity,18),ui.dp(this@MainActivity,12),
+                ui.dp(this@MainActivity,18),ui.dp(this@MainActivity,12))
+        }
+        body.addView(ui.text(this,
+            "Playit dashboard → your Bedrock (NetherNet) tunnel → Configuration help → Geyser → Copy. Edit the matching bedrock: and java: sections below, keeping the rest of the config intact. Set java.auth-type to floodgate if Floodgate is installed. Never share the private token.",
+            12f,ui.MUTED))
+        body.addView(ui.space(this,10))
+        val editor = android.widget.EditText(this).apply {
+            setSingleLine(false)
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or
+                android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or
+                android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+            setText(original)
+            textSize = 12f
+            typeface = android.graphics.Typeface.MONOSPACE
+            setTextColor(ui.WHITE)
+            setBackgroundColor(ui.SURFACE)
+            setPadding(ui.dp(this@MainActivity,12),ui.dp(this@MainActivity,12),
+                ui.dp(this@MainActivity,12),ui.dp(this@MainActivity,12))
+            minLines = 12
+            maxLines = 20
+            gravity = Gravity.TOP or Gravity.START
+        }
+        body.addView(editor,LinearLayout.LayoutParams(-1,ui.dp(this,320)))
+        body.addView(ui.space(this,10))
+        body.addView(ui.text(this,
+            "An original-file backup is saved alongside config.yml. Restart the server after saving. This editor never uploads config contents or the NetherNet token.",
+            11f,ui.MUTED))
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Geyser / NetherNet settings")
+            .setView(body)
+            .setNegativeButton("CANCEL",null)
+            .setPositiveButton("SAVE",null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val next = editor.text.toString()
+                if (next.length !in 50..256000 ||
+                    !Regex("(?m)^bedrock\\s*:").containsMatchIn(next) ||
+                    !Regex("(?m)^java\\s*:").containsMatchIn(next)) {
+                    toast("Keep the full Geyser YAML, including bedrock: and java: sections.")
+                    return@setOnClickListener
+                }
+                try {
+                    val backup = File(config.parentFile,"config.yml.pocketcraft.bak")
+                    val temp = File(config.parentFile,"config.yml.pocketcraft.part")
+                    if (!backup.isFile) config.copyTo(backup,overwrite=false)
+                    temp.writeText(next,Charsets.UTF_8)
+                    if (!temp.renameTo(config)) {
+                        temp.delete()
+                        throw java.io.IOException("Cannot activate edited config")
+                    }
+                    dialog.dismiss()
+                    toast("Geyser settings saved. Restart Minecraft to use NetherNet.")
+                } catch(e:Exception) {
+                    toast("Could not save Geyser config: " + e.message)
+                }
+            }
+        }
+        dialog.show()
+    }
+
     private fun modsPage(body:LinearLayout) {
         body.addView(h("Mod library","Manage your Fabric server add-ons"))
         body.addView(ui.space(this,15))
@@ -659,6 +748,10 @@ class MainActivity : Activity() {
                 .setNegativeButton("Cancel",null)
                 .setPositiveButton("Download") {_,_-> downloadAsync("crossplay") {ServerDownloads.installCrossplay(this)} }
                 .show()
+        })
+        body.addView(ui.space(this,10))
+        body.addView(ui.action(this,"⚙  EDIT GEYSER / NETHERNET CONFIG",true) {
+            editGeyserConfiguration()
         })
         body.addView(ui.space(this,12))
         val list=modFiles()
