@@ -1,0 +1,44 @@
+name: Experiment - Compile Playit Android ARM64
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/playit-android-experiment.yml'
+permissions:
+  contents: read
+jobs:
+  build-agent:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          target: aarch64-linux-android
+      - name: Install Android NDK
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+          fi
+          "$SDKMANAGER" "ndk;27.2.12479018"
+      - name: Fetch pinned Playit 1.2.0 source
+        run: |
+          git clone --depth 1 --branch v1.2.0 https://github.com/playit-cloud/playit-agent.git playit-src
+      - name: Compile Android executable
+        working-directory: playit-src
+        env:
+          TARGET: aarch64-linux-android
+        run: |
+          set -euo pipefail
+          NDK="$ANDROID_HOME/ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$NDK/aarch64-linux-android28-clang" >> "$GITHUB_ENV"
+          echo "CC_aarch64_linux_android=$NDK/aarch64-linux-android28-clang" >> "$GITHUB_ENV"
+          export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$NDK/aarch64-linux-android28-clang"
+          export CC_aarch64_linux_android="$NDK/aarch64-linux-android28-clang"
+          cargo build --release --locked --target aarch64-linux-android -p playit-cli
+          file target/aarch64-linux-android/release/playit-cli
+      - uses: actions/upload-artifact@v4
+        with:
+          name: experimental-playit-android-arm64
+          path: playit-src/target/aarch64-linux-android/release/playit-cli
