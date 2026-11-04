@@ -56,12 +56,35 @@ jobs:
           else
             echo "::warning::Persistent signing not configured. Debug APK will use runner-generated key and WILL NOT upgrade an APK signed on a different runner."
           fi
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          target: aarch64-linux-android
+      - name: Compile bundled Playit 1.2.0 for Android ARM64
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch v1.2.0 https://github.com/playit-cloud/playit-agent.git "$RUNNER_TEMP/playit-src"
+          cd "$RUNNER_TEMP/playit-src"
+          NDK="$ANDROID_HOME/ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          export PATH="$NDK:$PATH"
+          export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$NDK/aarch64-linux-android28-clang"
+          export CC_aarch64_linux_android="$NDK/aarch64-linux-android28-clang"
+          export AR_aarch64_linux_android="$NDK/llvm-ar"
+          export CFLAGS_aarch64_linux_android="--target=aarch64-linux-android28"
+          cargo build --release --locked --target aarch64-linux-android -p playit-cli -p playitd
+          mkdir -p "$GITHUB_WORKSPACE/app/src/main/assets"
+          cp target/aarch64-linux-android/release/playit-cli "$GITHUB_WORKSPACE/app/src/main/assets/playit-cli-arm64"
+          cp target/aarch64-linux-android/release/playitd "$GITHUB_WORKSPACE/app/src/main/assets/playitd-arm64"
+          file "$GITHUB_WORKSPACE/app/src/main/assets/"playit*-arm64
       - name: Build debug APK
         run: gradle :app:testDebugUnitTest :app:assembleDebug --no-daemon --stacktrace
       - name: Verify ARM64 native runtime exists inside APK
         run: |
           set -euo pipefail
           unzip -l app/build/outputs/apk/debug/app-debug.apk | grep -F 'lib/arm64-v8a/libc++_shared.so'
+      - name: Verify bundled tunnel binaries
+        run: |
+          unzip -l app/build/outputs/apk/debug/app-debug.apk | grep -F 'assets/playit-cli-arm64'
+          unzip -l app/build/outputs/apk/debug/app-debug.apk | grep -F 'assets/playitd-arm64'
       - name: Verify APK signing certificate
         run: |
           set -euo pipefail
