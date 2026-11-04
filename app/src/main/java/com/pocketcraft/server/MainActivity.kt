@@ -24,6 +24,12 @@ import java.util.Locale
 
 /** PocketCraft's offline-first dashboard. Does not pretend that a JVM is available on Android. */
 class MainActivity : Activity() {
+    companion object {
+        const val ACTION_OPEN_CONSOLE = "com.pocketcraft.server.OPEN_CONSOLE"
+        const val ACTION_COPY_JAVA = "com.pocketcraft.server.COPY_JAVA"
+        const val ACTION_COPY_BEDROCK = "com.pocketcraft.server.COPY_BEDROCK"
+    }
+    private var logFilter = "ALL"
     private val uiHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private var readyText: TextView? = null
     private var heroState: TextView? = null
@@ -71,7 +77,7 @@ class MainActivity : Activity() {
                     file.lastModified() != lastConsoleModified) {
                     lastConsoleSize = file.length()
                     lastConsoleModified = file.lastModified()
-                    consoleOutput?.text = getLog()
+                    consoleOutput?.text = filteredLog()
                 }
             }
             if (tab == 0) {
@@ -131,7 +137,40 @@ class MainActivity : Activity() {
         outState.putIntArray("tabScroll", scrollOffsets)
         super.onSaveInstanceState(outState)
     }
-    override fun onResume() { super.onResume(); render(); uiHandler.removeCallbacks(updateStatus); uiHandler.post(updateStatus) }
+    override fun onResume() {
+        super.onResume()
+        handleNotificationShortcut(intent)
+        render()
+        uiHandler.removeCallbacks(updateStatus)
+        uiHandler.post(updateStatus)
+    }
+
+    override fun onNewIntent(next: Intent?) {
+        super.onNewIntent(next)
+        setIntent(next)
+        handleNotificationShortcut(next)
+        render()
+    }
+
+    private fun handleNotificationShortcut(next: Intent?) {
+        val action=next?.action ?: return
+        if(action==ACTION_OPEN_CONSOLE) tab=3
+        if(action==ACTION_COPY_JAVA || action==ACTION_COPY_BEDROCK) {
+            val address=if(action==ACTION_COPY_JAVA) {
+                PlayitManager.javaAddress ?: NetworkInfo.lanAddress()?.let {
+                    it+":"+serverProperty("server-port","25565")
+                }
+            } else {
+                PlayitManager.bedrockAddress ?: NetworkInfo.lanAddress()?.let { "$it:19132" }
+            }
+            if(!address.isNullOrBlank()) {
+                (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
+                    .setPrimaryClip(ClipData.newPlainText("PocketCraft address",address))
+                toast("Connection address copied")
+            } else toast("No address available yet")
+        }
+        next.action=null // Prevent duplicate copy when returning to the app.
+    }
     override fun onPause() { uiHandler.removeCallbacks(updateStatus); super.onPause() }
 
     private fun h(label: String, sub: String? = null): LinearLayout {
@@ -389,6 +428,17 @@ class MainActivity : Activity() {
         })
         hero.addView(ui.space(this,9))
         hero.addView(ui.action(this,"SERVER HEALTH & DIAGNOSTICS") { showHealthCenter() })
+        hero.addView(ui.space(this,9))
+        hero.addView(ui.action(this,"RESTART MINECRAFT",false,ServerService.running) {
+            AlertDialog.Builder(this).setTitle("Restart Minecraft?")
+                .setMessage("Players will disconnect. PocketCraft will save and stop the Java server gracefully before starting it again.")
+                .setNegativeButton("CANCEL",null)
+                .setPositiveButton("RESTART"){_,_->
+                    startService(Intent(this,ServerService::class.java)
+                        .setAction(ServerService.ACTION_RESTART))
+                }.show()
+        })
+
         body.addView(hero)
         body.addView(ui.space(this,14))
         val joinHost = FrameLayout(this)
@@ -445,6 +495,10 @@ class MainActivity : Activity() {
         actions.addView(actionRow("▧","World vault","Backups, ZIP imports, and active world") {tab=2;render()})
         actions.addView(line())
         actions.addView(actionRow("▤","Server files","Browse, edit, export and back up your server") {openServerFiles()})
+        actions.addView(line())
+        actions.addView(actionRow("▣","Background hosting & alerts","Notification permission, battery settings and connection protection") {
+            showHostingPreferences()
+        })
         actions.addView(line())
         actions.addView(actionRow("↻","Fix update installation","Backup and secure APK signing instructions") {updateHelp()})
         actions.addView(line())
@@ -1528,6 +1582,41 @@ class MainActivity : Activity() {
                 }.show()
         },LinearLayout.LayoutParams(0,-2,1f))
         body.addView(actions)
+        body.addView(ui.space(this,9))
+        val filterRow=ui.row(this)
+        val filters=listOf("ALL","ERRORS","GEYSER","PLAYIT","PLAYERS")
+        filterRow.addView(ui.action(this,"FILTER: "+logFilter,true) {
+            AlertDialog.Builder(this).setTitle("Console log filter")
+                .setItems(filters.toTypedArray()){_,chosen->
+                    logFilter=filters[chosen]
+                    consoleOutput?.text=filteredLog()
+                    render()
+                }.setNegativeButton("CANCEL",null).show()
+        },ui.weight(this))
+        filterRow.addView(ui.action(this,"SAFE REPORT") {showHealthCenter()},
+            LinearLayout.LayoutParams(0,-2,1f))
+        body.addView(filterRow)
+        body.addView(ui.space(this,12))
+        val quick=ui.card(this)
+        quick.addView(ui.text(this,"QUICK COMMANDS",11f,ui.CYAN,true))
+        quick.addView(ui.space(this,9))
+        val commands=listOf(
+            "Players" to "list",
+            "Save world" to "save-all",
+            "NetherNet status" to "geyser nethernet status",
+            "NetherNet diagnostics" to "geyser nethernet diagnostics",
+            "NetherNet advertised" to "geyser nethernet advertised"
+        )
+        commands.forEach { (label,command) ->
+            quick.addView(ui.action(this,label,false,ServerService.javaReady) {
+                startService(Intent(this,ServerService::class.java)
+                    .setAction(ServerService.ACTION_COMMAND)
+                    .putExtra(ServerService.EXTRA_COMMAND,command))
+                toast("Sent: "+command)
+            })
+            quick.addView(ui.space(this,7))
+        }
+        body.addView(quick)
         body.addView(ui.space(this,13))
         val log=ui.column(this).apply {
             background=ui.shape(this@MainActivity,0xFF0F1728.toInt(),18,0xFF26354D.toInt())
@@ -1535,7 +1624,7 @@ class MainActivity : Activity() {
         }
         log.addView(ui.pill(this,"●  LOCAL LOG",ui.CYAN))
         log.addView(ui.space(this,12))
-        log.addView(ui.text(this,getLog(),12f,0xFFC0D7D7.toInt()).apply {
+        log.addView(ui.text(this,filteredLog(),12f,0xFFC0D7D7.toInt()).apply {
             typeface = android.graphics.Typeface.MONOSPACE
             setTextIsSelectable(true)
             consoleOutput = this
@@ -1567,6 +1656,24 @@ class MainActivity : Activity() {
         body.addView(ui.space(this,8))
         body.addView(ui.text(this,if(ServerService.running)"Commands are sent to the running Java process." else "Start the Java server first to enable commands.",12f,ui.MUTED))
     }
+    private fun filteredLog(): String {
+        val text=getLog()
+        if (logFilter=="ALL") return text
+        val lines=text.lines()
+        val selected=lines.filter { line ->
+            val lower=line.lowercase(Locale.ROOT)
+            when(logFilter) {
+                "ERRORS" -> listOf("error","exception","failed","fatal","crash").any {it in lower}
+                "GEYSER" -> listOf("geyser","floodgate","nethernet","bedrock","webrtc").any {it in lower}
+                "PLAYIT" -> listOf("playit","tunnel","agent").any {it in lower}
+                "PLAYERS" -> listOf("joined the game","left the game","players online","logged in").any {it in lower}
+                else -> true
+            }
+        }
+        return if(selected.isEmpty()) "No "+logFilter.lowercase(Locale.ROOT)+" entries in the recent console log."
+            else selected.joinToString("\n")
+    }
+
     private fun getLog():String {
         val file = File(base,"console.log")
         if(!file.isFile) return "[PocketCraft] No server output yet.\nStart the server to see live status here."
@@ -1755,6 +1862,44 @@ class MainActivity : Activity() {
                 ServerDownloads.acceptEula(this);toast("EULA acceptance saved")
             }.show()
     }
+    private fun showHostingPreferences() {
+        val prefs=getSharedPreferences("pocketcraft",0)
+        val panel=ui.column(this).apply {
+            setPadding(ui.dp(this@MainActivity,18),ui.dp(this@MainActivity,14),
+                ui.dp(this@MainActivity,18),ui.dp(this@MainActivity,12))
+        }
+        val alerts=android.widget.CheckBox(this).apply {
+            text="Notify when players join/leave or the server crashes"
+            setTextColor(ui.WHITE)
+            isChecked=prefs.getBoolean("eventNotifications",true)
+            setOnCheckedChangeListener {_,checked->
+                prefs.edit().putBoolean("eventNotifications",checked).apply()
+            }
+        }
+        panel.addView(alerts)
+        panel.addView(ui.space(this,12))
+        panel.addView(ui.text(this,
+            "PocketCraft already holds a partial wake lock while Minecraft runs, so the CPU can work with the screen off. Battery optimization and Android background limits may still stop hosting. Keeping the phone charging is recommended.",
+            12f,ui.MUTED))
+        panel.addView(ui.space(this,12))
+        panel.addView(ui.action(this,"OPEN BATTERY OPTIMIZATION SETTINGS",true) {
+            try {
+                startActivity(Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+            } catch(_:Exception) {
+                startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    android.net.Uri.parse("package:"+packageName)))
+            }
+        })
+        panel.addView(ui.space(this,9))
+        if(android.os.Build.VERSION.SDK_INT>=33) {
+            panel.addView(ui.action(this,"ALLOW NOTIFICATIONS") {
+                requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),186)
+            })
+        }
+        AlertDialog.Builder(this).setTitle("Background hosting & alerts")
+            .setView(panel).setPositiveButton("DONE",null).show()
+    }
+
     private fun openServerFiles(path: String = "") {
         startActivity(Intent(this,ServerFilesActivity::class.java).apply {
             if(path.isNotBlank()) putExtra(ServerFilesActivity.EXTRA_PATH,path)
