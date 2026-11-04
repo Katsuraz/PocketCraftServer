@@ -4,26 +4,40 @@ import android.content.Context
 import android.util.Log
 import java.io.File
 import java.net.URI
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * Experimental embedded playit.gg 1.2.0 agent.
- * Uses bundled Android ARM64 executables; does not require Termux or root.
- * A running agent is NOT proof that public tunnels are configured or reachable.
+ * PocketCraft's streamlined Playit assistant. A single Go Online request
+ * starts the agent, awaits account approval, creates ONE free Java tunnel
+ * when permitted by the provider, and retrieves the provider's public address.
+ * It never auto-creates a paid tunnel or claims remote connectivity was tested.
  */
 object PlayitManager {
-    @Volatile var status = "NOT INSTALLED"
+    @Volatile var status = "OFFLINE"
         private set
     @Volatile var claimUrl: String? = null
         private set
-    @Volatile var detail = "Android agent has not been started"
+    @Volatile var detail = "Tap Go Online to set up free Java hosting"
+        private set
+    @Volatile var javaAddress: String? = null
+        private set
+    @Volatile var accountConnected = false
+        private set
+    @Volatile var creationNeedsHelp = false
         private set
 
     private var daemon: Process? = null
     private var client: Process? = null
     private val logLock = Any()
+    private val polling = AtomicBoolean(false)
+    @Volatile private var generation = 0
+    @Volatile private var requestedJavaPort = 25565
+    @Volatile private var autoCreateRequested = false
+    @Volatile private var autoCreationAttempted = false
 
     fun isActive() = daemon?.isAlive == true
     private fun root(c: Context) = File(c.filesDir, "playit").apply { mkdirs() }
+
     private fun append(c: Context, line: String) {
         try {
             val clean = line.replace(Regex("(?i)(secret|token|key)[=:]\\S+"), "[credential hidden]")
@@ -37,16 +51,20 @@ object PlayitManager {
 
     private fun executable(c: Context, assetName: String): File {
         if (!android.os.Build.SUPPORTED_ABIS.contains("arm64-v8a"))
-            throw IllegalStateException("The Playit tunnel agent requires Android ARM64")
-        val target = File(root(c), assetName)
-        if (!target.isFile) {
-            val temp = File(root(c), "$assetName.part")
-            c.assets.open(assetName).use { input ->
+            throw IllegalStateException("Playit requires Android ARM64")
+        val dir = root(c)
+        val target = File(dir, assetName)
+        val asset = c.assets.open(assetName)
+        asset.use { input ->
+            if (!target.isFile) {
+                val temp = File(dir, "$assetName.part")
                 temp.outputStream().use { output -> input.copyTo(output) }
+                if (!temp.setExecutable(true, true) || !temp.renameTo(target))
+                    throw IllegalStateException("Could not prepare $assetName")
             }
-            if (!temp.setExecutable(true, true)) throw IllegalStateException("Could not mark $assetName executable")
-            if (!temp.renameTo(target)) throw IllegalStateException("Could not install $assetName")
         }
+        if (!target.canExecute() && !target.setExecutable(true, true))
+            throw IllegalStateException("$assetName is not executable")
         return target
     }
 
@@ -56,83 +74,179 @@ object PlayitManager {
         e["HOME"] = dir.absolutePath
         e["TMPDIR"] = c.cacheDir.absolutePath
         e["XDG_CONFIG_HOME"] = dir.absolutePath
-        val inherited = e["LD_LIBRARY_PATH"].orEmpty()
-        e["LD_LIBRARY_PATH"] = listOf(c.applicationInfo.nativeLibraryDir, inherited)
+        e["LD_LIBRARY_PATH"] = listOf(c.applicationInfo.nativeLibraryDir, e["LD_LIBRARY_PATH"].orEmpty())
             .filter { it.isNotBlank() }.joinToString(":")
         return builder
     }
 
-    /** Called by the foreground ServerService, on a worker thread. */
+    /** User's Go Online action explicitly authorizes creating ONE free Java tunnel. */
+    @Synchronized fun goOnline(c: Context, javaPort: Int) {
+        requestedJavaPort = javaPort.coerceIn(1, 65535)
+        autoCreateRequested = true
+        autoCreationAttempted = false
+        creationNeedsHelp = false
+        if (isActive()) {
+            refreshAsync(c)
+        } else {
+            start(c)
+        }
+    }
+
     @Synchronized fun start(c: Context) {
         if (isActive()) return
+        val token = ++generation
         status = "STARTING"
+        detail = "Starting Playit in PocketCraft..."
+        javaAddress = null
+        accountConnected = false
         claimUrl = null
-        detail = "Launching embedded Playit daemon"
         val dir = root(c)
         try {
             val daemonExe = executable(c, "playitd-arm64")
             val clientExe = executable(c, "playit-cli-arm64")
             val sock = File(dir, "playit.sock")
             sock.delete()
-            val cmd = listOf(
+            val args = listOf(
                 daemonExe.absolutePath,
                 "--socket-path", sock.absolutePath,
                 "--secret-path", File(dir, "secret.toml").absolutePath,
                 "--log-path", File(dir, "daemon.log").absolutePath
             )
-            daemon = env(c, ProcessBuilder(cmd).directory(dir).redirectErrorStream(true)).start()
-            status = "AGENT PROCESS ACTIVE"
-            detail = "Follow the account claim link, then set TCP and TCP+UDP tunnels in your Playit dashboard."
+            val proc = env(c, ProcessBuilder(args).directory(dir).redirectErrorStream(true)).start()
+            daemon = proc
+            status = "STARTING"
             Thread {
-                daemon?.inputStream?.bufferedReader()?.useLines { lines ->
-                    lines.forEach { line -> append(c, "[daemon] $line") }
+                proc.inputStream.bufferedReader().useLines { lines ->
+                    lines.forEach { append(c, "[daemon] $it") }
                 }
-                status = "OFFLINE"
-                detail = "Playit daemon exited. Open tunnel logs."
+                if (generation == token) {
+                    status = "OFFLINE"
+                    detail = "Playit stopped unexpectedly. Open diagnostics if it won't restart."
+                    append(c, "Playit daemon exited with code ${proc.waitFor()}")
+                }
             }.start()
             Thread {
-                Thread.sleep(1700)
-                if (!isActive()) return@Thread
-                val cli = env(c, ProcessBuilder(
-                    clientExe.absolutePath, "--stdout", "--socket-path", sock.absolutePath
-                ).directory(dir).redirectErrorStream(true)).start()
-                client = cli
-                cli.inputStream.bufferedReader().useLines { lines ->
-                    lines.forEach { line ->
-                        append(c, "[client] $line")
-                        val found = Regex("https://playit\\.gg/[^\\s<>\"']+").find(line)?.value
-                            ?.trimEnd('.', ',', ')', ';')
-                        if (found != null) {
-                            try {
-                                val uri=URI(found)
-                                if (uri.scheme=="https" && uri.host=="playit.gg") {
-                                    claimUrl=found
-                                    detail="Open the Playit setup link to claim your tunnel agent"
-                                }
-                            } catch (_:Exception) {}
+                try {
+                    Thread.sleep(1400)
+                    if (generation != token || !proc.isAlive) return@Thread
+                    val cli = env(c, ProcessBuilder(
+                        clientExe.absolutePath, "--stdout", "--socket-path", sock.absolutePath
+                    ).directory(dir).redirectErrorStream(true)).start()
+                    client = cli
+                    cli.inputStream.bufferedReader().useLines { lines ->
+                        lines.forEach { line ->
+                            append(c, "[client] $line")
+                            val found = Regex("https://playit\\.gg/claim/[a-fA-F0-9]+")
+                                .find(line)?.value
+                            if (found != null && generation == token) {
+                                try {
+                                    val uri = URI(found)
+                                    if (uri.scheme == "https" && uri.host == "playit.gg") {
+                                        claimUrl = found
+                                        if (!accountConnected) {
+                                            status = "APPROVAL REQUIRED"
+                                            detail = "Tap Connect Account once to approve PocketCraft in Playit"
+                                        }
+                                    }
+                                } catch (_: Exception) {}
+                            }
                         }
                     }
-                }
-                append(c, "Playit CLI exited with code ${cli.waitFor()}")
+                    append(c, "Playit setup helper exited with code ${cli.waitFor()}")
+                } catch(e: Exception) { append(c, "Setup helper: ${e.message}") }
             }.start()
-        } catch(e:Exception) {
-            status = "ERROR"
-            detail = e.message ?: "Playit failed to launch"
-            append(c, "Agent launch failed: $detail")
+            Thread {
+                while (generation == token && proc.isAlive) {
+                    refreshAsync(c)
+                    try { Thread.sleep(8000) } catch (_: InterruptedException) { break }
+                }
+            }.start()
+        } catch (e: Exception) {
+            val message = e.message ?: "Agent could not start"
             stop()
+            status = "ERROR"
+            detail = message
+            append(c, "Tunnel launch failed: $message")
         }
     }
 
+    /** API calls happen only on worker threads and never expose the agent key to the UI. */
+    fun refreshAsync(c: Context) {
+        if (!isActive() || !polling.compareAndSet(false, true)) return
+        Thread {
+            try {
+                if (!PlayitApiBridge.isClaimed(c)) {
+                    accountConnected = false
+                    if (claimUrl == null) {
+                        status = "WAITING FOR ACCOUNT"
+                        detail = "Preparing a one-time Playit approval link..."
+                    }
+                    return@Thread
+                }
+                accountConnected = true
+                claimUrl = null
+                status = "CHECKING"
+                detail = "Finding your Minecraft Java address..."
+                var state = PlayitApiBridge.fetch(c)
+                if (state.javaTunnelCount == 0 && autoCreateRequested && !autoCreationAttempted) {
+                    autoCreationAttempted = true
+                    status = "CREATING FREE TUNNEL"
+                    detail = "Requesting a free Minecraft Java tunnel from Playit..."
+                    try {
+                        PlayitApiBridge.createJava(c, state.agentId, requestedJavaPort)
+                        append(c, "Requested free Java tunnel for port $requestedJavaPort")
+                        // Allocations can take a moment; a later refresh will display the address.
+                        state = PlayitApiBridge.fetch(c)
+                    } catch (e:Exception) {
+                        creationNeedsHelp = true
+                        detail = "Automatic Java tunnel setup was rejected. Tap Finish Setup."
+                        append(c, "Automatic tunnel creation failed: ${e.message}")
+                    }
+                }
+                javaAddress = state.javaAddress
+                status = when {
+                    javaAddress != null -> "ADDRESS ASSIGNED"
+                    creationNeedsHelp -> "SETUP HELP NEEDED"
+                    else -> "CONFIGURING"
+                }
+                if (javaAddress != null) {
+                    detail = "Playit assigned a Java address. Invite a friend to test from another network."
+                } else if (!creationNeedsHelp) {
+                    detail = "Playit account connected; waiting for Java tunnel allocation."
+                }
+            } catch(e:Exception) {
+                if (accountConnected) {
+                    status = "CHECKING CONNECTION"
+                    detail = "Unable to check Playit: ${e.message?.take(90) ?: "network error"}"
+                }
+            } finally { polling.set(false) }
+        }.start()
+    }
+
+    @Synchronized fun retryTunnel(c: Context) {
+        autoCreateRequested = true
+        autoCreationAttempted = false
+        creationNeedsHelp = false
+        refreshAsync(c)
+    }
+
     @Synchronized fun stop() {
-        try { client?.destroy() } catch (_:Exception) {}
-        try { daemon?.destroy() } catch (_:Exception) {}
+        generation++
+        try { client?.destroy() } catch (_: Exception) {}
+        try { daemon?.destroy() } catch (_: Exception) {}
         client = null
         daemon = null
+        javaAddress = null
+        accountConnected = false
+        claimUrl = null
+        autoCreateRequested = false
+        autoCreationAttempted = false
+        creationNeedsHelp = false
         status = "OFFLINE"
-        detail = "Playit tunnel agent stopped"
+        detail = "Tunnel stopped. Start it when you want remote players to join."
     }
 
     fun recentLog(c: Context): String =
-        try { File(root(c), "agent.log").takeIf { it.exists() }?.readText()?.takeLast(8000) ?: "No tunnel logs yet" }
-        catch (_:Exception) { "Cannot read Playit logs" }
+        try { File(root(c), "agent.log").takeIf { it.exists() }?.readText()?.takeLast(8000) ?: "No tunnel diagnostics" }
+        catch (_: Exception) { "Could not read tunnel diagnostics" }
 }
