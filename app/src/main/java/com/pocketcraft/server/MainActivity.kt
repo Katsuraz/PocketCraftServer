@@ -244,8 +244,6 @@ class MainActivity : Activity() {
         body.addView(ui.space(this,14))
         body.addView(enginePanel())
         body.addView(ui.space(this,14))
-        body.addView(connectionPanel())
-        body.addView(ui.space(this,14))
         val localHost = FrameLayout(this)
         localHost.addView(phoneOnlyPanel())
         phoneHost = localHost
@@ -261,7 +259,7 @@ class MainActivity : Activity() {
         body.addView(h("Overview"))
         body.addView(ui.space(this,11))
         val row = ui.row(this)
-        row.addView(stat("— / "+serverProperty("max-players","5"), "PLAYERS", "♟"), ui.weight(this))
+        row.addView(stat(serverProperty("max-players","5"), "MAX PLAYERS", "♟"), ui.weight(this))
         row.addView(stat(modFiles().count { it.name.endsWith(".jar") }.toString(), "MODS", "⬡"), LinearLayout.LayoutParams(0,-2,1f))
         body.addView(row)
         body.addView(ui.space(this,10))
@@ -444,6 +442,17 @@ class MainActivity : Activity() {
         card.addView(ui.space(this,8))
         card.addView(ui.text(this,"Host straight from this phone",18f,ui.WHITE,true))
         card.addView(ui.space(this,8))
+        val authenticated = serverProperty("online-mode","true").equals("true",true)
+        card.addView(ui.pill(this,
+            if(authenticated)"✓  JAVA AUTHENTICATION ON" else "⚠  JAVA AUTHENTICATION OFF",
+            if(authenticated)ui.GREEN else ui.RED))
+        if(!authenticated) {
+            card.addView(ui.space(this,8))
+            card.addView(ui.text(this,
+                "Java account verification is disabled; player names can be impersonated. Use trusted players and avoid handing out operator access.",
+                11f,ui.RED))
+        }
+        card.addView(ui.space(this,8))
         card.addView(ui.text(this,"No Playit account or tunnel. Start your Fabric server and share these local addresses with players on the same Wi-Fi or phone hotspot.",12f,ui.MUTED))
         card.addView(ui.space(this,11))
         val ready = ServerService.javaReady
@@ -490,6 +499,20 @@ class MainActivity : Activity() {
                     toast("Copied local Bedrock address")
                 })
             }
+        }
+        val customAddress = getSharedPreferences("pocketcraft",0)
+            .getString("shareAddress","").orEmpty().trim()
+        if(customAddress.isNotBlank()) {
+            card.addView(ui.space(this,11))
+            card.addView(ui.text(this,"CUSTOM SHARE ADDRESS  •  NOT VERIFIED",11f,ui.MUTED,true))
+            card.addView(ui.space(this,6))
+            card.addView(ui.text(this,customAddress,13f,ui.WHITE,true))
+            card.addView(ui.space(this,8))
+            card.addView(ui.action(this,"COPY CUSTOM ADDRESS") {
+                (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
+                    .setPrimaryClip(ClipData.newPlainText("Custom server address",customAddress))
+                toast("Custom address copied; verify its DNS/tunnel before sharing.")
+            })
         }
         card.addView(ui.space(this,10))
         card.addView(ui.action(this,"PLAY FROM ANOTHER NETWORK — NO TUNNEL?") {
@@ -783,28 +806,10 @@ class MainActivity : Activity() {
                 downloadAsync("Java self-test") { RuntimeStore.probe(this) }
             })
         }
-        box.addView(ui.space(this,8))
-        val lan = NetworkInfo.lanAddress()
-        val serverConfig = java.util.Properties()
-        File(base, "server.properties").takeIf {it.isFile}?.inputStream()?.use {serverConfig.load(it)}
-        val javaPort = serverConfig.getProperty("server-port", "25565")
-        if(lan != null) {
-            box.addView(ui.space(this,15))
-            box.addView(ui.text(this,"LAN CONNECTION",11f,ui.CYAN,true))
-            box.addView(ui.space(this,7))
-            box.addView(ui.text(this,"Java: $lan:$javaPort",13f,ui.WHITE,true))
-            box.addView(ui.text(this,"Bedrock: $lan:19132 (only when Geyser is active)",12f,ui.MUTED))
-            box.addView(ui.space(this,9))
-            box.addView(ui.action(this,"COPY JAVA LAN ADDRESS") {
-                val manager = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                manager.setPrimaryClip(ClipData.newPlainText("Minecraft Java LAN", "$lan:$javaPort"))
-                toast("Local address copied")
-            })
-        }
         box.addView(ui.space(this,12))
-        box.addView(ui.text(this,"LAN addresses work only on the same network. Remote friends need a compatible TCP and UDP tunnel or router ports. Do not share this LAN IP as a public address.",11f,ui.MUTED))
-        box.addView(ui.space(this,8))
-        box.addView(ui.text(this,"Experimental: on-device execution and Java compatibility require phone testing. Stop the server before changing worlds or mods.",11f,ui.MUTED))
+        box.addView(ui.text(this,
+            "Manage local and remote addresses in the hosting panels below. Stop the server before changing mods, worlds, or JVM settings.",
+            11f,ui.MUTED))
         return box
     }
 
