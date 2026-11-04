@@ -96,6 +96,9 @@ class MainActivity : Activity() {
     private val mods by lazy { File(base,"mods").apply { mkdirs() } }
     private var tab = 0
     private var pendingBackup: File? = null
+    private var currentScroller: ScrollView? = null
+    private var renderedTab = -1
+    private var scrollOffsets = IntArray(4)
     private val serverJar get() = File(base, "fabric-server-launch.jar")
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -103,11 +106,15 @@ class MainActivity : Activity() {
         window.statusBarColor = ui.BG
         window.navigationBarColor = ui.BG
         window.decorView.systemUiVisibility = 0
-        tab = savedInstanceState?.getInt("tab") ?: 0
+        tab = (savedInstanceState?.getInt("tab") ?: 0).coerceIn(0,3)
+        scrollOffsets = savedInstanceState?.getIntArray("tabScroll")?.takeIf { it.size==4 } ?: IntArray(4)
         render()
     }
     override fun onSaveInstanceState(outState: Bundle) {
-        outState.putInt("tab", tab); super.onSaveInstanceState(outState)
+        if (renderedTab in 0..3) scrollOffsets[renderedTab] = currentScroller?.scrollY ?: 0
+        outState.putInt("tab", tab)
+        outState.putIntArray("tabScroll", scrollOffsets)
+        super.onSaveInstanceState(outState)
     }
     override fun onResume() { super.onResume(); render(); uiHandler.removeCallbacks(updateStatus); uiHandler.post(updateStatus) }
     override fun onPause() { uiHandler.removeCallbacks(updateStatus); super.onPause() }
@@ -122,6 +129,9 @@ class MainActivity : Activity() {
         return item
     }
     private fun render() {
+        if (renderedTab in 0..3) {
+            scrollOffsets[renderedTab] = currentScroller?.scrollY ?: scrollOffsets[renderedTab]
+        }
         val screen = ui.column(this).apply { setBackgroundColor(ui.BG) }
         val brand = ui.row(this).apply {
             setPadding(ui.dp(this@MainActivity,18),ui.dp(this@MainActivity,16),
@@ -217,7 +227,116 @@ class MainActivity : Activity() {
         }
         screen.addView(navbar)
         setContentView(screen)
+        currentScroller = scroller
+        renderedTab = tab
+        val restoreY = scrollOffsets[tab]
+        scroller.post { scroller.scrollTo(0,restoreY) }
     }
+    private fun healthSnapshot(): HostingHealth.Snapshot = HostingHealth.Snapshot(
+        fabricInstalled = serverJar.isFile,
+        javaInstalled = RuntimeStore.isInstalled(this),
+        eulaAccepted = ServerDownloads.eulaAccepted(this),
+        geyserInstalled = modFiles().any { it.name.startsWith("Geyser",true) && it.name.endsWith(".jar") },
+        floodgateInstalled = modFiles().any { it.name.startsWith("floodgate",true) && it.name.endsWith(".jar") },
+        processRunning = ServerService.running,
+        javaReady = ServerService.javaReady,
+        bedrockListening = ServerService.bedrockReady,
+        nethernetRegistered = ServerService.nethernetReady,
+        playitActive = PlayitManager.isActive(),
+        javaTunnelAddress = PlayitManager.javaAddress,
+        bedrockTunnelAddress = PlayitManager.bedrockAddress,
+        localIp = NetworkInfo.lanAddress(),
+        lastError = ServerService.failure.takeIf { it.isNotBlank() }
+    )
+
+    /** All diagnostics are local, with no remote probes or secret disclosure. */
+    private fun showHealthCenter() {
+        val state = healthSnapshot()
+        val checks = HostingHealth.evaluate(state)
+        val content = ui.column(this).apply {
+            setPadding(ui.dp(this@MainActivity,18),ui.dp(this@MainActivity,6),
+                ui.dp(this@MainActivity,18),ui.dp(this@MainActivity,22))
+        }
+        val core = 3 - HostingHealth.startBlockers(state)
+        content.addView(ui.pill(this,"$core / 3 CORE PREREQUISITES",
+            if(core==3)ui.GREEN else ui.CYAN))
+        content.addView(ui.space(this,10))
+        content.addView(ui.text(this,
+            "An installed mod or assigned tunnel address isn't proof of a successful connection. This check uses only actual files and local server signals.",
+            12f,ui.MUTED))
+        content.addView(ui.space(this,14))
+        checks.forEachIndexed { index, check ->
+            val card = ui.card(this)
+            val tint = when(check.level) {
+                HostingHealth.Level.GOOD -> ui.GREEN
+                HostingHealth.Level.ACTION -> ui.RED
+                HostingHealth.Level.INFO -> ui.CYAN
+            }
+            val row = ui.row(this)
+            row.addView(ui.text(this,
+                when(check.level) {
+                    HostingHealth.Level.GOOD -> "✓"
+                    HostingHealth.Level.ACTION -> "!"
+                    HostingHealth.Level.INFO -> "i"
+                },16f,tint,true).apply {
+                gravity=Gravity.CENTER
+                background = ui.shape(this@MainActivity,ui.SURFACE,11,ui.BORDER)
+            },LinearLayout.LayoutParams(ui.dp(this,35),ui.dp(this,35)))
+            row.addView(ui.text(this,check.title,14f,ui.WHITE,true).apply {
+                setPadding(ui.dp(this@MainActivity,12),0,0,0)
+            },LinearLayout.LayoutParams(0,-2,1f))
+            card.addView(row)
+            card.addView(ui.space(this,9))
+            card.addView(ui.text(this,check.explanation,12f,ui.MUTED))
+            content.addView(card)
+            if (index != checks.lastIndex) content.addView(ui.space(this,9))
+        }
+        lateinit var dialog: AlertDialog
+        content.addView(ui.space(this,14))
+        content.addView(ui.action(this,"OPEN CONSOLE") {
+            dialog.dismiss()
+            tab=3
+            render()
+        })
+        val scroll = ScrollView(this).apply { addView(content) }
+        dialog = AlertDialog.Builder(this)
+            .setTitle("Server health")
+            .setView(scroll)
+            .setNegativeButton("CLOSE",null)
+            .setNeutralButton("COPY SAFE REPORT") {_,_->
+                // Intentionally omit agent secrets, console output, user paths,
+                // public tunnel names, IP addresses and raw exception messages.
+                val version = runCatching {
+                    packageManager.getPackageInfo(packageName,0).versionName ?: "unknown"
+                }.getOrDefault("unknown")
+                val report = listOf(
+                    "PocketCraft diagnostics • v$version",
+                    "Android API: " + android.os.Build.VERSION.SDK_INT,
+                    "Fabric installed: " + state.fabricInstalled,
+                    "Java files installed: " + state.javaInstalled,
+                    "EULA accepted: " + state.eulaAccepted,
+                    "Minecraft process: " + state.processRunning,
+                    "Java ready: " + state.javaReady,
+                    "Geyser mod: " + state.geyserInstalled,
+                    "Floodgate mod: " + state.floodgateInstalled,
+                    "Bedrock listening: " + state.bedrockListening,
+                    "NetherNet registered: " + state.nethernetRegistered,
+                    "Playit running: " + state.playitActive,
+                    "Java public address assigned: " + !state.javaTunnelAddress.isNullOrBlank(),
+                    "Bedrock public address assigned: " + !state.bedrockTunnelAddress.isNullOrBlank()
+                ).joinToString("\n")
+                (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
+                    .setPrimaryClip(ClipData.newPlainText("PocketCraft safe report",report))
+                toast("Private tokens omitted. Diagnostic summary copied.")
+            }
+            .setPositiveButton("SERVER FILES") {_,_->openServerFiles()}
+            .create()
+        dialog.show()
+        dialog.window?.setLayout(
+            (resources.displayMetrics.widthPixels*.95f).toInt(),
+            (resources.displayMetrics.heightPixels*.82f).toInt())
+    }
+
     private fun dashboard(body: LinearLayout) {
         body.addView(h("Pocket server","Your Minecraft world, your rules"))
         body.addView(ui.space(this,16))
@@ -237,7 +356,24 @@ class MainActivity : Activity() {
         hero.addView(ui.space(this,6))
         hero.addView(ui.text(this,if(ServerService.running)"Java process is active. Check the Console tab to confirm Minecraft has fully started." else "Install the ARM64 Java runtime, Fabric, and crossplay files before starting. Startup on Android is experimental.",12f,0xFFB7CFE0.toInt()))
         hero.addView(ui.space(this,16))
-        hero.addView(ui.action(this,"VIEW SETUP STATUS  →",true) { setup() })
+        val readyForStart = HostingHealth.startBlockers(healthSnapshot()) == 0
+        hero.addView(ui.action(this,when {
+            ServerService.javaReady -> "✓  SERVER READY — OPEN CONSOLE"
+            ServerService.running -> "◌  SERVER STARTING — OPEN CONSOLE"
+            readyForStart -> "▶  START MY SERVER"
+            else -> "✦  COMPLETE SERVER SETUP"
+        },true) {
+            when {
+                ServerService.running -> { tab=3; render() }
+                readyForStart -> startMinecraft()
+                !serverJar.isFile -> installFabricPrompt()
+                !ServerDownloads.eulaAccepted(this) -> offerEula()
+                !RuntimeStore.isInstalled(this) -> installJavaPrompt()
+                else -> showHealthCenter()
+            }
+        })
+        hero.addView(ui.space(this,9))
+        hero.addView(ui.action(this,"SERVER HEALTH & DIAGNOSTICS") { showHealthCenter() })
         body.addView(hero)
         body.addView(ui.space(this,16))
         body.addView(setupJourney())
@@ -271,6 +407,8 @@ class MainActivity : Activity() {
         body.addView(h("Quick actions"))
         body.addView(ui.space(this,11))
         val actions = ui.card(this)
+        actions.addView(actionRow("✓","Server health","Check Java, Geyser, local network and tunnel setup") { showHealthCenter() })
+        actions.addView(line())
         actions.addView(actionRow("⚙","Server settings","Addresses, non-premium access, gameplay & performance") {
             startActivity(Intent(this, SettingsActivity::class.java))
         })
@@ -1125,9 +1263,15 @@ class MainActivity : Activity() {
         val actions=ui.row(this)
         actions.addView(ui.action(this,"↻  Refresh",true){render()},ui.weight(this))
         actions.addView(ui.action(this,"Copy log"){
-            val manager=getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            manager.setPrimaryClip(ClipData.newPlainText("PocketCraft logs",getLog()))
-            toast("Log copied")
+            AlertDialog.Builder(this).setTitle("Copy server log?")
+                .setMessage("Raw Minecraft logs may contain player information, public addresses or private configuration values. Review them before sharing. For a token-free status summary, use Server Health instead.")
+                .setNegativeButton("CANCEL",null)
+                .setNeutralButton("SERVER HEALTH") {_,_->showHealthCenter()}
+                .setPositiveButton("COPY RAW LOG") {_,_->
+                    val manager=getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    manager.setPrimaryClip(ClipData.newPlainText("PocketCraft raw logs",getLog()))
+                    toast("Raw log copied. Check for private details before sharing.")
+                }.show()
         },LinearLayout.LayoutParams(0,-2,1f))
         body.addView(actions)
         body.addView(ui.space(this,13))
@@ -1321,9 +1465,27 @@ class MainActivity : Activity() {
                     render()
                     if(label.startsWith("Fabric") && !ServerDownloads.eulaAccepted(this)) offerEula()
                 }.onFailure {error->
-                    AlertDialog.Builder(this).setTitle(if(cancelled.get())"Installation cancelled" else "Installation failed")
-                        .setMessage(error.message ?: "Check your connection and available storage.")
-                        .setPositiveButton("OK",null).show()
+                    val wasCancelled = cancelled.get()
+                    val reason = error.message?.take(1300)
+                        ?: "Check your internet connection, storage, and installed Minecraft version."
+                    val builder = AlertDialog.Builder(this)
+                        .setTitle(if(wasCancelled)"Installation cancelled" else "Installation failed")
+                        .setMessage(if(wasCancelled)"The installer was stopped. Your existing world and server settings were not intentionally changed."
+                            else "$label could not finish.\n\n$reason")
+                        .setNegativeButton("CLOSE",null)
+                    if (!wasCancelled) {
+                        builder.setNeutralButton("COPY ERROR") {_,_->
+                            (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
+                                .setPrimaryClip(ClipData.newPlainText("PocketCraft installer failure",
+                                    "$label: $reason"))
+                            toast("Error copied for troubleshooting")
+                        }
+                        if (label.startsWith("Fabric ") || label == "crossplay" ||
+                            label == "Android Java 25") {
+                            builder.setPositiveButton("TRY AGAIN") {_,_->downloadAsync(label,action)}
+                        }
+                    }
+                    builder.show()
                 }
             }
         }.start()
