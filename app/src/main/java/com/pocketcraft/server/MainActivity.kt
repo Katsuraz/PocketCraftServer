@@ -1373,52 +1373,65 @@ class MainActivity : Activity() {
     }
 
     private fun modsPage(body:LinearLayout) {
-        body.addView(h("Mod library","Manage your Fabric server add-ons"))
-        body.addView(ui.space(this,15))
-        body.addView(ui.action(this,"▤  BROWSE SERVER FILES",true) {openServerFiles("mods")})
-        body.addView(ui.space(this,10))
-        body.addView(ui.action(this,"+  IMPORT MOD JAR",true) {picker(2)})
-        body.addView(ui.space(this,10))
-        val packCard=ui.card(this)
-        packCard.addView(ui.pill(this,"NEW  •  MODPACKS",ui.GREEN))
-        packCard.addView(ui.space(this,9))
-        packCard.addView(ui.text(this,"Import a complete modpack",18f,ui.WHITE,true))
-        packCard.addView(ui.space(this,7))
-        packCard.addView(ui.text(this,"Modrinth .mrpack or CurseForge manifest ZIP. Installs server-compatible files only; no world or launcher replacement.",12f,ui.MUTED))
-        packCard.addView(ui.space(this,13))
-        packCard.addView(ui.action(this,"⌕  BROWSE MODRINTH PACKS",true) {
-            browseModrinth()
+        val hero=ui.card(this)
+        hero.addView(ui.pill(this,"FABRIC  •  SERVER ADD-ONS",ui.CYAN))
+        hero.addView(ui.space(this,9))
+        hero.addView(ui.text(this,"Mods & modpacks",21f,ui.WHITE,true))
+        hero.addView(ui.space(this,7))
+        hero.addView(ui.text(this,"Explore, install and manage add-ons. Everything runs on your phone.",12f,ui.MUTED))
+        hero.addView(ui.space(this,8))
+        hero.addView(WorldArt(this))
+        val activeVersion=getSharedPreferences("pocketcraft",0).getString("gameVersion",null)
+        hero.addView(ui.text(this,"Fabric • " + (activeVersion ?: "Version unknown"),11f,ui.CYAN,true))
+        body.addView(hero)
+        body.addView(ui.space(this,16))
+
+        body.addView(ui.text(this,"Discover",16f,ui.WHITE,true))
+        body.addView(ui.space(this,8))
+        val discover=ui.card(this)
+        discover.addView(ui.action(this,"⌕  BROWSE MODRINTH PACKS",true) { browseModrinth() })
+        discover.addView(ui.space(this,9))
+        discover.addView(ui.action(this,"↗  ADD MODS FROM WEBSITE") { installFromWebsite() })
+        discover.addView(ui.space(this,9))
+        discover.addView(ui.text(this,"Paste Modrinth mod/modpack pages or trusted direct Fabric JAR / .mrpack download links.",11f,ui.MUTED))
+        body.addView(discover)
+        body.addView(ui.space(this,16))
+
+        body.addView(ui.text(this,"Import & manage",16f,ui.WHITE,true))
+        body.addView(ui.space(this,8))
+        val imports=ui.card(this)
+        imports.addView(ui.action(this,"＋  IMPORT MODPACK",true) {
+            if (ServerService.running) toast("Stop Minecraft before importing a modpack") else picker(5)
         })
-        packCard.addView(ui.space(this,8))
-        packCard.addView(ui.action(this,"＋  IMPORT MODPACK",true) {
-            if(ServerService.running){toast("Stop the server before installing a modpack")}else picker(5)
-        })
-        body.addView(packCard)
-        body.addView(ui.space(this,14))
-        body.addView(ui.action(this,"↓  INSTALL CROSSPLAY FILES") {
+        imports.addView(ui.space(this,8))
+        imports.addView(ui.action(this,"＋  IMPORT MOD JAR") { picker(2) })
+        imports.addView(ui.space(this,8))
+        imports.addView(ui.action(this,"▤  SERVER FILES") {openServerFiles("mods")})
+        imports.addView(ui.space(this,10))
+        imports.addView(ui.text(this,"Supports Modrinth .mrpack and Fabric CurseForge manifest ZIP. Existing files are preserved.",11f,ui.MUTED))
+        body.addView(imports)
+        body.addView(ui.space(this,16))
+
+        body.addView(ui.text(this,"Crossplay",16f,ui.WHITE,true))
+        body.addView(ui.space(this,8))
+        val crossplayCard=ui.card(this)
+        crossplayCard.addView(ui.action(this,"↓  INSTALL GEYSER + FLOODGATE") {
             AlertDialog.Builder(this).setTitle("Install crossplay bridge?")
-                .setMessage("Downloads matching Fabric API from Modrinth, plus the latest Geyser-Fabric and Floodgate from GeyserMC for Minecraft Java 26.3. These server files alone cannot host Minecraft: an Android Java runtime is still required.")
-                .setNegativeButton("Cancel",null)
-                .setPositiveButton("Download") {_,_-> downloadAsync("crossplay") {ServerDownloads.installCrossplay(this)} }
+                .setMessage("Downloads Fabric API, Geyser-Fabric and Floodgate-Fabric for supported Minecraft versions. Stop the server before changing installed mods.")
+                .setNegativeButton("CANCEL",null)
+                .setPositiveButton("INSTALL") {_,_-> downloadAsync("Crossplay files") {ServerDownloads.installCrossplay(this)} }
                 .show()
         })
-        body.addView(ui.space(this,10))
-        body.addView(ui.action(this,"⎘  PASTE PLAYIT GEYSER CONFIG",true) {
-            pastePlayitGeyserSettings()
-        })
-        body.addView(ui.space(this,10))
-        body.addView(ui.action(this,"⚙  EDIT GEYSER CONFIG IN APP",true) {
-            editGeyserConfiguration()
-        })
-        body.addView(ui.space(this,10))
-        body.addView(ui.action(this,"⚙  OPEN GEYSER CONFIG IN FILES",true) {
-            openServerFiles("config/Geyser-Fabric/config.yml")
-        })
-        body.addView(ui.space(this,8))
-        body.addView(ui.action(this,"↶  RESTORE GEYSER CONFIG BACKUP") {
-            restoreGeyserBackup()
-        })
-        body.addView(ui.space(this,12))
+        crossplayCard.addView(ui.space(this,8))
+        crossplayCard.addView(ui.action(this,"⎘  PASTE PLAYIT GEYSER SETTINGS") {pastePlayitGeyserSettings()})
+        crossplayCard.addView(ui.space(this,8))
+        crossplayCard.addView(ui.action(this,"⚙  EDIT GEYSER SETTINGS") {editGeyserConfiguration()})
+        crossplayCard.addView(ui.space(this,8))
+        crossplayCard.addView(ui.action(this,"↶  RESTORE GEYSER BACKUP") {restoreGeyserBackup()})
+        body.addView(crossplayCard)
+        body.addView(ui.space(this,18))
+        body.addView(ui.text(this,"Installed mods",16f,ui.WHITE,true))
+        body.addView(ui.space(this,9))
         val list=modFiles()
         body.addView(ui.text(this,list.size.toString() + " total  •  " + list.count {it.name.endsWith(".jar")} + " enabled",12f,ui.MUTED))
         body.addView(ui.space(this,12))
@@ -1810,6 +1823,54 @@ class MainActivity : Activity() {
         }
         startActivityForResult(intent,code)
     }
+    private fun installFromWebsite() {
+        val input=android.widget.EditText(this).apply {
+            hint="https://modrinth.com/mod/..."
+            setSingleLine(false)
+            minLines=2
+            maxLines=4
+            inputType=android.text.InputType.TYPE_CLASS_TEXT or
+                android.text.InputType.TYPE_TEXT_VARIATION_URI
+            setTextColor(ui.WHITE)
+            setHintTextColor(ui.MUTED)
+            background=ui.shape(this@MainActivity,ui.SURFACE,12)
+            setPadding(ui.dp(this@MainActivity,13),ui.dp(this@MainActivity,12),
+                ui.dp(this@MainActivity,13),ui.dp(this@MainActivity,12))
+        }
+        val panel=ui.column(this).apply {
+            setPadding(ui.dp(this@MainActivity,20),ui.dp(this@MainActivity,10),
+                ui.dp(this@MainActivity,20),ui.dp(this@MainActivity,12))
+            addView(ui.text(this@MainActivity,
+                "Modrinth project/version pages, direct HTTPS Fabric .jar links, and .mrpack downloads are supported. Minecraft must be stopped.",
+                12f,ui.MUTED))
+            addView(ui.space(this@MainActivity,12))
+            addView(input)
+        }
+        val dialog=AlertDialog.Builder(this)
+            .setTitle("Add from website")
+            .setView(panel)
+            .setNegativeButton("CANCEL",null)
+            .setPositiveButton("INSTALL",null).create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val link=input.text.toString().trim()
+                if (!link.startsWith("https://")) {
+                    toast("Paste a complete HTTPS download or Modrinth link")
+                    return@setOnClickListener
+                }
+                if(ServerService.running) {
+                    toast("Stop Minecraft before installing mods")
+                    return@setOnClickListener
+                }
+                dialog.dismiss()
+                downloadAsync("Website mod installation") {
+                    WebsiteModInstaller.install(this,link)
+                }
+            }
+        }
+        dialog.show()
+    }
+
     private fun browseModrinth() {
         val input=android.widget.EditText(this).apply {
             hint="Search Fabric modpacks"
@@ -1996,8 +2057,8 @@ class MainActivity : Activity() {
                 if(!name.endsWith(".mrpack") && !name.endsWith(".zip")) {
                     toast("Choose a .mrpack or CurseForge .zip file");return
                 }
-                val isCurse=name.endsWith(".zip")
-                if(isCurse) askCurseForgeKey(uri) else installModpack(uri,null)
+                // Both .mrpack and .zip are ZIP archives. Inspect the manifest, not only the extension.
+                if(name.endsWith(".zip")) askCurseForgeKey(uri) else installModpack(uri,null)
             }
             4 -> {
                 val world=pendingBackup ?: return
