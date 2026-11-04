@@ -262,6 +262,23 @@ class MainActivity : Activity() {
             })
         }
         box.addView(ui.space(this,8))
+        val lan = NetworkInfo.lanAddress()
+        if(lan != null) {
+            box.addView(ui.space(this,15))
+            box.addView(ui.text(this,"LAN CONNECTION",11f,ui.CYAN,true))
+            box.addView(ui.space(this,7))
+            box.addView(ui.text(this,"Java: $lan:25565",13f,ui.WHITE,true))
+            box.addView(ui.text(this,"Bedrock: $lan:19132 (only when Geyser is active)",12f,ui.MUTED))
+            box.addView(ui.space(this,9))
+            box.addView(ui.action(this,"COPY JAVA LAN ADDRESS") {
+                val manager = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                manager.setPrimaryClip(ClipData.newPlainText("Minecraft Java LAN", "$lan:25565"))
+                toast("Local address copied")
+            })
+        }
+        box.addView(ui.space(this,12))
+        box.addView(ui.text(this,"LAN addresses work only on the same network. Remote friends need a compatible TCP and UDP tunnel or router ports. Do not share this LAN IP as a public address.",11f,ui.MUTED))
+        box.addView(ui.space(this,8))
         box.addView(ui.text(this,"Experimental: on-device execution and Java compatibility require phone testing. Stop the server before changing worlds or mods.",11f,ui.MUTED))
         return box
     }
