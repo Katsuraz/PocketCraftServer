@@ -43,12 +43,34 @@ int main(int argc, char **argv) {
     if (setenv("JAVA_HOME", home, 1) || setenv("TMPDIR", temp, 1))
         return fail("Unable to configure Java environment");
 
+    /*
+     * HotSpot derives the boot module image location from the path returned
+     * by dladdr(libjvm.so), not from -Djava.home. The previously APK-packaged
+     * libjvm.so lived under /data/app/.../lib/arm64, so HotSpot looked for
+     * /data/app/.../lib/modules and emitted "Failed setting boot class path".
+     *
+     * Always load libjvm.so from the extracted JRE's ORIGINAL
+     * <java.home>/lib/server location. Android disallows execve() for
+     * user-writable files at targetSdk>=29; dlopen() of a normal PIC library
+     * is a separate operation. Devices may still restrict that dlopen().
+     */
     char jvm[PATH_MAX];
-    if (snprintf(jvm, sizeof jvm, "%s/libjvm.so", libs) >= (int)sizeof jvm)
-        return fail("Native library directory too long");
+    if (snprintf(jvm, sizeof jvm, "%s/lib/server/libjvm.so", home) >= (int)sizeof jvm)
+        return fail("Java runtime path too long");
+    char module_image[PATH_MAX];
+    if (snprintf(module_image, sizeof module_image, "%s/lib/modules", home) >= (int)sizeof module_image)
+        return fail("Java modules path too long");
+    if (access(module_image, R_OK)) {
+        fprintf(stderr, "[PocketCraft native Java] Missing Java boot modules: %s (%s)\n",
+                module_image, strerror(errno));
+        return 2;
+    }
+    fprintf(stderr, "[PocketCraft native Java] Loading JVM from %s\n", jvm);
+    fflush(stderr);
     void *handle = dlopen(jvm, RTLD_NOW | RTLD_GLOBAL);
     if (!handle) {
-        fprintf(stderr, "[PocketCraft native Java] JVM library load failed: %s\n", dlerror());
+        fprintf(stderr, "[PocketCraft native Java] Android rejected runtime libjvm.so: %s\n", dlerror());
+        fprintf(stderr, "[PocketCraft native Java] Java's .so files may be blocked by this device's app-data execution policy.\n");
         return 2;
     }
     JvmCreate create = (JvmCreate)dlsym(handle, "JNI_CreateJavaVM");
