@@ -357,6 +357,10 @@ class MainActivity : Activity() {
             "BEDROCK: " + (local?.let { "$it:19132" } ?: "Local network required") +
                 if (geyser) " • Geyser listener detected" else " • Geyser listener not confirmed",
             12f,ui.MUTED))
+        if (ServerService.nethernetReady) {
+            card.addView(ui.space(this,5))
+            card.addView(ui.text(this,"✓ External NetherNet signaling registered",12f,ui.GREEN))
+        }
         card.addView(ui.space(this,14))
         card.addView(ui.action(this,
             if(ServerService.running) "✓  SERVER PROCESS ACTIVE" else "▶  HOST ON THIS PHONE — NO PLAYIT",
@@ -414,6 +418,11 @@ class MainActivity : Activity() {
         card.addView(ui.text(this,"OPTIONAL INTERNET TUNNEL",11f,ui.CYAN,true))
         card.addView(ui.space(this,8))
         card.addView(ui.text(this,"Playit for remote connections",18f,ui.WHITE,true))
+        card.addView(ui.space(this,8))
+        card.addView(ui.text(this,
+            if(ServerService.nethernetReady) "✓ Geyser registered with external NetherNet signaling"
+            else "NetherNet signaling not confirmed yet. Check Geyser's configuration and Console.",
+            12f,if(ServerService.nethernetReady)ui.GREEN else ui.MUTED))
         card.addView(ui.space(this,8))
         val blocked = PlayitManager.status == "ACCOUNT LIMIT" || PlayitManager.status == "ACCOUNT ACTION"
         card.addView(ui.pill(this,
