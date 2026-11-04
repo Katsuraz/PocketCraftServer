@@ -67,7 +67,7 @@ class MainActivity : Activity() {
             ui.run { padding(this@MainActivity, 10, 3, 10, 3) }
         })
         screen.addView(top)
-        val scroller = ScrollView(this).apply { fillViewport = true; isVerticalScrollBarEnabled = false }
+        val scroller = ScrollView(this).apply { isFillViewport = true; isVerticalScrollBarEnabled = false }
         val body = ui.column(this).apply { setPadding(ui.dp(this@MainActivity,18), ui.dp(this@MainActivity,7), ui.dp(this@MainActivity,18), ui.dp(this@MainActivity,18)) }
         when(tab) {
             0 -> dashboard(body)
