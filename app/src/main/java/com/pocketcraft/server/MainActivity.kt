@@ -2217,7 +2217,16 @@ class MainActivity : Activity() {
                     if(kind==1 && oldFile.exists()) oldFile.renameTo(target)
                     error("Unable to install imported JAR")
                 }
-                runOnUiThread {toast("Imported "+filename);render()}
+                if(kind==1) {
+                    // A manually imported launcher may target a different Minecraft version.
+                    // Do not reuse stale metadata from the previous server.
+                    getSharedPreferences("pocketcraft",0).edit().remove("gameVersion").apply()
+                }
+                runOnUiThread {
+                    toast("Imported "+filename)
+                    render()
+                    if(kind==1)showServerVersionPrompt()
+                }
             } catch(e:Exception) {runOnUiThread {toast("Import failed: "+e.message)}}
             finally {temp.delete()}
         }.start()
