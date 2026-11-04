@@ -2,6 +2,14 @@
 
 PocketCraft Server is a native Kotlin Android app for managing a Minecraft Java Fabric server, with a custom midnight / block-world UI. It does **not** depend on Termux.
 
+## v0.5: genuine installer progress and Fabric modpacks
+
+- Download/install dialogs now display a real byte-based progress bar when content size is available, current file, and phases such as resolving dependencies, verifying files and unpacking Java. Otherwise a visible indeterminate progress indicator is used; cancellation is cooperative.
+- **Modrinth:** browse Fabric modpacks in the app, download a compatible release for the installed Minecraft version, or import a local `.mrpack` file. The installer checks SHA-512 when provided, skips client-only and optional content, and supports `overrides/` and `server-overrides/`.
+- **CurseForge:** import a ZIP with `manifest.json` and Fabric loader. Mod downloads require an approved CurseForge developer API key entered for that install only; PocketCraft does not retain the key. Files withheld by CurseForge must be obtained through authorized means.
+- Both importers avoid overwriting existing server files, refuse non-Fabric packs, check the installed Minecraft version and restrict extracted paths to server-compatible mod/config directories.
+- Imports do **not** install client-side mods on Bedrock or guarantee crossplay. Back up the server and stop it before importing. Some modpacks also require client mods on Java players.
+
 ## v0.4: multiplayer controls and refreshed UI
 
 - Redesigned server settings with visible touch-friendly selectors and switches, consistent dark theme, larger tap targets, and clearer sections for identity, access, gameplay and performance.
