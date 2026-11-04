@@ -22,6 +22,7 @@ class MainActivity : Activity() {
         fun button(label: String, action: () -> Unit) {
             layout.addView(Button(this).apply { text = label; setOnClickListener { action() } })
         }
+        button("Server Settings") { startActivity(Intent(this, SettingsActivity::class.java)) }
         button("Import Fabric server JAR") { pick("application/java-archive", 1) }
         button("Import Fabric mod JAR") { pick("application/java-archive", 2) }
         button("Start server") {
