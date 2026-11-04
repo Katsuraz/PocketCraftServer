@@ -131,7 +131,10 @@ object RuntimeStore {
             env["JAVA_HOME"] = javaHome.absolutePath
             env["TMPDIR"] = tmp.absolutePath
             env["LD_LIBRARY_PATH"] = listOf(
-                c.applicationInfo.nativeLibraryDir, env["LD_LIBRARY_PATH"].orEmpty()
+                File(javaHome, "lib").absolutePath,
+                File(javaHome, "lib/server").absolutePath,
+                c.applicationInfo.nativeLibraryDir,
+                env["LD_LIBRARY_PATH"].orEmpty()
             ).filter { it.isNotBlank() }.joinToString(":")
         }.start()
         if (!process.waitFor(18, TimeUnit.SECONDS)) {
