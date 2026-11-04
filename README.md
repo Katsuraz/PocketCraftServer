@@ -1,38 +1,54 @@
-# PocketCraft Server
+# PocketCraft Server — Android (v0.3 experimental)
 
-An experimental, standalone **Android Minecraft server manager** with a custom midnight / block-world UI, implemented in native Kotlin. The APK does **not** require Termux to run the manager UI.
+PocketCraft Server is a native Kotlin Android app for managing a Minecraft Java Fabric server, with a custom midnight / block-world UI. It does **not** depend on Termux.
 
-## Features implemented in v0.2
-- A four-tab Dashboard, Mods, Worlds, Console experience with custom pixel-art and status cards.
-- Server properties editor with numeric and whitelist validation; Java online authentication is kept enabled.
-- Download a Fabric server launcher from the official Fabric metadata API for Minecraft 26.3, 1.21.11 or 1.20.1; explicitly record EULA acceptance (the runtime is not included).
-- Download current Geyser-Fabric and Floodgate files for the latest supported Fabric target, or import compatible copies manually.
-- Import an existing Fabric server launcher JAR, plus third-party mod JARs via Android's document picker.
-- Enable / disable mod JAR files, inspect what's in the mods folder, remove a mod with confirmation.
-- Import a Java world ZIP with path traversal checks and a 1 GiB extraction cap.
-- View available worlds, mark an active world via `server.properties`, export a world ZIP using Android's document creation screen.
-- Read and copy local console logs.
-- GitHub Actions build uploads a debug APK automatically.
+## Implemented
 
-## Not implemented (important)
-**This version CANNOT run Minecraft Java Edition or host a Bedrock crossplay game.**
+- **Dashboard:** setup journey, actual process state, real Start / Stop buttons, accessible LAN addresses and copy action.
+- **Android OpenJDK installer:** opt-in download of ARM64 Java 25 from AngelAuraMC, pinned to the upstream SHA-256 checksum. Uses a safe, size-limited tar.xz extraction flow and an on-device `java -version` health check.
+- **Experimental process host:** Android foreground notification, partial wake lock, launches the Fabric JAR with bounded heap, follows stdout/stderr into a rotating log, sends console commands over stdin, gracefully stops with `stop` and a 15-second fallback.
+- **Fabric installer:** downloads official Fabric launcher versions and records EULA acceptance only with explicit agreement.
+- **Crossplay files:** downloads Fabric API, Geyser-Fabric and Floodgate-Fabric for Minecraft Java 26.3 from official endpoints. Does not assert that crossplay is online merely because files are installed.
+- **Mods:** import JARs, inspect Fabric metadata, enable/disable, delete with confirmation.
+- **Worlds:** import world ZIP with extraction checks, select active world, export backups.
+- **Server settings:** edit server.properties, keep online-mode enabled and RCON disabled.
+- **Console:** view/copy logs, submit commands to the actual process only while running.
+- **CI:** GitHub Actions builds a debug APK.
 
-Android ART cannot execute a regular Java SE Minecraft server JAR. The APK **does not currently bundle a compatible Android OpenJDK runtime / userspace Linux engine**, and server startup is intentionally not faked. External ports, Geyser/Floodgate, live player numbers, server commands and connection tunnels are not active.
+## Very important: proof-of-concept, not production hosting
 
-The production engine needs:
-1. A licensed and redistributable ARM64 Java 21/25 runtime that actually executes Minecraft Fabric on Android, likely in a PRoot/proot-distro-style environment or with native Android OpenJDK.
-2. Robust foreground-service execution, proper process IO, notification controls, Android background limits, battery/power handling and safe JVM memory limits.
-3. Fabric server setup/downloader, EULA acceptance, server version detection, compatible Geyser-Fabric and Floodgate installations; for older Minecraft versions, Geyser may need a separate proxy.
-4. TCP and UDP reachability testing (including CGNAT mitigation and provider restrictions) before advertising public access.
+**A successful APK compilation is not proof that Fabric, Java 25, or Geyser actually runs on a realme 7 Pro.** Execution of downloaded native binaries is restricted on some Android versions. The Java runtime used by the Amethyst Minecraft client may require additional Android-specific launcher integration to run a headless server. Java 25 on Android is not a standard JVM included in Android.
 
-This application is an honest **file manager + future server dashboard**. Do not claim it hosts a server yet.
+The app intentionally reports only process status and local addresses; it does **not** yet confirm that the server finished loading, show actual connected players or expose a public internet address. A working Java server and Bedrock connection still require device-level testing and potentially more platform integration.
 
-## Build an APK
-1. GitHub > Actions > **Build Android APK**.
-2. Run the workflow from the default branch, or open a PR to test this development branch.
-3. Download the `pocketcraft-debug-apk` artifact from a successful build.
+**Version compatibility:** Current Geyser-Fabric supports Java 26.3 only, which requires Java 25. For older Fabric server releases, a separate compatible proxy such as ViaProxy is needed. Client-required Fabric content mods will not magically load on Bedrock.
 
-Requires Android 8+ (API 26); intended for your realme 7 Pro. Java 17 in GitHub Actions compiles the Android app; this is **not** the Minecraft server runtime.
+**Internet access:** The LAN address shown in the app only works for devices on the same reachable network. Public hosting requires a TCP tunnel for Java (default 25565) and both TCP + UDP connectivity to Geyser's Bedrock port (default 19132), or suitable router forwarding.
 
-## Security and backup notes
-Keep worlds backed up before deleting. Installed JARs are not executed by the app in v0.2. Only import files from trusted sources. The ZIP extraction code checks paths and expansion limits, but importing very large worlds may use substantial device storage.
+## Test on realme 7 Pro
+
+1. Build/download the latest APK from GitHub Actions. Confirm the APK is from **this** repository, not a lookalike.
+2. Install PocketCraft. In the app, install Java 25. The runtime is downloaded only after you opt in.
+3. Tap **TEST JAVA ENGINE**. Save its exact output, whether successful or not. If it fails, do not assume Minecraft can start.
+4. Install Minecraft **26.3** Fabric server, review the Minecraft EULA, and install compatible crossplay files.
+5. Tap **START**, visit **Console**, and refresh. Wait for an actual Minecraft ready message (usually `Done (...)`); a running Java process alone is not proof.
+6. If it starts, connect Java from another device on the same Wi-Fi using the shown LAN IP:25565. For Bedrock, verify Geyser was initialized and connect to the shown LAN IP:19132.
+7. If any step fails, share the console text. Keep backups of every important world before testing.
+
+For internet play, use a tunnel supporting the latest Geyser NetherNet TCP+UDP requirements; a standalone Android tunnel implementation has not been integrated yet.
+
+## APK build
+
+GitHub repository → **Actions** → **Build Android APK** → latest passing run → **Artifacts** → `pocketcraft-debug-apk`.
+
+Build uses Gradle/JDK 17 for the Android app; the phone separately downloads the experimental Java 25 runtime for Minecraft. v0.3 uses Android `targetSdk=28` to experiment with executable binaries in private app storage; this is not suitable for Play Store release and has compatibility/security tradeoffs. Runtime execution may still be denied by the device.
+
+## Upstream sources & licenses
+
+- Runtime: [AngelAuraMC Android OpenJDK releases](https://github.com/AngelAuraMC/angelauramc-openjdk-build/releases/tag/download_jre25). Java 25 ARM64 release file SHA-256: `d3eb7afe2240c26728a1bb440502c5f18ac3883e932d202dd7f0c9bcbbce4c37`. The APK does not redistribute that archive.
+- Minecraft Fabric: https://fabricmc.net/
+- Fabric API: https://modrinth.com/mod/fabric-api
+- Geyser / Floodgate: https://geysermc.org/
+- Apache Commons Compress (Apache-2.0) and XZ for Java (public domain) perform runtime extraction.
+
+PocketCraft is an experimental community project, not an official Minecraft product, and is not affiliated with Mojang, Microsoft, GeyserMC, or AngelAuraMC. Only run trusted mods; mods are executable code and can access server files.
