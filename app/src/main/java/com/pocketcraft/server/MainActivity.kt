@@ -297,64 +297,87 @@ class MainActivity : Activity() {
         body.addView(note)
     }
     /** Honest, actionable setup journey: never equates imported files with a running server. */
+    /** One truthful setup indicator: prerequisites, optional crossplay and online state stay distinct. */
     private fun setupJourney(): LinearLayout {
         val card = ui.card(this)
         val version = getSharedPreferences("pocketcraft",0).getString("gameVersion",null)
         val steps = listOf(
-            Triple("01", "Fabric server launcher", serverJar.isFile),
-            Triple("02", "Minecraft EULA accepted", ServerDownloads.eulaAccepted(this)),
-            Triple("03", "Android Java runtime", RuntimeStore.isInstalled(this)),
-            Triple("04", "Crossplay and internet access", false)
+            Triple("01","Fabric server launcher",serverJar.isFile),
+            Triple("02","Minecraft EULA accepted",ServerDownloads.eulaAccepted(this)),
+            Triple("03","Android Java runtime files",RuntimeStore.isInstalled(this))
         )
-        val ready = steps.count { it.third }
+        val completed = steps.count { it.third }
+        val crossplay = listOf("fabric-api.jar","Geyser-Fabric.jar","floodgate-fabric.jar")
+            .all { File(mods,it).isFile }
         val heading = ui.row(this)
         heading.addView(ui.column(this).apply {
-            addView(ui.text(this@MainActivity,"SETUP JOURNEY",11f,ui.GREEN,true))
+            addView(ui.text(this@MainActivity,"GET READY TO PLAY",11f,ui.GREEN,true))
             addView(ui.space(this@MainActivity,5))
-            addView(ui.text(this@MainActivity,"Make your world playable",18f,ui.WHITE,true))
-        }, LinearLayout.LayoutParams(0,-2,1f))
-        heading.addView(ui.pill(this,"$ready / 4",if(ready==4)ui.GREEN else ui.CYAN))
+            addView(ui.text(this@MainActivity,"Server setup",19f,ui.WHITE,true))
+        },LinearLayout.LayoutParams(0,-2,1f))
+        heading.addView(ui.pill(this,"$completed / 3 CORE",if(completed==3)ui.GREEN else ui.CYAN))
         card.addView(heading)
-        card.addView(ui.space(this,14))
-        val track = android.widget.FrameLayout(this).apply {
-            background=ui.shape(this@MainActivity,ui.SURFACE,8)
-        }
-        val fill=View(this).apply { background=ui.gradient(this@MainActivity,ui.GREEN,ui.CYAN) }
-        track.addView(fill,android.widget.FrameLayout.LayoutParams(0,ui.dp(this,7)))
+        card.addView(ui.space(this,8))
+        card.addView(ui.text(this,
+            if(completed==3)"Required files detected. Check Test Java Engine and the Console to verify your server runs."
+            else "Complete these three steps before hosting your world.",
+            12f,ui.MUTED))
+        card.addView(ui.space(this,13))
+        val track = FrameLayout(this).apply {background=ui.shape(this@MainActivity,ui.SURFACE,8)}
+        val fill = View(this).apply {background=ui.gradient(this@MainActivity,ui.GREEN,ui.CYAN)}
+        track.addView(fill,FrameLayout.LayoutParams(0,ui.dp(this,6)))
         track.post {
-            fill.layoutParams=android.widget.FrameLayout.LayoutParams(track.width*ready/4,ui.dp(this,7))
+            fill.layoutParams=FrameLayout.LayoutParams(track.width*completed/3,ui.dp(this,6))
         }
-        card.addView(track,LinearLayout.LayoutParams(-1,ui.dp(this,7)))
-        card.addView(ui.space(this,15))
+        card.addView(track,LinearLayout.LayoutParams(-1,ui.dp(this,6)))
+        card.addView(ui.space(this,17))
         steps.forEachIndexed { index, step ->
             val row=ui.row(this)
             row.addView(ui.text(this,if(step.third)"✓" else step.first,12f,
                 if(step.third)ui.GREEN else ui.MUTED,true).apply {
                 gravity=Gravity.CENTER
                 background=ui.shape(this@MainActivity,ui.SURFACE,10)
-                layoutParams=LinearLayout.LayoutParams(ui.dp(this@MainActivity,35),ui.dp(this@MainActivity,35))
+                layoutParams=LinearLayout.LayoutParams(ui.dp(this@MainActivity,35),
+                    ui.dp(this@MainActivity,35))
             })
-            val details=ui.column(this).apply { setPadding(ui.dp(this@MainActivity,11),0,0,0) }
+            val details=ui.column(this).apply {setPadding(ui.dp(this@MainActivity,11),0,0,0)}
             details.addView(ui.text(this,step.second,13f,ui.WHITE,true))
             val subtitle=when(index) {
-                0 -> if(step.third) "Installed • ${version ?: "version not recorded"}" else "Choose a Minecraft version"
-                1 -> if(step.third) "Agreement recorded" else "Review and accept before hosting"
-                2 -> if(step.third) "ARM64 Java 25 files detected • launch experimental" else "Tap Install Java 25 on the dashboard"
-                else -> "Geyser, Floodgate and internet tunnel not verified"
+                0 -> if(step.third)"Installed • ${version ?: "version not recorded"}"
+                    else "Choose a Minecraft version"
+                1 -> if(step.third)"Agreement recorded"
+                    else "Review and accept the EULA"
+                else -> if(step.third)"Files detected • test before launch"
+                    else "Install Android Java 25"
             }
             details.addView(ui.space(this,4))
             details.addView(ui.text(this,subtitle,11f,ui.MUTED))
             row.addView(details,LinearLayout.LayoutParams(0,-2,1f))
             card.addView(row)
-            if(index<steps.lastIndex) card.addView(ui.space(this,13))
+            if(index<steps.lastIndex)card.addView(ui.space(this,13))
         }
         card.addView(ui.space(this,16))
-        card.addView(ui.action(this,if(!serverJar.isFile)"GET FABRIC SERVER  →" else
-            if(!ServerDownloads.eulaAccepted(this))"REVIEW MINECRAFT EULA  →" else "VIEW ENGINE LIMITATIONS  →",true) {
+        val optional=ui.row(this)
+        optional.addView(ui.pill(this,"OPTIONAL",ui.PURPLE))
+        optional.addView(ui.text(this,
+            if(crossplay)"  Bedrock bridge files present" else "  Bedrock crossplay not installed",
+            12f,if(crossplay)ui.GREEN else ui.MUTED))
+        card.addView(optional)
+        card.addView(ui.space(this,15))
+        val label = when {
+            !serverJar.isFile -> "INSTALL FABRIC SERVER"
+            !ServerDownloads.eulaAccepted(this) -> "REVIEW MINECRAFT EULA"
+            !RuntimeStore.isInstalled(this) -> "INSTALL JAVA ENGINE"
+            !crossplay -> "ADD BEDROCK CROSSPLAY (OPTIONAL)"
+            else -> "OPEN SERVER CONSOLE"
+        }
+        card.addView(ui.action(this,label,true) {
             when {
                 !serverJar.isFile -> installFabricPrompt()
                 !ServerDownloads.eulaAccepted(this) -> offerEula()
-                else -> setup()
+                !RuntimeStore.isInstalled(this) -> installJavaPrompt()
+                !crossplay -> {tab=1;render()}
+                else -> {tab=3;render()}
             }
         })
         return card
