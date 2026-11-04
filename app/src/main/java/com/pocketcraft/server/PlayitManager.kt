@@ -33,6 +33,7 @@ object PlayitManager {
     private val logLock = Any()
     private val polling = AtomicBoolean(false)
     @Volatile private var generation = 0
+    @Volatile private var accountBlocked = false
     @Volatile private var requestedJavaPort = 25565
     @Volatile private var requestedBedrockPort = 19132
     @Volatile private var autoBedrockRequested = false
@@ -60,6 +61,34 @@ object PlayitManager {
      * filesDir. The package manager extracts executable ELF files under
      * nativeLibraryDir from the APK's ARM64 native-library entries at install time.
      */
+    /**
+     * Playit account limits and rejected agent registrations are server-side.
+     * Expose these conditions clearly instead of displaying endless "Setting up".
+     * Do not remove stored credentials or try creating more agents automatically.
+     */
+    private fun observeProviderMessage(line: String) {
+        val message = line.lowercase(java.util.Locale.ROOT)
+        when {
+            message.contains("over the agent limit") ||
+            message.contains("over agent limit") ||
+            message.contains("agent limit exceeded") ||
+            message.contains("disabledoverlimit") -> {
+                accountBlocked = true
+                status = "ACCOUNT LIMIT"
+                detail = "Playit agent limit reached. Open Playit Agent Management, disable unused agents, then tap Retry."
+            }
+            message.contains("failed to sign and register") ||
+            message.contains("http 403") ||
+            message.contains("status 403") -> {
+                if (status != "ACCOUNT LIMIT") {
+                    accountBlocked = true
+                    status = "ACCOUNT ACTION"
+                    detail = "Playit rejected agent authentication (possibly account limit or HTTP 403). Check your Playit account and agent status, then retry."
+                }
+            }
+        }
+    }
+
     private fun executable(c: Context, assetName: String): File {
         if (!android.os.Build.SUPPORTED_ABIS.contains("arm64-v8a"))
             throw IllegalStateException("Playit requires Android ARM64")
@@ -106,6 +135,7 @@ object PlayitManager {
     @Synchronized fun start(c: Context) {
         if (isActive()) return
         val token = ++generation
+        accountBlocked = false
         status = "STARTING"
         detail = "Starting Playit in PocketCraft..."
         javaAddress = null
@@ -129,7 +159,10 @@ object PlayitManager {
             status = "STARTING"
             Thread {
                 proc.inputStream.bufferedReader().useLines { lines ->
-                    lines.forEach { append(c, "[daemon] $it") }
+                    lines.forEach {
+                        append(c, "[daemon] $it")
+                        observeProviderMessage(it)
+                    }
                 }
                 if (generation == token) {
                     status = "OFFLINE"
@@ -141,13 +174,19 @@ object PlayitManager {
                 try {
                     Thread.sleep(1400)
                     if (generation != token || !proc.isAlive) return@Thread
-                    val cli = env(c, ProcessBuilder(
+                    // With an existing secret, avoid the interactive setup wizard
+                    // (there is no console for answering its questions on Android).
+                    val cliArgs = mutableListOf(
                         clientExe.absolutePath, "--stdout", "--socket-path", sock.absolutePath
-                    ).directory(dir).redirectErrorStream(true)).start()
+                    )
+                    if (PlayitApiBridge.isClaimed(c)) cliArgs.add("attach")
+                    val cli = env(c, ProcessBuilder(cliArgs)
+                        .directory(dir).redirectErrorStream(true)).start()
                     client = cli
                     cli.inputStream.bufferedReader().useLines { lines ->
                         lines.forEach { line ->
                             append(c, "[client] $line")
+                            observeProviderMessage(line)
                             val found = Regex("https://playit\\.gg/claim/[a-fA-F0-9]+")
                                 .find(line)?.value
                             if (found != null && generation == token) {
@@ -184,7 +223,7 @@ object PlayitManager {
 
     /** API calls happen only on worker threads and never expose the agent key to the UI. */
     fun refreshAsync(c: Context) {
-        if (!isActive() || !polling.compareAndSet(false, true)) return
+        if (!isActive() || accountBlocked || !polling.compareAndSet(false, true)) return
         Thread {
             try {
                 if (!PlayitApiBridge.isClaimed(c)) {
@@ -247,15 +286,24 @@ object PlayitManager {
                     detail = if (state.pendingJavaCount > 0) "Playit is allocating your free Java address..." else "No Java tunnel yet. Tap Finish Setup if automatic creation is unavailable."
                 }
             } catch(e:Exception) {
-                if (accountConnected) {
+                val message = e.message.orEmpty()
+                if (message.contains("HTTP 403") || message.contains("HTTP 401")) {
+                    accountBlocked = true
+                    status = "ACCOUNT ACTION"
+                    detail = "Playit API refused this agent (${message.take(80)}). Check agent status at playit.gg/account/agents, then retry."
+                    append(c, "Playit API authorization rejected. Manual account action required.")
+                } else {
                     status = "CHECKING CONNECTION"
-                    detail = "Unable to check Playit: ${e.message?.take(90) ?: "network error"}"
+                    detail = "Unable to check Playit: ${message.take(90).ifBlank { "network error" }}"
                 }
             } finally { polling.set(false) }
         }.start()
     }
 
     @Synchronized fun retryTunnel(c: Context) {
+        accountBlocked = false
+        status = "CHECKING"
+        detail = "Retrying Playit account status…"
         autoCreateRequested = true
         autoCreationAttempted = false
         bedrockCreationAttempted = false
@@ -266,6 +314,7 @@ object PlayitManager {
 
     @Synchronized fun stop() {
         generation++
+        accountBlocked = false
         try { client?.destroy() } catch (_: Exception) {}
         try { daemon?.destroy() } catch (_: Exception) {}
         client = null
