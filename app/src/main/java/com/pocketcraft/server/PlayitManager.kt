@@ -51,7 +51,7 @@ object PlayitManager {
     @Synchronized fun importExistingAgent(c: Context, raw: String) {
         if (isActive()) throw IllegalStateException("Go Offline before switching agents")
         val value = raw.trim().let { text ->
-            val matched = Regex("""(?s)^secret_key\\s*=\\s*["']([0-9a-fA-F]+)["']\\s*$""")
+            val matched = Regex("""^secret_key *= *["']([0-9a-fA-F]+)["'] *$""")
                 .matchEntire(text)
             matched?.groupValues?.get(1) ?: text
         }
@@ -64,7 +64,8 @@ object PlayitManager {
         val stage = File(store,".secret-import.tmp")
         try {
             java.io.FileOutputStream(stage).use {
-                it.write(("secret_key = \\"" + value + "\\"\\n").toByteArray(Charsets.UTF_8))
+                val content = "secret_key = " + 34.toChar() + value + 34.toChar() + 10.toChar()
+                it.write(content.toByteArray(Charsets.UTF_8))
                 it.fd.sync()
             }
             stage.setReadable(false,false)
