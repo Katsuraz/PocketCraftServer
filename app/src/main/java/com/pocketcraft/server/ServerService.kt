@@ -25,6 +25,8 @@ class ServerService : Service() {
         const val ACTION_START = "com.pocketcraft.server.START"
         const val ACTION_STOP = "com.pocketcraft.server.STOP"
         const val ACTION_COMMAND = "com.pocketcraft.server.COMMAND"
+        const val ACTION_TUNNEL_START = "com.pocketcraft.server.TUNNEL_START"
+        const val ACTION_TUNNEL_STOP = "com.pocketcraft.server.TUNNEL_STOP"
         const val EXTRA_COMMAND = "command"
         private const val CHANNEL = "pocketcraft-host"
         private const val NOTIFICATION_ID = 4812
@@ -51,6 +53,18 @@ class ServerService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
+            ACTION_TUNNEL_START -> {
+                notice("Starting Playit Internet tunnel agent")
+                Thread {
+                    PlayitManager.start(this)
+                    notice(if(PlayitManager.isActive()) "Playit agent active • configure tunnels" else "Playit startup failed • check logs")
+                }.start()
+            }
+            ACTION_TUNNEL_STOP -> {
+                PlayitManager.stop()
+                if (!running) { stopForeground(STOP_FOREGROUND_REMOVE); stopSelf() }
+                else notice("Minecraft server running on LAN")
+            }
             ACTION_START -> if (!running) begin()
             ACTION_STOP -> end()
             ACTION_COMMAND -> {
@@ -65,7 +79,7 @@ class ServerService : Service() {
                 }
             }
         }
-        return if (running) START_STICKY else START_NOT_STICKY
+        return if (running || PlayitManager.isActive()) START_STICKY else START_NOT_STICKY
     }
 
     private fun notice(message: String) {
@@ -219,11 +233,12 @@ class ServerService : Service() {
         status = if (failure.isBlank()) "OFFLINE" else "ERROR"
         try { wakeLock?.takeIf { it.isHeld }?.release() } catch (_: Exception) {}
         wakeLock = null
-        stopForeground(STOP_FOREGROUND_REMOVE)
-        stopSelf()
+        if (PlayitManager.isActive()) notice("Playit tunnel agent active • Minecraft offline")
+        else { stopForeground(STOP_FOREGROUND_REMOVE); stopSelf() }
     }
 
     override fun onDestroy() {
+        PlayitManager.stop()
         server?.takeIf { it.isAlive }?.destroy()
         release()
         super.onDestroy()
