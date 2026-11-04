@@ -109,6 +109,48 @@ jobs:
               fi
             fi
           fi
+      - name: Compile Android WebRTC native from pinned upstream if no verified download
+        if: success()
+        run: |
+          set -euo pipefail
+          JNI="$GITHUB_WORKSPACE/app/src/main/jniLibs/arm64-v8a"
+          if [ -s "$JNI/libdatachannel-java.so" ]; then
+            echo "Verified prebuilt Android WebRTC JNI already present"
+            exit 0
+          fi
+          echo "::notice::No verified prebuilt Android WebRTC JNI; compiling upstream Android ARM64 native from source"
+          SRC="$RUNNER_TEMP/pocketcraft-web-rtc"
+          git clone https://github.com/opencollab-incubator/libdatachannel-java.git "$SRC"
+          git -C "$SRC" checkout --detach 6be4ad71e1f10dc56a09af6daeac0e1122e23e7a
+          git -C "$SRC" submodule update --init --recursive --depth 1
+          cd "$SRC"
+          # The exact upstream commit predates the Geyser 2026-10-29 JNI
+          # snapshot. Build Android/Bionic, not Linux/glibc or Linux/musl.
+          chmod +x ./gradlew
+          ./gradlew compileNativeForAndroidArm64V8a \
+            -Plibdatachannel.targets=android-arm64-v8a \
+            -Plibdatachannel.build-release-binaries=true \
+            --max-workers=4 --no-daemon --stacktrace
+          native="$(find "$SRC/build/dockcross/android-arm64-v8a" -type f -name 'libdatachannel-java.so' -print -quit)"
+          test -n "$native" && test -s "$native"
+          cp "$native" "$JNI/libdatachannel-java.so"
+          file "$JNI/libdatachannel-java.so"
+          readelf -h "$JNI/libdatachannel-java.so" | grep -q 'Machine:.*AArch64'
+          if readelf -d "$JNI/libdatachannel-java.so" | grep -Fq 'libc.so.6'; then
+            echo "::error::WebRTC JNI is incorrectly linked to glibc, not Android bionic"
+            exit 1
+          fi
+          echo "Successfully compiled native Android ARM64 WebRTC JNI for PocketCraft"
+      - name: Require Android ARM64 WebRTC JNI before claiming a NetherNet-capable APK
+        run: |
+          set -euo pipefail
+          JNI=app/src/main/jniLibs/arm64-v8a/libdatachannel-java.so
+          if [ ! -s "$JNI" ]; then
+            echo "::error::Android WebRTC native binary missing. Refusing to publish an APK as a NetherNet fix."
+            exit 1
+          fi
+          readelf -h "$JNI" | grep -q 'Machine:.*AArch64'
+          echo "Android WebRTC JNI is ready for APK packaging (real-device test still required)"
       - name: Bundle pinned Android Java 25 native runtime and JNI launcher
         run: |
           set -euo pipefail
