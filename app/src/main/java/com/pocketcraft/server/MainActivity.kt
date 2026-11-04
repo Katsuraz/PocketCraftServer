@@ -488,6 +488,70 @@ class MainActivity : Activity() {
         return card
     }
 
+    /**
+     * Playit agents can be reused through their private secret.
+     * Never display, log, export or send that secret outside app storage.
+     */
+    private fun existingPlayitAgentPrompt() {
+        if (PlayitManager.isActive()) {
+            AlertDialog.Builder(this)
+                .setTitle("Go Offline before switching agents")
+                .setMessage("Stop Playit in PocketCraft first, and stop the same agent on its old device. Two copies running with the same identity may conflict.")
+                .setPositiveButton("OK",null).show()
+            return
+        }
+        val shell = ui.column(this).apply {
+            setPadding(ui.dp(this@MainActivity,20),ui.dp(this@MainActivity,12),
+                ui.dp(this@MainActivity,20),ui.dp(this@MainActivity,12))
+        }
+        shell.addView(ui.text(this,
+            "Have an existing Playit agent? Import the secret from its local playit.toml file. This reuses the agent's identity and can preserve its assigned tunnels. Stop the old agent first. If you don't have its secret, you can instead transfer existing tunnels to the PocketCraft agent in Playit's dashboard.",
+            12f,ui.MUTED))
+        shell.addView(ui.space(this,13))
+        val field = android.widget.EditText(this).apply {
+            hint = "Paste existing agent secret (kept private)"
+            isSingleLine = true
+            textSize = 14f
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or
+                android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD or
+                android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+            setTextColor(ui.WHITE)
+            setHintTextColor(ui.MUTED)
+            background = ui.shape(this@MainActivity,ui.SURFACE,12,ui.BORDER)
+            setPadding(ui.dp(this@MainActivity,14),ui.dp(this@MainActivity,14),
+                ui.dp(this@MainActivity,14),ui.dp(this@MainActivity,14))
+        }
+        shell.addView(field)
+        shell.addView(ui.space(this,12))
+        shell.addView(ui.text(this,
+            "Security: never send the agent secret in chat, screenshots or GitHub issues. PocketCraft saves it only to its private files.",
+            11f,ui.MUTED))
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Use an existing Playit agent")
+            .setView(shell)
+            .setNeutralButton("TRANSFER TUNNELS IN PLAYIT") {_,_->
+                startActivity(Intent(Intent.ACTION_VIEW,
+                    android.net.Uri.parse("https://playit.gg/account/tunnels")))
+            }
+            .setNegativeButton("CANCEL",null)
+            .setPositiveButton("USE THIS AGENT",null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                try {
+                    PlayitManager.importExistingAgent(this,field.text.toString())
+                    field.text.clear()
+                    dialog.dismiss()
+                    toast("Agent imported locally. Tap Use Playit to connect.")
+                    render()
+                } catch (e:Exception) {
+                    field.error = e.message ?: "Invalid agent secret"
+                }
+            }
+        }
+        dialog.show()
+    }
+
     /** One-tap Playit setup: first use requires a one-time external account approval. */
     private fun internetPanel(): LinearLayout {
         val card = ui.card(this)
@@ -595,6 +659,10 @@ class MainActivity : Activity() {
             })
         }
         card.addView(ui.space(this,10))
+        card.addView(ui.action(this,"USE AN EXISTING PLAYIT AGENT") {
+            existingPlayitAgentPrompt()
+        })
+        card.addView(ui.space(this,9))
         card.addView(ui.action(this,"ADVANCED SETUP / DIAGNOSTICS") {
             AlertDialog.Builder(this)
                 .setTitle("Internet hosting diagnostics")
