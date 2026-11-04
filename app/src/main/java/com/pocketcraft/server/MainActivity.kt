@@ -166,6 +166,8 @@ class MainActivity : Activity() {
         body.addView(ui.space(this,14))
         body.addView(connectionPanel())
         body.addView(ui.space(this,14))
+        body.addView(phoneOnlyPanel())
+        body.addView(ui.space(this,14))
         val host = android.widget.FrameLayout(this)
         host.addView(internetPanel())
         onlineHost = host
@@ -322,6 +324,86 @@ class MainActivity : Activity() {
         return box
     }
 
+    /**
+     * A real local-first path: Android itself hosts both Minecraft listeners.
+     * No Playit, cloud account, reverse proxy or external registration needed.
+     */
+    private fun phoneOnlyPanel(): LinearLayout {
+        val card = ui.card(this)
+        val local = NetworkInfo.lanAddress()
+        val port = serverProperty("server-port","25565")
+        card.addView(ui.text(this,"PHONE-ONLY HOSTING",11f,ui.GREEN,true))
+        card.addView(ui.space(this,8))
+        card.addView(ui.text(this,"Host straight from this phone",18f,ui.WHITE,true))
+        card.addView(ui.space(this,8))
+        card.addView(ui.text(this,"No Playit account or tunnel. Start your Fabric server and share these local addresses with players on the same Wi-Fi or phone hotspot.",12f,ui.MUTED))
+        card.addView(ui.space(this,11))
+        val ready = ServerService.javaReady
+        val geyser = ServerService.bedrockReady
+        card.addView(ui.pill(this,
+            when {
+                geyser -> "●  JAVA + BEDROCK LISTENERS"
+                ready -> "●  JAVA LISTENER READY"
+                ServerService.running -> "●  MINECRAFT STARTING"
+                else -> "●  OFFLINE"
+            },
+            if (ready) ui.GREEN else if (ServerService.running) ui.CYAN else ui.MUTED))
+        card.addView(ui.space(this,12))
+        card.addView(ui.text(this,
+            "JAVA: " + (local?.let { "$it:$port" } ?: "Connect to Wi-Fi / hotspot"),
+            13f,ui.WHITE,true))
+        card.addView(ui.space(this,5))
+        card.addView(ui.text(this,
+            "BEDROCK: " + (local?.let { "$it:19132" } ?: "Local network required") +
+                if (geyser) " • Geyser listener detected" else " • Geyser listener not confirmed",
+            12f,ui.MUTED))
+        card.addView(ui.space(this,14))
+        card.addView(ui.action(this,
+            if(ServerService.running) "✓  SERVER PROCESS ACTIVE" else "▶  HOST ON THIS PHONE — NO PLAYIT",
+            true,!ServerService.running) {
+            startForegroundService(Intent(this,ServerService::class.java)
+                .setAction(ServerService.ACTION_START))
+            toast("Starting local Minecraft server. No external service used.")
+            tab=3
+            render()
+        })
+        if(local != null) {
+            card.addView(ui.space(this,9))
+            card.addView(ui.action(this,"COPY JAVA LAN ADDRESS") {
+                (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
+                    .setPrimaryClip(ClipData.newPlainText("Java LAN","$local:$port"))
+                toast("Copied local Java address")
+            })
+            if (geyser) {
+                card.addView(ui.space(this,9))
+                card.addView(ui.action(this,"COPY BEDROCK LAN ADDRESS") {
+                    (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
+                        .setPrimaryClip(ClipData.newPlainText("Bedrock LAN","$local:19132"))
+                    toast("Copied local Bedrock address")
+                })
+            }
+        }
+        card.addView(ui.space(this,10))
+        card.addView(ui.action(this,"PLAY FROM ANOTHER NETWORK — NO TUNNEL?") {
+            val localIp = local ?: "your phone's Wi-Fi address"
+            AlertDialog.Builder(this)
+                .setTitle("Direct internet hosting (no Playit)")
+                .setMessage(
+                    "Your phone can host on its own. For remote friends without a tunnel, " +
+                    "your home internet/router must allow incoming connections.\\n\\n" +
+                    "1. Connect the phone to your home Wi-Fi and keep PocketCraft running.\\n" +
+                    "2. Forward TCP $port (Java) and UDP 19132 (Bedrock/Geyser) on your router to $localIp.\\n" +
+                    "3. Share your router's reachable public IP or hostname, NOT the private LAN IP shown here.\\n\\n" +
+                    "Mobile data and many ISPs use CGNAT, which prevents inbound port forwarding. " +
+                    "A tunnel, VPN mesh, or publicly reachable connection is then needed. " +
+                    "Only open ports for a server you trust; use allowlists and secure accounts."
+                )
+                .setPositiveButton("OK",null)
+                .show()
+        })
+        return card
+    }
+
     /** One-tap Playit setup: first use requires a one-time external account approval. */
     private fun internetPanel(): LinearLayout {
         val card = ui.card(this)
@@ -329,20 +411,37 @@ class MainActivity : Activity() {
         val javaAddress = PlayitManager.javaAddress
         val bedrockAddress = PlayitManager.bedrockAddress
         val approval = PlayitManager.claimUrl
-        card.addView(ui.text(this,"INTERNET HOSTING",11f,ui.CYAN,true))
+        card.addView(ui.text(this,"OPTIONAL INTERNET TUNNEL",11f,ui.CYAN,true))
         card.addView(ui.space(this,8))
-        card.addView(ui.text(this,"Play with friends anywhere",18f,ui.WHITE,true))
+        card.addView(ui.text(this,"Playit for remote connections",18f,ui.WHITE,true))
         card.addView(ui.space(this,8))
+        val blocked = PlayitManager.status == "ACCOUNT LIMIT" || PlayitManager.status == "ACCOUNT ACTION"
         card.addView(ui.pill(this,
-            if(PlayitManager.status=="ERROR") "●  ERROR" else if(!active) "●  OFFLINE"
+            if(blocked) "●  PLAYIT ACCOUNT ISSUE" else if(PlayitManager.status=="ERROR") "●  ERROR"
+            else if(!active) "●  OFFLINE"
             else if(javaAddress!=null || bedrockAddress!=null) "●  ADDRESS ASSIGNED" else "●  SETTING UP",
-            if(PlayitManager.status=="ERROR")ui.RED else if(javaAddress!=null || bedrockAddress!=null)ui.GREEN
+            if(blocked || PlayitManager.status=="ERROR")ui.RED
+            else if(javaAddress!=null || bedrockAddress!=null)ui.GREEN
             else if(active)ui.CYAN else ui.MUTED))
         card.addView(ui.space(this,9))
-        card.addView(ui.text(this,PlayitManager.detail,12f,ui.MUTED))
+        card.addView(ui.text(this,PlayitManager.detail,12f,if(blocked)ui.RED else ui.MUTED))
         card.addView(ui.space(this,12))
+        if (blocked) {
+            card.addView(ui.action(this,"OPEN PLAYIT AGENT MANAGEMENT",true) {
+                startActivity(Intent(Intent.ACTION_VIEW,
+                    android.net.Uri.parse("https://playit.gg/account/agents")))
+            })
+            card.addView(ui.space(this,9))
+            card.addView(ui.action(this,"RETRY AFTER FIXING PLAYIT ACCOUNT") {
+                if (active) PlayitManager.retryTunnel(this)
+                else startForegroundService(Intent(this,ServerService::class.java)
+                    .setAction(ServerService.ACTION_TUNNEL_START))
+                toast("Retrying Playit connection")
+            })
+            card.addView(ui.space(this,11))
+        }
         if(!active) {
-            card.addView(ui.action(this,"▶  GO ONLINE — JAVA + BEDROCK",true) {
+            card.addView(ui.action(this,"▶  USE PLAYIT FOR REMOTE FRIENDS",true) {
                 startForegroundService(Intent(this,ServerService::class.java)
                     .setAction(ServerService.ACTION_TUNNEL_START))
                 toast("Starting Playit and checking your Minecraft server. See status below.")
