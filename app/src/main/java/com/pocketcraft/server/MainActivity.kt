@@ -117,6 +117,8 @@ class MainActivity : Activity() {
         hero.addView(ui.action(this,"VIEW SETUP STATUS  →",true) { setup() })
         body.addView(hero)
         body.addView(ui.space(this,16))
+        body.addView(setupJourney())
+        body.addView(ui.space(this,19))
         body.addView(h("Overview"))
         body.addView(ui.space(this,11))
         val row = ui.row(this)
@@ -153,6 +155,70 @@ class MainActivity : Activity() {
         note.addView(ui.text(this,"Geyser-Fabric + Floodgate need builds that match your Fabric server version. Most client-required content mods cannot be used by Bedrock players.",12f,ui.MUTED))
         body.addView(note)
     }
+    /** Honest, actionable setup journey: never equates imported files with a running server. */
+    private fun setupJourney(): LinearLayout {
+        val card = ui.card(this)
+        val version = getSharedPreferences("pocketcraft",0).getString("gameVersion",null)
+        val steps = listOf(
+            Triple("01", "Fabric server launcher", serverJar.isFile),
+            Triple("02", "Minecraft EULA accepted", ServerDownloads.eulaAccepted(this)),
+            Triple("03", "Android Java runtime", false),
+            Triple("04", "Crossplay and internet access", false)
+        )
+        val ready = steps.count { it.third }
+        val heading = ui.row(this)
+        heading.addView(ui.column(this).apply {
+            addView(ui.text(this@MainActivity,"SETUP JOURNEY",11f,ui.GREEN,true))
+            addView(ui.space(this@MainActivity,5))
+            addView(ui.text(this@MainActivity,"Make your world playable",18f,ui.WHITE,true))
+        }, LinearLayout.LayoutParams(0,-2,1f))
+        heading.addView(ui.pill(this,"$ready / 4",if(ready==4)ui.GREEN else ui.CYAN))
+        card.addView(heading)
+        card.addView(ui.space(this,14))
+        val track = android.widget.FrameLayout(this).apply {
+            background=ui.shape(this@MainActivity,ui.SURFACE,8)
+        }
+        val fill=View(this).apply { background=ui.gradient(this@MainActivity,ui.GREEN,ui.CYAN) }
+        track.addView(fill,android.widget.FrameLayout.LayoutParams(0,ui.dp(this,7)))
+        track.post {
+            fill.layoutParams=android.widget.FrameLayout.LayoutParams(track.width*ready/4,ui.dp(this,7))
+        }
+        card.addView(track,LinearLayout.LayoutParams(-1,ui.dp(this,7)))
+        card.addView(ui.space(this,15))
+        steps.forEachIndexed { index, step ->
+            val row=ui.row(this)
+            row.addView(ui.text(this,if(step.third)"✓" else step.first,12f,
+                if(step.third)ui.GREEN else ui.MUTED,true).apply {
+                gravity=Gravity.CENTER
+                background=ui.shape(this@MainActivity,ui.SURFACE,10)
+                layoutParams=LinearLayout.LayoutParams(ui.dp(this@MainActivity,35),ui.dp(this@MainActivity,35))
+            })
+            val details=ui.column(this).apply { setPadding(ui.dp(this@MainActivity,11),0,0,0) }
+            details.addView(ui.text(this,step.second,13f,ui.WHITE,true))
+            val subtitle=when(index) {
+                0 -> if(step.third) "Installed • ${version ?: "version not recorded"}" else "Choose a Minecraft version"
+                1 -> if(step.third) "Agreement recorded" else "Review and accept before hosting"
+                2 -> "Native runtime integration required"
+                else -> "Geyser, Floodgate and tunnel not verified"
+            }
+            details.addView(ui.space(this,4))
+            details.addView(ui.text(this,subtitle,11f,ui.MUTED))
+            row.addView(details,LinearLayout.LayoutParams(0,-2,1f))
+            card.addView(row)
+            if(index<steps.lastIndex) card.addView(ui.space(this,13))
+        }
+        card.addView(ui.space(this,16))
+        card.addView(ui.action(this,if(!serverJar.isFile)"GET FABRIC SERVER  →" else
+            if(!ServerDownloads.eulaAccepted(this))"REVIEW MINECRAFT EULA  →" else "VIEW ENGINE LIMITATIONS  →",true) {
+            when {
+                !serverJar.isFile -> installFabricPrompt()
+                !ServerDownloads.eulaAccepted(this) -> offerEula()
+                else -> setup()
+            }
+        })
+        return card
+    }
+
     private fun stat(value:String, label:String, symbol:String):LinearLayout {
         val card=ui.card(this)
         val row=ui.row(this)
