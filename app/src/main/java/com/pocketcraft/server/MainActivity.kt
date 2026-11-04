@@ -286,6 +286,8 @@ class MainActivity : Activity() {
         actions.addView(actionRow("◈","Manage mod library","Import, disable, and remove JAR files") {tab=1;render()})
         actions.addView(line())
         actions.addView(actionRow("▧","World vault","Backups, ZIP imports, and active world") {tab=2;render()})
+        actions.addView(line())
+        actions.addView(actionRow("ⓘ","About PocketCraft","App version, connection facts and privacy") {about()})
         body.addView(actions)
         body.addView(ui.space(this,14))
         val note = ui.card(this)
@@ -296,8 +298,7 @@ class MainActivity : Activity() {
         note.addView(ui.text(this,"Geyser-Fabric + Floodgate must match your Fabric version. Non-premium Java access and Bedrock authentication are separate settings; neither proves that public multiplayer works.",12f,ui.MUTED))
         body.addView(note)
     }
-    /** Honest, actionable setup journey: never equates imported files with a running server. */
-    /** One truthful setup indicator: prerequisites, optional crossplay and online state stay distinct. */
+    /** Setup checks separate core prerequisites from optional crossplay. */
     private fun setupJourney(): LinearLayout {
         val card = ui.card(this)
         val version = getSharedPreferences("pocketcraft",0).getString("gameVersion",null)
