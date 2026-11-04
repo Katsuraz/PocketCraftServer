@@ -179,6 +179,12 @@ jobs:
           unzip -l app/build/outputs/apk/debug/app-debug.apk | grep -F 'lib/arm64-v8a/libc++_shared.so'
           unzip -l app/build/outputs/apk/debug/app-debug.apk | grep -F 'lib/arm64-v8a/libjvm.so'
           unzip -l app/build/outputs/apk/debug/app-debug.apk | grep -F 'lib/arm64-v8a/libpocketjava.so'
+          if [ -s app/src/main/jniLibs/arm64-v8a/libdatachannel-java.so ]; then
+            unzip -l app/build/outputs/apk/debug/app-debug.apk | grep -F 'lib/arm64-v8a/libdatachannel-java.so'
+            echo "Verified Android WebRTC JNI is in installable APK"
+          else
+            echo "::warning::APK has no Android WebRTC JNI. It cannot fix NetherNet on bionic."
+          fi
       - name: Verify bundled tunnel binaries
         run: |
           unzip -l app/build/outputs/apk/debug/app-debug.apk | grep -F 'lib/arm64-v8a/libpocketplayitcli.so'
