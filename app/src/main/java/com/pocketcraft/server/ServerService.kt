@@ -143,7 +143,14 @@ class ServerService : Service() {
                 }
                 notice("Minecraft Java process active • check console")
                 proc.inputStream.bufferedReader().useLines { lines ->
-                    lines.forEach { line -> append(line) }
+                    lines.forEach { line ->
+                        append(line)
+                        if(line.contains("Done (") && line.contains("For help")) {
+                            status = "READY"
+                            notice("Minecraft server ready on LAN")
+                            append("Minecraft startup confirmed from server output")
+                        }
+                    }
                 }
                 val code = proc.waitFor()
                 append("Java process exited with code $code")
