@@ -196,9 +196,9 @@ class MainActivity : Activity() {
         body.addView(ui.space(this,15))
         body.addView(ui.action(this,"+  IMPORT MOD JAR",true) {picker(2)})
         body.addView(ui.space(this,10))
-        body.addView(ui.action(this,"↓  DOWNLOAD GEYSER + FLOODGATE") {
+        body.addView(ui.action(this,"↓  INSTALL CROSSPLAY FILES") {
             AlertDialog.Builder(this).setTitle("Install crossplay bridge?")
-                .setMessage("Downloads the latest Geyser-Fabric and Floodgate JARs for Minecraft Java 26.3. Fabric API and a working Android JVM are also required. Existing matching JARs may be replaced.")
+                .setMessage("Downloads matching Fabric API from Modrinth, plus the latest Geyser-Fabric and Floodgate from GeyserMC for Minecraft Java 26.3. These server files alone cannot host Minecraft: an Android Java runtime is still required.")
                 .setNegativeButton("Cancel",null)
                 .setPositiveButton("Download") {_,_-> downloadAsync("crossplay") {ServerDownloads.installCrossplay(this)} }
                 .show()
@@ -238,7 +238,7 @@ class MainActivity : Activity() {
         help.addView(ui.text(this,"Crossplay checklist",16f,ui.WHITE,true))
         help.addView(ui.space(this,8))
         listOf("Fabric API","Geyser-Fabric","Floodgate-Fabric").forEach { name ->
-            val installed=list.any { it.name.contains(name.substringBefore("-"),true) && it.name.endsWith(".jar") }
+            val installed=list.any { it.name.replace(" ","-").contains(name.replace(" ","-").substringBefore("-"),true) && it.name.endsWith(".jar") }
             help.addView(ui.text(this,(if(installed)"✓  " else "○  ") + name,
                 13f,if(installed)ui.GREEN else ui.MUTED))
             help.addView(ui.space(this,7))
