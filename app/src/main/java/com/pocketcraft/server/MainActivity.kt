@@ -291,22 +291,50 @@ class MainActivity : Activity() {
             content.addView(card)
             if (index != checks.lastIndex) content.addView(ui.space(this,9))
         }
+        lateinit var dialog: AlertDialog
         content.addView(ui.space(this,14))
         content.addView(ui.action(this,"OPEN CONSOLE") {
+            dialog.dismiss()
             tab=3
             render()
         })
         val scroll = ScrollView(this).apply { addView(content) }
-        AlertDialog.Builder(this)
+        dialog = AlertDialog.Builder(this)
             .setTitle("Server health")
             .setView(scroll)
             .setNegativeButton("CLOSE",null)
-            .setPositiveButton("SERVER FILES") {_,_->openServerFiles()}
-            .show().also { dialog ->
-                dialog.window?.setLayout(
-                    (resources.displayMetrics.widthPixels*.95f).toInt(),
-                    (resources.displayMetrics.heightPixels*.82f).toInt())
+            .setNeutralButton("COPY SAFE REPORT") {_,_->
+                // Intentionally omit agent secrets, console output, user paths,
+                // public tunnel names, IP addresses and raw exception messages.
+                val version = runCatching {
+                    packageManager.getPackageInfo(packageName,0).versionName ?: "unknown"
+                }.getOrDefault("unknown")
+                val report = listOf(
+                    "PocketCraft diagnostics • v$version",
+                    "Android API: " + android.os.Build.VERSION.SDK_INT,
+                    "Fabric installed: " + state.fabricInstalled,
+                    "Java files installed: " + state.javaInstalled,
+                    "EULA accepted: " + state.eulaAccepted,
+                    "Minecraft process: " + state.processRunning,
+                    "Java ready: " + state.javaReady,
+                    "Geyser mod: " + state.geyserInstalled,
+                    "Floodgate mod: " + state.floodgateInstalled,
+                    "Bedrock listening: " + state.bedrockListening,
+                    "NetherNet registered: " + state.nethernetRegistered,
+                    "Playit running: " + state.playitActive,
+                    "Java public address assigned: " + !state.javaTunnelAddress.isNullOrBlank(),
+                    "Bedrock public address assigned: " + !state.bedrockTunnelAddress.isNullOrBlank()
+                ).joinToString("\n")
+                (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
+                    .setPrimaryClip(ClipData.newPlainText("PocketCraft safe report",report))
+                toast("Private tokens omitted. Diagnostic summary copied.")
             }
+            .setPositiveButton("SERVER FILES") {_,_->openServerFiles()}
+            .create()
+        dialog.show()
+        dialog.window?.setLayout(
+            (resources.displayMetrics.widthPixels*.95f).toInt(),
+            (resources.displayMetrics.heightPixels*.82f).toInt())
     }
 
     private fun dashboard(body: LinearLayout) {
