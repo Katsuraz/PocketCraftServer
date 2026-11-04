@@ -97,3 +97,25 @@ Existing builds signed using disposable debug keys cannot be retroactively upgra
 with this new certificate. Export important worlds and configurations before the
 one-time migration to a permanently signed build. Thereafter, installing a later
 APK signed with the same key can update the app without uninstalling it.
+
+
+## PocketCraft 0.6 — readiness and experimental worldwide hosting
+
+**Readiness badge**: PocketCraft now watches actual Fabric and Geyser server logs. Java is marked ready only after Minecraft reports `Done (...)! For help, type ...`. Geyser listener detection is tracked separately and will appear only if a Geyser startup log confirms the Bedrock port. The badge refreshes approximately every two seconds while the app is in the foreground. A detected listener does not prove that a remote device can successfully connect.
+
+**Built-in Playit Android agent (experimental)**: GitHub Actions cross-compiles Playit 1.2.0 directly from its official pinned upstream source for Android ARM64 and embeds both `playit-cli` and `playitd` in the APK. PocketCraft copies the files to private app storage at first use and runs them using its existing Android foreground service. The agent does not use Termux. The app does NOT report remote connectivity just because the agent process is running.
+
+To try internet hosting:
+1. Back up your Minecraft world, then install the signed PocketCraft build.
+2. Start Fabric and wait for **Java Ready**; verify Geyser's listener message and TCP/UDP configuration if you also want Bedrock.
+3. Select **Start Tunnel** in the **Worldwide Multiplayer** card, then **Refresh Tunnel Status**.
+4. If the agent prints a Playit claim link, tap **Claim Agent Account**. The Playit account and its service are operated by playit.gg.
+5. In the Playit dashboard configure a Minecraft Java TCP tunnel forwarding to port 25565 (or your configured Java port). For Bedrock with NetherNet, configure a suitable tunnel forwarding **both TCP and UDP** to port 19132 (or your configured Geyser port).
+6. Only share provider-assigned external addresses after checking actual connectivity from a different network.
+7. Use **View Tunnel Log** if claim or connectivity fails. A working native ARM64 build does not guarantee compatibility with your particular Android version or mobile network.
+
+The Playit native agent has been cross-compiled by GitHub Actions, but the end-to-end Android claim flow and public Minecraft connections require device-level testing. The native build workflow is included in `.github/workflows/playit-android-experiment.yml`.
+
+Playit upstream: https://github.com/playit-cloud/playit-agent (copyright Developed Methods LLC; see `app/src/main/assets/PLAYIT-LICENSE.txt`). Its service terms, limitations and availability are controlled by the provider.
+
+**APK updates:** The same private signing key must be configured in GitHub Actions secrets across versions. Without that configuration, GitHub's default debug-signing certificate changes between runners, so updates may require uninstalling; uninstalling removes app-private Minecraft files. Back up worlds first.
