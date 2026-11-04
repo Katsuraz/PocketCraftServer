@@ -13,7 +13,7 @@ import java.util.zip.ZipFile
 /** Installs server-compatible content from a user-supplied modpack archive. */
 object ModpackImporter {
     data class Summary(val name:String,val platform:String,val version:String,val loader:String,val count:Int,val skipped:Int) {
-        fun description():String = "$name ($platform)\nMinecraft $version • $loader\nInstalled $count file(s); skipped $skipped client/optional file(s). Restart the server. Confirm crossplay compatibility separately."
+        fun description():String = "$name ($platform)\nMinecraft $version • $loader\nInstalled $count file(s); skipped $skipped client-only, optional, or already-installed file(s). Restart Minecraft. Some modpacks need extra client-side mods and may not support Bedrock."
     }
     private const val FILE_LIMIT = 120L * 1024 * 1024
     private const val PACK_LIMIT = 700L * 1024 * 1024
@@ -31,7 +31,9 @@ object ModpackImporter {
         path.startsWith("config/") ||
         path.startsWith("defaultconfigs/") ||
         path.startsWith("kubejs/") ||
-        path.startsWith("datapacks/")
+        path.startsWith("datapacks/") ||
+        path.startsWith("scripts/") ||
+        path.startsWith("patchouli_books/")
 
     private fun dest(root:File,path:String):File {
         val safe=safePath(path)
@@ -118,6 +120,7 @@ object ModpackImporter {
                         if(n<0)break
                         bytes+=n
                         if(bytes>PACK_LIMIT)throw IOException("Modpack overrides exceed 700 MB")
+                        if(output.length()+n>FILE_LIMIT)throw IOException("Override file exceeds 120 MB: $relative")
                         out.write(buf,0,n)
                     }
                 }
@@ -127,23 +130,34 @@ object ModpackImporter {
         return count
     }
 
-    private fun apply(stage:File,root:File):Int {
+    /** Keep existing server files untouched; install missing files instead of aborting. */
+    private fun apply(stage:File,root:File):Pair<Int,Int> {
         val files=stage.walkTopDown().filter{it.isFile}.toList()
         if(files.size>MAX_FILES)throw IOException("Pack contains too many files")
-        // Never modify server.properties, EULA, launchers, or world folder.
-        files.forEach {file ->
-            val relative=file.relativeTo(stage).invariantSeparatorsPath
-            val target=dest(root,relative)
-            if(target.exists())throw IOException("File already exists: $relative. Remove it or choose a fresh server.")
-        }
-        files.forEach {file ->
+        var already=0
+        val pending=mutableListOf<Pair<File,File>>()
+        for(file in files) {
             InstallProgress.check()
             val relative=file.relativeTo(stage).invariantSeparatorsPath
             val target=dest(root,relative)
-            target.parentFile?.mkdirs()
-            file.copyTo(target,overwrite=false)
+            if(target.exists()) {
+                if(!target.isFile) throw IOException("Cannot install over directory: $relative")
+                already++
+            } else pending.add(file to target)
         }
-        return files.size
+        val created=mutableListOf<File>()
+        try {
+            for((file,target) in pending) {
+                InstallProgress.check()
+                target.parentFile?.mkdirs()
+                file.copyTo(target,overwrite=false)
+                created.add(target)
+            }
+        } catch (e:Exception) {
+            created.forEach { it.delete() }
+            throw IOException("Import failed; newly copied files rolled back: \${e.message}",e)
+        }
+        return created.size to already
     }
 
     fun install(context:Context,uri:Uri,apiKey:String?=null):Summary {
@@ -183,7 +197,7 @@ object ModpackImporter {
 
     private fun checkVersion(context:Context,required:String) {
         val current=context.getSharedPreferences("pocketcraft",0).getString("gameVersion",null)
-        if(current.isNullOrBlank())throw IOException("Install the matching Fabric server version before importing a modpack ($required).")
+        if(current.isNullOrBlank())throw IOException("Minecraft version is unknown. Install or select the Fabric $required server in PocketCraft before importing this pack.")
         if(current!=required)throw IOException("Modpack requires Minecraft $required, but the current Fabric server is $current. Switch versions before importing.")
     }
 
@@ -208,14 +222,23 @@ object ModpackImporter {
             if(urls.length()==0)throw IOException("No download URL for $path")
             val output=dest(stage,path)
             output.parentFile?.mkdirs()
-            download(urls.getString(0),output,item.optJSONObject("hashes")?.optString("sha512"),null,i+1,files.length())
+            var lastError: Exception? = null
+            var downloaded = false
+            for(j in 0 until urls.length()) {
+                try {
+                    download(urls.getString(j),output,item.optJSONObject("hashes")?.optString("sha512"),null,i+1,files.length())
+                    downloaded = true
+                    break
+                } catch (e: Exception) { lastError = e }
+            }
+            if (!downloaded) throw IOException("All download mirrors failed for $path: \${lastError?.message}",lastError)
         }
         InstallProgress.emit("Unpacking server overrides…")
         stageOverrides(zip,stage,"overrides/")
         stageOverrides(zip,stage,"server-overrides/")
         InstallProgress.emit("Applying modpack files…")
-        val installed=apply(stage,base)
-        return Summary(index.optString("name","Modrinth pack"),"Modrinth",version,"Fabric $loader",installed,skipped)
+        val (installed,already)=apply(stage,base)
+        return Summary(index.optString("name","Modrinth pack"),"Modrinth",version,"Fabric $loader",installed,skipped+already)
     }
 
     private fun installCurse(context:Context,zip:ZipFile,manifest:java.util.zip.ZipEntry,stage:File,base:File,key:String?):Summary {
@@ -256,7 +279,7 @@ object ModpackImporter {
         InstallProgress.emit("Unpacking server overrides…")
         stageOverrides(zip,stage,index.optString("overrides","overrides")+"/")
         InstallProgress.emit("Applying modpack files…")
-        val installed=apply(stage,base)
-        return Summary(index.optString("name","CurseForge pack"),"CurseForge",version,loader,installed,skipped)
+        val (installed,already)=apply(stage,base)
+        return Summary(index.optString("name","CurseForge pack"),"CurseForge",version,loader,installed,skipped+already)
     }
 }
