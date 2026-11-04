@@ -366,7 +366,10 @@ class MainActivity : Activity() {
             when {
                 ServerService.running -> { tab=3; render() }
                 readyForStart -> startMinecraft()
-                else -> setup()
+                !serverJar.isFile -> installFabricPrompt()
+                !ServerDownloads.eulaAccepted(this) -> offerEula()
+                !RuntimeStore.isInstalled(this) -> installJavaPrompt()
+                else -> showHealthCenter()
             }
         })
         hero.addView(ui.space(this,9))
