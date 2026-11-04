@@ -390,10 +390,10 @@ class MainActivity : Activity() {
                 .setTitle("Direct internet hosting (no Playit)")
                 .setMessage(
                     "Your phone can host on its own. For remote friends without a tunnel, " +
-                    "your home internet/router must allow incoming connections.\\n\\n" +
-                    "1. Connect the phone to your home Wi-Fi and keep PocketCraft running.\\n" +
-                    "2. Forward TCP $port (Java) and UDP 19132 (Bedrock/Geyser) on your router to $localIp.\\n" +
-                    "3. Share your router's reachable public IP or hostname, NOT the private LAN IP shown here.\\n\\n" +
+                    "your home internet/router must allow incoming connections.\n\n" +
+                    "1. Connect the phone to your home Wi-Fi and keep PocketCraft running.\n" +
+                    "2. Forward TCP $port (Java) and UDP 19132 (Bedrock/Geyser) on your router to $localIp.\n" +
+                    "3. Share your router's reachable public IP or hostname, NOT the private LAN IP shown here.\n\n" +
                     "Mobile data and many ISPs use CGNAT, which prevents inbound port forwarding. " +
                     "A tunnel, VPN mesh, or publicly reachable connection is then needed. " +
                     "Only open ports for a server you trust; use allowlists and secure accounts."
