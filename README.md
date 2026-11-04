@@ -166,3 +166,13 @@ To verify on a real device:
 
 GeyserMC upstream Android support issue:
 https://github.com/GeyserMC/Geyser/issues/6848.
+
+## v0.8.2 — Play Together guided experience (Anvil-inspired, original implementation)
+
+- Home dashboard now includes **Play Together** with one-tap entry into a guided Java/Bedrock, LAN/internet connection workflow.
+- The guide chooses the next supported action: start server, inspect Console, install Geyser, connect to Wi-Fi, start/approve Playit, open tunnel setup, or copy an assigned address.
+- Native Android WebRTC errors prevent Bedrock addresses from being presented as joinable; Minecraft Java success remains separate from Bedrock success.
+- Copy actions only appear after required local startup or tunnel assignment signals. A copied address is **not** a verified player connection; test with a second device.
+- Home connection indicators refresh without resetting page scroll. Pure Kotlin tests cover typical blocked and ready states.
+- PocketCraft remains an independent app. This does **not** reproduce Anvil-MC's automatic tunnel infrastructure, native Bedrock server hosting, UI assets, or other proprietary features.
+- Experimental Android NetherNet support from v0.8.1 remains unverified. Do not uninstall older builds without world backups; APK update signing keys must match.
