@@ -392,11 +392,13 @@ class ServerService : Service() {
         }
         status = "STOPPING"
         append("Graceful stop requested")
+        val stoppingProcess = server
         Thread {
             try {
                 synchronized(lock) { writer?.apply { write("stop"); newLine(); flush() } }
                 Thread.sleep(15_000)
-                server?.takeIf { it.isAlive }?.destroy()
+                // Do not accidentally destroy a replacement server after restart.
+                stoppingProcess?.takeIf { it.isAlive }?.destroy()
             } catch (e: Exception) { append("Shutdown: " + e.message) }
         }.start()
     }
