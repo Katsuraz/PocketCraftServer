@@ -92,6 +92,28 @@ int main(int argc, char **argv) {
     OPTVAL("-Djava.io.tmpdir", temp);
     OPT("-Djava.awt.headless=true");
     OPT("-Djavax.imageio.useCache=false");
+    /*
+     * Geyser's libdatachannel-java auto-detection treats this headless JRE as
+     * regular Linux and tries to find glibc/musl. Android actually uses bionic.
+     * If the APK bundles a real Android ARM64 JNI build, tell the binding
+     * where it lives instead of spoofing glibc or musl.
+     *
+     * The upstream Platform.loadNativeLibrary() honors
+     * -Dlibdatachannel.native.datachannel-java.path as a fallback to
+     * System.loadLibrary(). This must be set BEFORE Minecraft creates Geyser.
+     */
+    if (server) {
+        char rtcLib[PATH_MAX];
+        if (snprintf(rtcLib, sizeof rtcLib, "%s/libdatachannel-java.so", libs) >= (int)sizeof rtcLib)
+            return fail("Android WebRTC JNI path too long");
+        if (access(rtcLib, R_OK) == 0) {
+            OPTVAL("-Dlibdatachannel.native.datachannel-java.path", rtcLib);
+            fprintf(stderr, "[PocketCraft native Java] Android WebRTC JNI available: %s\n", rtcLib);
+        } else {
+            fprintf(stderr, "[PocketCraft native Java] Android WebRTC JNI missing; Geyser NetherNet may fail on bionic.\n");
+        }
+        fflush(stderr);
+    }
     if (server) {
         char *classpath = argv[6];
         OPTVAL("-Djava.class.path", classpath);
