@@ -1157,7 +1157,7 @@ class MainActivity : Activity() {
     }
     private fun getLog():String {
         val file = File(base,"console.log")
-        if(!file.isFile) return "[PocketCraft] No server output yet.\\nStart the server to see live status here."
+        if(!file.isFile) return "[PocketCraft] No server output yet.\nStart the server to see live status here."
         return try {
             // Read the last 16KB rather than loading a multi-megabyte logfile on UI.
             java.io.RandomAccessFile(file,"r").use { reader ->
@@ -1340,8 +1340,8 @@ class MainActivity : Activity() {
             "Playit agent: " + PlayitManager.status
         )
         AlertDialog.Builder(this).setTitle("Setup & connection diagnostics")
-            .setMessage(checks.joinToString("\\n")+
-                "\\n\\nInstalled files do not guarantee that the JVM or a public tunnel works. Confirm by joining from the desired network.")
+            .setMessage(checks.joinToString("\n")+
+                "\n\nInstalled files do not guarantee that the JVM or a public tunnel works. Confirm by joining from the desired network.")
             .setNeutralButton("OPEN CONSOLE") {_,_->tab=3;render()}
             .setPositiveButton("OK",null).show()
     }
@@ -1350,7 +1350,7 @@ class MainActivity : Activity() {
         val v=runCatching{packageManager.getPackageInfo(packageName,0).versionName}
             .getOrNull() ?: "unknown"
         AlertDialog.Builder(this).setTitle("PocketCraft Server · v$v")
-            .setMessage("A phone-first Minecraft Fabric server studio. LAN hosting runs on your device; internet tunnels are optional. Java, Bedrock and NetherNet readiness are checked separately.\\n\\nMinecraft, Fabric, Geyser and Playit are independent third-party projects. On-device and remote gameplay still depends on your device, server and network.")
+            .setMessage("A phone-first Minecraft Fabric server studio. LAN hosting runs on your device; internet tunnels are optional. Java, Bedrock and NetherNet readiness are checked separately.\n\nMinecraft, Fabric, Geyser and Playit are independent third-party projects. On-device and remote gameplay still depends on your device, server and network.")
             .setPositiveButton("GOT IT",null).show()
     }
     private fun picker(code:Int) {
