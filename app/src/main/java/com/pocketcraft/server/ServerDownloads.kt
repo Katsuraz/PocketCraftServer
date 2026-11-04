@@ -144,24 +144,50 @@ object ServerDownloads {
         return CrossplayFile(url, sha)
     }
 
-    /** Modrinth version metadata supplies official Fabric API release checksum. */
-    private fun fabricApi26_3(): CrossplayFile {
+    /** Resolve one project release explicitly compatible with Fabric 26.3. */
+    private fun modrinthFabric(project: String): CrossplayFile {
         val loaders = encoded("[\"fabric\"]")
         val versions = encoded("[\"26.3\"]")
-        val list = readJsonArray("https://api.modrinth.com/v2/project/P7dR8mSH/version?loaders=" +
-            loaders + "&game_versions=" + versions)
-        if (list.length() == 0) throw IOException("Modrinth has no Fabric API build for Minecraft 26.3")
-        val candidates = list.getJSONObject(0).getJSONArray("files")
-        var chosen: JSONObject? = null
-        for(i in 0 until candidates.length()) {
-            val f = candidates.getJSONObject(i)
-            if (f.optString("filename").endsWith(".jar",true) && (chosen == null || f.optBoolean("primary")))
-                chosen = f
+        val list = readJsonArray("https://api.modrinth.com/v2/project/" + encoded(project) +
+            "/version?loaders=" + loaders + "&game_versions=" + versions)
+        if (list.length() == 0) throw IOException("Modrinth has no Fabric 26.3 version for " + project)
+        for (v in 0 until list.length()) {
+            val files = list.getJSONObject(v).optJSONArray("files") ?: continue
+            var selected: JSONObject? = null
+            for (i in 0 until files.length()) {
+                val file = files.getJSONObject(i)
+                if (!file.optString("filename").endsWith(".jar", true)) continue
+                if (selected == null || file.optBoolean("primary",false)) selected = file
+            }
+            if (selected != null) {
+                val sha = selected.optJSONObject("hashes")?.optString("sha256")
+                    ?.takeIf { it.matches(Regex("[a-fA-F0-9]{64}")) }
+                val url = selected.getString("url")
+                if (!url.startsWith("https://")) throw IOException("Modrinth returned an unsafe download URL")
+                return CrossplayFile(url,sha)
+            }
         }
-        val jar = chosen ?: throw IOException("Modrinth Fabric API release does not contain a JAR")
-        val sha = jar.optJSONObject("hashes")?.optString("sha256")
-            ?.takeIf { it.matches(Regex("[a-fA-F0-9]{64}")) }
-        return CrossplayFile(jar.getString("url"), sha)
+        throw IOException("Modrinth " + project + " has no Fabric 26.3 JAR")
+    }
+
+    private fun fabricApi26_3(): CrossplayFile = modrinthFabric("P7dR8mSH")
+
+    /**
+     * Floodgate's latest GeyserMC build can have no Fabric artifact (its build
+     * metadata is not guaranteed to include one). Resolve the official 26.3
+     * Fabric release from Modrinth instead, with a SHA-256 checksum.
+     */
+    private fun floodgateFabric(): CrossplayFile {
+        return try {
+            geyserFabric("floodgate")
+        } catch (metadataError: Exception) {
+            try {
+                modrinthFabric("floodgate")
+            } catch (modrinthError: Exception) {
+                throw IOException("GeyserMC: " + metadataError.message +
+                    "; Modrinth fallback: " + modrinthError.message,modrinthError)
+            }
+        }
     }
 
     fun installCrossplay(context: Context): String {
@@ -181,7 +207,7 @@ object ServerDownloads {
             val downloads = listOf(
                 "Fabric API" to { fabricApi26_3() },
                 "Geyser-Fabric" to { geyserFabric("geyser") },
-                "Floodgate-Fabric" to { geyserFabric("floodgate") }
+                "Floodgate-Fabric" to { floodgateFabric() }
             )
             downloads.forEachIndexed { i, entry ->
                 InstallProgress.check()
