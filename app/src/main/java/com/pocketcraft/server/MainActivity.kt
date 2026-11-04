@@ -1455,6 +1455,17 @@ class MainActivity : Activity() {
         packCard.addView(ui.text(this,"Import a complete modpack",18f,ui.WHITE,true))
         packCard.addView(ui.space(this,7))
         packCard.addView(ui.text(this,"Modrinth .mrpack or CurseForge manifest ZIP. Installs server-compatible files only; no world or launcher replacement.",12f,ui.MUTED))
+        packCard.addView(ui.space(this,11))
+        val serverVersion=ServerVersionManager.current(this)
+        packCard.addView(ui.pill(this,
+            if(!serverVersion.launcherPresent)"FABRIC NOT INSTALLED"
+            else if(serverVersion.version==null)"FABRIC PRESENT • VERSION UNKNOWN"
+            else "FABRIC "+serverVersion.version+" • "+serverVersion.source.uppercase(Locale.ROOT),
+            if(serverVersion.version==null)ui.RED else ui.GREEN))
+        packCard.addView(ui.space(this,9))
+        packCard.addView(ui.action(this,"SET / DETECT INSTALLED SERVER VERSION") {
+            showServerVersionPrompt()
+        })
         packCard.addView(ui.space(this,13))
         packCard.addView(ui.action(this,"⌕  BROWSE MODRINTH PACKS",true) {
             browseModrinth()
@@ -1463,6 +1474,15 @@ class MainActivity : Activity() {
         packCard.addView(ui.action(this,"＋  IMPORT MODPACK",true) {
             if(ServerService.running){toast("Stop the server before installing a modpack")}else picker(5)
         })
+        packCard.addView(ui.space(this,8))
+        packCard.addView(ui.action(this,"BROWSE CURSEFORGE MODPACKS") {
+            startActivity(Intent(Intent.ACTION_VIEW,
+                android.net.Uri.parse("https://www.curseforge.com/minecraft/search?class=modpacks")))
+        })
+        packCard.addView(ui.space(this,7))
+        packCard.addView(ui.text(this,
+            "CurseForge installs use a downloaded pack ZIP and may require an approved CurseForge API key. Modrinth supports in-app browsing and downloading.",
+            11f,ui.MUTED))
         body.addView(packCard)
         body.addView(ui.space(this,14))
         val crossplayPresets=ui.card(this)
