@@ -54,7 +54,7 @@ class MainActivity : Activity() {
             if (tab == 0) {
                 val signature = listOf(ServerService.running, ServerService.status,
                     ServerService.javaReady, ServerService.bedrockReady,
-                    ServerService.nethernetReady, NetworkInfo.lanAddress().orEmpty()
+                    ServerService.nethernetReady, ServerService.nethernetNativeFailure, NetworkInfo.lanAddress().orEmpty()
                 ).joinToString("|")
                 if (signature != lastPhoneSignature) {
                     lastPhoneSignature = signature
@@ -616,6 +616,12 @@ class MainActivity : Activity() {
             "BEDROCK: " + (local?.let { "$it:19132" } ?: "Local network required") +
                 if (geyser) " • Geyser listener detected" else " • Geyser listener not confirmed",
             12f,ui.MUTED))
+        if (ServerService.nethernetNativeFailure) {
+            card.addView(ui.space(this,8))
+            card.addView(ui.text(this,
+                "NetherNet failed to load Android WebRTC JNI. This is a native-library issue, not a Playit token or port problem. See Console.",
+                12f,ui.RED))
+        }
         if (ServerService.nethernetReady) {
             card.addView(ui.space(this,5))
             card.addView(ui.text(this,"✓ External NetherNet signaling registered",12f,ui.GREEN))
