@@ -123,23 +123,51 @@ class MainActivity : Activity() {
     }
     private fun render() {
         val screen = ui.column(this).apply { setBackgroundColor(ui.BG) }
-        val top = ui.row(this).apply { ui.run { padding(this@MainActivity, 20, 19, 20, 13) } }
-        top.addView(ui.text(this,"▦", 28f, ui.GREEN,true).apply {
-            background = ui.shape(this@MainActivity, ui.SURFACE, 12)
-            ui.run { padding(this@MainActivity, 9, 7, 9, 7) }
-        })
-        top.addView(ui.column(this).apply {
+        val brand = ui.row(this).apply {
+            setPadding(ui.dp(this@MainActivity,18),ui.dp(this@MainActivity,16),
+                ui.dp(this@MainActivity,18),ui.dp(this@MainActivity,14))
+        }
+        val logo = ImageView(this).apply {
+            setImageResource(R.drawable.pocket_logo)
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            background = ui.shape(this@MainActivity,ui.SUBTLE,14,ui.BORDER)
+            setPadding(ui.dp(this@MainActivity,6),ui.dp(this@MainActivity,6),
+                ui.dp(this@MainActivity,6),ui.dp(this@MainActivity,6))
+            contentDescription = "PocketCraft app logo"
+        }
+        brand.addView(logo,LinearLayout.LayoutParams(ui.dp(this,44),ui.dp(this,44)))
+        val version = runCatching {
+            packageManager.getPackageInfo(packageName,0).versionName ?: "dev"
+        }.getOrDefault("dev")
+        brand.addView(ui.column(this).apply {
             setPadding(ui.dp(this@MainActivity,12),0,0,0)
-            addView(ui.text(this@MainActivity,"POCKETCRAFT",17f,ui.WHITE,true))
-            addView(ui.text(this@MainActivity,"HOST • CUSTOMIZE • PLAY",9f,ui.MUTED,true))
-        }, LinearLayout.LayoutParams(0, -2, 1f))
-        top.addView(ui.text(this,"⚙",24f,ui.GREEN,true).apply {
-            setOnClickListener { startActivity(Intent(this@MainActivity,SettingsActivity::class.java)) }; contentDescription="Server settings"
-            ui.run { padding(this@MainActivity, 10, 3, 10, 3) }
-        })
-        screen.addView(top)
-        val scroller = ScrollView(this).apply { isFillViewport = true; isVerticalScrollBarEnabled = false }
-        val body = ui.column(this).apply { setPadding(ui.dp(this@MainActivity,18), ui.dp(this@MainActivity,7), ui.dp(this@MainActivity,18), ui.dp(this@MainActivity,18)) }
+            addView(ui.text(this@MainActivity,"PocketCraft",20f,ui.WHITE,true))
+            addView(ui.space(this@MainActivity,4))
+            addView(ui.text(this@MainActivity,"SERVER STUDIO  •  v$version",10f,ui.MUTED,true))
+        }, LinearLayout.LayoutParams(0,-2,1f))
+        val settings = ImageView(this).apply {
+            setImageResource(R.drawable.pc_settings)
+            setColorFilter(ui.MUTED)
+            scaleType = ImageView.ScaleType.CENTER_INSIDE
+            setPadding(ui.dp(this@MainActivity,12),ui.dp(this@MainActivity,12),
+                ui.dp(this@MainActivity,12),ui.dp(this@MainActivity,12))
+            background = ui.pressable(this@MainActivity,ui.shape(this@MainActivity,ui.SURFACE,14))
+            contentDescription = "Server settings"
+            isFocusable = true
+            setOnClickListener { startActivity(Intent(this@MainActivity,SettingsActivity::class.java)) }
+        }
+        brand.addView(settings,LinearLayout.LayoutParams(ui.dp(this,46),ui.dp(this,46)))
+        screen.addView(brand)
+
+        val scroller = ScrollView(this).apply {
+            isFillViewport = true
+            isVerticalScrollBarEnabled = false
+            clipToPadding = false
+        }
+        val body = ui.column(this).apply {
+            setPadding(ui.dp(this@MainActivity,18),ui.dp(this@MainActivity,7),
+                ui.dp(this@MainActivity,18),ui.dp(this@MainActivity,26))
+        }
         when(tab) {
             0 -> dashboard(body)
             1 -> modsPage(body)
@@ -147,24 +175,45 @@ class MainActivity : Activity() {
             else -> consolePage(body)
         }
         scroller.addView(body)
-        screen.addView(scroller, LinearLayout.LayoutParams(-1,0,1f))
+        screen.addView(scroller,LinearLayout.LayoutParams(-1,0,1f))
+
         val navbar = ui.row(this).apply {
-            background = ui.shape(this@MainActivity, 0xFF101A2D.toInt(), 0)
-            setPadding(ui.dp(this@MainActivity,6),ui.dp(this@MainActivity,10),ui.dp(this@MainActivity,6),ui.dp(this@MainActivity,12))
+            background = ui.shape(this@MainActivity,0xFF111B29.toInt(),0,ui.BORDER)
+            setPadding(ui.dp(this@MainActivity,7),ui.dp(this@MainActivity,8),
+                ui.dp(this@MainActivity,7),ui.dp(this@MainActivity,9))
         }
-        val icons = listOf("◈", "⬡", "▧", "⌘")
-        val labels = listOf("HOME", "MODS", "WORLDS", "CONSOLE")
+        val icons = intArrayOf(R.drawable.pc_home,R.drawable.pc_mods,
+            R.drawable.pc_worlds,R.drawable.pc_console)
+        val names = listOf("Home","Mods","Worlds","Console")
         repeat(4) { i ->
-            val item = ui.column(this)
-            item.gravity = Gravity.CENTER
-            item.addView(ui.text(this,icons[i],24f,if(i==tab) ui.GREEN else ui.MUTED,true).apply { gravity=Gravity.CENTER })
+            val selected = i == tab
+            val item = ui.column(this).apply {
+                gravity = Gravity.CENTER
+                background = ui.pressable(this@MainActivity,
+                    ui.shape(this@MainActivity,if(selected)0xFF233C42.toInt() else 0xFF111B29.toInt(),15))
+                isClickable = true
+                isFocusable = true
+                isSelected = selected
+                contentDescription = names[i] + if(selected) ", selected" else ", tab"
+                setOnClickListener {
+                    if(tab != i) {
+                        tab = i
+                        render()
+                    }
+                }
+            }
+            val navIcon = ImageView(this).apply {
+                setImageResource(icons[i])
+                setColorFilter(if(selected)ui.GREEN else ui.MUTED)
+                scaleType = ImageView.ScaleType.FIT_CENTER
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            }
+            item.addView(navIcon,LinearLayout.LayoutParams(ui.dp(this,23),ui.dp(this,23)))
             item.addView(ui.space(this,5))
-            item.addView(ui.text(this,labels[i],10f,if(i==tab) ui.GREEN else ui.MUTED,true).apply { gravity=Gravity.CENTER })
-            item.isClickable = true
-            item.contentDescription = "Open "+labels[i].lowercase(Locale.ROOT)
-            item.background=if(i==tab) ui.shape(this,ui.SURFACE,14) else ui.shape(this,0xFF101A2D.toInt(),14)
-            item.setOnClickListener { tab=i; render() }
-            navbar.addView(item,LinearLayout.LayoutParams(0,ui.dp(this,52),1f))
+            item.addView(ui.text(this,names[i],11f,if(selected)ui.GREEN else ui.MUTED,selected)
+                .apply { gravity=Gravity.CENTER
+                    importantForAccessibility=View.IMPORTANT_FOR_ACCESSIBILITY_NO })
+            navbar.addView(item,LinearLayout.LayoutParams(0,ui.dp(this,62),1f))
         }
         screen.addView(navbar)
         setContentView(screen)
