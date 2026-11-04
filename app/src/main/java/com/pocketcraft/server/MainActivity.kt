@@ -31,6 +31,8 @@ class MainActivity : Activity() {
     private var lastOnlineSignature = ""
     private var phoneHost: FrameLayout? = null
     private var lastPhoneSignature = ""
+    private var connectionHost: FrameLayout? = null
+    private var lastConnectionSignature = ""
     private var consoleOutput: TextView? = null
     private var lastConsoleSize = -1L
     private var lastConsoleModified = -1L
@@ -70,6 +72,19 @@ class MainActivity : Activity() {
                     lastConsoleSize = file.length()
                     lastConsoleModified = file.lastModified()
                     consoleOutput?.text = getLog()
+                }
+            }
+            if (tab == 0) {
+                val signature = listOf(
+                    ServerService.running, ServerService.javaReady,
+                    ServerService.bedrockReady, ServerService.nethernetNativeFailure
+                ).joinToString("|")
+                if (signature != lastConnectionSignature) {
+                    lastConnectionSignature = signature
+                    connectionHost?.let { host ->
+                        host.removeAllViews()
+                        host.addView(connectionJourneyPanel())
+                    }
                 }
             }
             // Refresh just the online hosting panel when the Playit worker changes
@@ -376,7 +391,11 @@ class MainActivity : Activity() {
         hero.addView(ui.action(this,"SERVER HEALTH & DIAGNOSTICS") { showHealthCenter() })
         body.addView(hero)
         body.addView(ui.space(this,14))
-        body.addView(connectionJourneyPanel())
+        val joinHost = FrameLayout(this)
+        joinHost.addView(connectionJourneyPanel())
+        connectionHost = joinHost
+        lastConnectionSignature = ""
+        body.addView(joinHost)
         body.addView(ui.space(this,16))
         body.addView(setupJourney())
         body.addView(ui.space(this,14))
