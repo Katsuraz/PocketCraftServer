@@ -108,11 +108,21 @@ class ServerService : Service() {
                 val prefs = getSharedPreferences("pocketcraft", 0)
                 val requestedHeap = prefs.getInt("heapMB", 2048).coerceIn(512, 3072)
                 val javaHome = java.parentFile!!.parentFile!!
+                // Android does not provide /tmp. ImageIO and Geyser use java.io.tmpdir,
+                // which does not automatically follow TMPDIR on the JVM.
+                val javaTmp = File(cacheDir, "minecraft-java-tmp")
+                if (!javaTmp.isDirectory && !javaTmp.mkdirs()) {
+                    throw IllegalStateException("Could not create the Java temporary directory")
+                }
+                if (!javaTmp.canWrite()) throw IllegalStateException("Java temporary directory is not writable")
+                append("Java temporary files: ${javaTmp.absolutePath}")
                 val cmd = listOf(
                     java.absolutePath,
                     "-Xms256M",
                     "-Xmx${requestedHeap}M",
                     "-Djava.awt.headless=true",
+                    "-Djava.io.tmpdir=${javaTmp.absolutePath}",
+                    "-Djavax.imageio.useCache=false",
                     "-jar", launcher.name, "nogui"
                 )
                 append("Launching Fabric using ${java.absolutePath} (heap max: ${requestedHeap} MB)")
@@ -123,7 +133,9 @@ class ServerService : Service() {
                         val env = environment()
                         env["JAVA_HOME"] = javaHome.absolutePath
                         env["HOME"] = filesDir.absolutePath
-                        env["TMPDIR"] = cacheDir.absolutePath
+                        env["TMPDIR"] = javaTmp.absolutePath
+                        env["TMP"] = javaTmp.absolutePath
+                        env["TEMP"] = javaTmp.absolutePath
                         val libs = listOf(
                             File(javaHome, "lib").absolutePath,
                             File(javaHome, "lib/server").absolutePath,
