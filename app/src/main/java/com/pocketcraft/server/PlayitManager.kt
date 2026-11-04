@@ -50,22 +50,13 @@ object PlayitManager {
      */
     @Synchronized fun importExistingAgent(c: Context, raw: String) {
         if (isActive()) throw IllegalStateException("Go Offline before switching agents")
-        val value = raw.trim().let { text ->
-            val matched = Regex("""^secret_key *= *["']([0-9a-fA-F]+)["'] *$""")
-                .matchEntire(text)
-            matched?.groupValues?.get(1) ?: text
-        }
-        if(value.length !in 32..512 || value.length % 2 != 0 ||
-            !value.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }) {
-            throw IllegalArgumentException("Invalid Playit agent secret format. Copy the hex secret from your own existing Playit agent config.")
-        }
+        val value = PlayitSecretFormat.normalize(raw)
         val store = root(c)
         val target = File(store,"secret.toml")
         val stage = File(store,".secret-import.tmp")
         try {
             java.io.FileOutputStream(stage).use {
-                val content = "secret_key = " + 34.toChar() + value + 34.toChar() + 10.toChar()
-                it.write(content.toByteArray(Charsets.UTF_8))
+                it.write(PlayitSecretFormat.toToml(value).toByteArray(Charsets.UTF_8))
                 it.fd.sync()
             }
             stage.setReadable(false,false)
