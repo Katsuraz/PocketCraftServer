@@ -78,6 +78,7 @@ object ServerDownloads {
     }
 
     fun installFabric(context: Context, version: String): String {
+        if (ServerService.running) throw IOException("Stop the Minecraft server before changing its version")
         if(version !in listOf("26.3","1.21.11","1.20.1"))
             throw IOException("Unsupported version selection")
         val loader=latestStable(readJsonArray(FABRIC_META+"/loader"))
@@ -101,6 +102,7 @@ object ServerDownloads {
     }
 
     fun installCrossplay(context: Context): String {
+        if (ServerService.running) throw IOException("Stop the Minecraft server before updating mods")
         val version=context.getSharedPreferences("pocketcraft",0).getString("gameVersion",null)
         if(version!="26.3") throw IOException("Auto-install supports only Java 26.3. Older Fabric needs a compatible proxy.")
         val mods=File(WorldStore.root(context),"mods").apply {mkdirs()}
