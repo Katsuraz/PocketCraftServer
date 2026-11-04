@@ -536,6 +536,16 @@ class MainActivity : Activity() {
             if (ServerService.bedrockReady) "✓ BEDROCK LISTENER" else "○ BEDROCK WAITING",
             if (ServerService.bedrockReady) ui.GREEN else ui.MUTED))
         card.addView(indicators)
+        card.addView(ui.space(this,8))
+        val networkIndicators=ui.row(this)
+        networkIndicators.addView(ui.pill(this,
+            if (ServerService.nethernetReady) "✓ NETHERNET REGISTERED" else "○ NETHERNET UNVERIFIED",
+            if (ServerService.nethernetReady) ui.GREEN else ui.MUTED))
+        networkIndicators.addView(ui.space(this,7))
+        networkIndicators.addView(ui.pill(this,
+            if (PlayitManager.isActive()) "✓ PLAYIT ACTIVE" else "○ PLAYIT OFFLINE",
+            if (PlayitManager.isActive()) ui.GREEN else ui.MUTED))
+        card.addView(networkIndicators)
         if (ServerService.nethernetNativeFailure) {
             card.addView(ui.space(this, 10))
             card.addView(ui.text(this,
@@ -545,6 +555,12 @@ class MainActivity : Activity() {
         card.addView(ui.space(this, 13))
         card.addView(ui.action(this, "PLAY WITH FRIENDS — GET ADDRESS", true) {
             showConnectionChooser()
+        })
+        card.addView(ui.space(this,9))
+        card.addView(ui.action(this,"SAME-PHONE BEDROCK ADDRESS",false,ServerService.bedrockReady) {
+            (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
+                .setPrimaryClip(ClipData.newPlainText("Local Bedrock","127.0.0.1:19132"))
+            toast("Copied 127.0.0.1:19132. Use only on this hosting phone.")
         })
         card.addView(ui.space(this, 8))
         card.addView(ui.text(this,
