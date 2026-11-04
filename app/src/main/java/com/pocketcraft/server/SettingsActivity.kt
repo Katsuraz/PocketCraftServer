@@ -3,83 +3,139 @@ package com.pocketcraft.server
 import android.app.Activity
 import android.os.Bundle
 import android.text.InputType
-import android.widget.*
+import android.view.Gravity
+import android.view.View
+import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.TextView
+import android.widget.Toast
 import java.io.File
 import java.util.Properties
 
-/** Offline editor for Minecraft Java server.properties. Does not start the server. */
+/** A dark themed, offline editor for Java server.properties. */
 class SettingsActivity : Activity() {
-    private data class Field(val key: String, val label: String, val default: String, val choices: List<String>? = null)
-    private val fields = listOf(
-        Field("motd", "Server description", "PocketCraft Server"),
-        Field("server-port", "Java TCP port", "25565"),
-        Field("max-players", "Maximum players", "5"),
-        Field("gamemode", "Default game mode", "survival", listOf("survival","creative","adventure","spectator")),
-        Field("difficulty", "Difficulty", "normal", listOf("peaceful","easy","normal","hard")),
-        Field("hardcore", "Hardcore", "false", listOf("false","true")),
-        Field("force-gamemode", "Force default game mode", "false", listOf("false","true")),
-        Field("white-list", "Whitelist", "false", listOf("false","true")),
-        Field("enforce-whitelist", "Enforce whitelist", "false", listOf("false","true")),
-        Field("online-mode", "Online authentication", "true", listOf("true")),
-        Field("view-distance", "View distance (chunks)", "5"),
-        Field("simulation-distance", "Simulation distance (chunks)", "4"),
-        Field("spawn-protection", "Spawn protection radius", "0"),
-        Field("level-name", "World folder name", "world"),
-        Field("level-seed", "World seed (new worlds only)", ""),
-        Field("generate-structures", "Generate structures", "true", listOf("true","false")),
-        Field("allow-flight", "Allow flight", "false", listOf("false","true")),
-        Field("enable-status", "Show server status", "true", listOf("true","false")),
-        Field("player-idle-timeout", "Idle timeout (minutes)", "0"),
-        Field("max-world-size", "Max world radius", "29999984"),
-        Field("enable-rcon", "Remote console (disabled for safety)", "false", listOf("false"))
+    private val ui=PocketUi
+    private data class Field(val key:String,val title:String,val default:String,val choices:List<String>?=null,val numeric:Boolean=false)
+    private val groups=linkedMapOf(
+        "PLAYER EXPERIENCE" to listOf(
+            Field("motd","Server name","PocketCraft Server"),
+            Field("max-players","Maximum players","5",numeric=true),
+            Field("gamemode","Default game mode","survival",listOf("survival","creative","adventure","spectator")),
+            Field("difficulty","Difficulty","normal",listOf("peaceful","easy","normal","hard")),
+            Field("pvp","Player versus player","true",listOf("true","false")),
+            Field("hardcore","Hardcore mode","false",listOf("true","false"))
+        ),
+        "WORLD GENERATION" to listOf(
+            Field("level-name","World folder","world"),
+            Field("level-seed","World seed (new worlds only)",""),
+            Field("view-distance","View distance (chunks)","5",numeric=true),
+            Field("simulation-distance","Simulation distance","4",numeric=true),
+            Field("generate-structures","Structures","true",listOf("true","false")),
+            Field("spawn-protection","Spawn protection radius","0",numeric=true),
+            Field("allow-flight","Allow flight","false",listOf("true","false"))
+        ),
+        "NETWORK & SECURITY" to listOf(
+            Field("server-port","Java TCP port","25565",numeric=true),
+            Field("white-list","Use whitelist","false",listOf("true","false")),
+            Field("enforce-whitelist","Enforce whitelist","false",listOf("true","false")),
+            Field("online-mode","Java account authentication","true",listOf("true")),
+            Field("enable-rcon","Remote console disabled","false",listOf("false"))
+        )
     )
-    private val controls = mutableMapOf<String, EditText>()
-    private val root by lazy { File(filesDir, "minecraft").apply { mkdirs() } }
-    override fun onCreate(savedInstanceState: Bundle?) {
+    private val controls=linkedMapOf<String,EditText>()
+    private val root by lazy { WorldStore.root(this) }
+    override fun onCreate(savedInstanceState:Bundle?) {
         super.onCreate(savedInstanceState)
-        val file = File(root, "server.properties")
-        val props = Properties()
-        if (file.exists()) file.inputStream().use { props.load(it) }
-        val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24,24,24,24) }
-        body.addView(TextView(this).apply { text = "Server settings"; textSize = 26f })
-        body.addView(TextView(this).apply { text = "Edit Java server.properties. Restart required. Bedrock/Geyser settings are separate. Some keys change between Minecraft versions." })
-        fields.forEach { f ->
-            body.addView(TextView(this).apply { text = f.label })
-            val editor = EditText(this).apply {
-                setSingleLine(true)
-                setText(props.getProperty(f.key, f.default))
-                if (f.key in listOf("max-players","view-distance","simulation-distance","server-port","spawn-protection","player-idle-timeout","max-world-size"))
-                    inputType = InputType.TYPE_CLASS_NUMBER
-            }
-            controls[f.key] = editor
-            body.addView(editor)
-            if (f.choices != null) {
-                body.addView(TextView(this).apply { text = "Allowed: " + f.choices.joinToString(", "); textSize = 12f })
-            }
+        window.statusBarColor=ui.BG
+        window.navigationBarColor=ui.BG
+        val file=File(root,"server.properties")
+        val properties=Properties()
+        if(file.exists()) file.inputStream().use {properties.load(it)}
+        val screen=ui.column(this).apply {setBackgroundColor(ui.BG)}
+        val header=ui.row(this).apply {
+            setPadding(ui.dp(this@SettingsActivity,18),ui.dp(this@SettingsActivity,22),ui.dp(this@SettingsActivity,18),ui.dp(this@SettingsActivity,16))
         }
-        body.addView(Button(this).apply {
-            text = "Save settings"
-            setOnClickListener {
-                for (f in fields) {
-                    val value = controls[f.key]!!.text.toString().trim()
-                    if (f.choices != null && value !in f.choices) {
-                        Toast.makeText(this@SettingsActivity, "Invalid ${f.key}", Toast.LENGTH_LONG).show()
-                        return@setOnClickListener
-                    }
-                    if (f.key in listOf("max-players","view-distance","simulation-distance","server-port","spawn-protection","player-idle-timeout","max-world-size")) {
-                        val n = value.toIntOrNull()
-                        if (n == null || n < 0 || (f.key == "server-port" && n !in 1..65535) || (f.key == "max-players" && n < 1)) {
-                            Toast.makeText(this@SettingsActivity, "Invalid number for ${f.key}", Toast.LENGTH_LONG).show()
-                            return@setOnClickListener
-                        }
+        header.addView(ui.text(this,"‹",34f,ui.GREEN,true).apply {
+            setOnClickListener {finish()}
+            contentDescription="Back"
+            setPadding(0,0,ui.dp(this@SettingsActivity,18),0)
+        })
+        header.addView(ui.column(this).apply {
+            addView(ui.text(this@SettingsActivity,"SERVER SETTINGS",20f,ui.WHITE,true))
+            addView(ui.text(this@SettingsActivity,"Customize your next world",11f,ui.MUTED))
+        })
+        screen.addView(header)
+        val scroll=ScrollView(this)
+        val body=ui.column(this).apply {
+            setPadding(ui.dp(this@SettingsActivity,18),0,ui.dp(this@SettingsActivity,18),ui.dp(this@SettingsActivity,20))
+        }
+        val intro=ui.card(this)
+        intro.addView(ui.pill(this,"OFFLINE CONFIGURATION",ui.PURPLE))
+        intro.addView(ui.space(this,11))
+        intro.addView(ui.text(this,"Build the world your way",19f,ui.WHITE,true))
+        intro.addView(ui.space(this,7))
+        intro.addView(ui.text(this,"Settings are saved into server.properties. Restart the Minecraft server to apply changes once the Android engine is available.",12f,ui.MUTED))
+        body.addView(intro)
+        groups.forEach { (heading,fields) ->
+            body.addView(ui.space(this,21))
+            body.addView(ui.text(this,heading,11f,ui.GREEN,true))
+            body.addView(ui.space(this,10))
+            val section=ui.card(this)
+            fields.forEachIndexed {index,field->
+                section.addView(ui.text(this,field.title,13f,ui.WHITE,true))
+                section.addView(ui.space(this,7))
+                val edit=EditText(this).apply {
+                    setSingleLine(true)
+                    textSize=14f
+                    setTextColor(ui.WHITE);setHintTextColor(ui.MUTED)
+                    setText(properties.getProperty(field.key,field.default))
+                    background=ui.shape(this@SettingsActivity,ui.SURFACE,12,0xFF34455F.toInt())
+                    setPadding(ui.dp(this@SettingsActivity,14),ui.dp(this@SettingsActivity,11),
+                        ui.dp(this@SettingsActivity,14),ui.dp(this@SettingsActivity,11))
+                    if(field.numeric) inputType=InputType.TYPE_CLASS_NUMBER
+                }
+                controls[field.key]=edit
+                section.addView(edit,LinearLayout.LayoutParams(-1,-2))
+                if(field.choices!=null) {
+                    section.addView(ui.space(this,5))
+                    section.addView(ui.text(this,"Options: "+field.choices.joinToString(" / "),10f,ui.MUTED))
+                }
+                if(index < fields.size-1) section.addView(ui.space(this,16))
+            }
+            body.addView(section)
+        }
+        scroll.addView(body)
+        screen.addView(scroll,LinearLayout.LayoutParams(-1,0,1f))
+        val footer=ui.column(this).apply {
+            setPadding(ui.dp(this@SettingsActivity,18),ui.dp(this@SettingsActivity,12),
+                ui.dp(this@SettingsActivity,18),ui.dp(this@SettingsActivity,18))
+        }
+        footer.addView(ui.action(this,"SAVE SERVER SETTINGS  ✓",true) {
+            for(field in groups.values.flatten()) {
+                val value=controls[field.key]!!.text.toString().trim()
+                if(field.choices!=null && value !in field.choices) {
+                    Toast.makeText(this,"Invalid "+field.title,Toast.LENGTH_LONG).show()
+                    return@action
+                }
+                if(field.numeric) {
+                    val n=value.toIntOrNull()
+                    if(n==null || n<0 || (field.key=="server-port" && n !in 1..65535) ||
+                        (field.key=="max-players" && n !in 1..100) ||
+                        (field.key in listOf("view-distance","simulation-distance") && n !in 2..32)) {
+                        Toast.makeText(this,"Check "+field.title,Toast.LENGTH_LONG).show()
+                        return@action
                     }
                 }
-                fields.forEach { f -> props.setProperty(f.key, controls[f.key]!!.text.toString().trim()) }
-                file.outputStream().use { props.store(it, "PocketCraft Java server settings") }
-                Toast.makeText(this@SettingsActivity, "Saved server.properties", Toast.LENGTH_LONG).show()
-                finish()
             }
+            groups.values.flatten().forEach {field->
+                properties.setProperty(field.key,controls[field.key]!!.text.toString().trim())
+            }
+            file.outputStream().use {properties.store(it,"PocketCraft Server configuration")}
+            Toast.makeText(this,"Server settings saved",Toast.LENGTH_SHORT).show()
+            finish()
         })
-        setContentView(ScrollView(this).apply { addView(body) })
+        screen.addView(footer)
+        setContentView(screen)
     }
 }
