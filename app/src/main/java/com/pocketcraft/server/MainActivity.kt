@@ -1465,6 +1465,64 @@ class MainActivity : Activity() {
         })
         body.addView(packCard)
         body.addView(ui.space(this,14))
+        val crossplayPresets=ui.card(this)
+        crossplayPresets.addView(ui.pill(this,"JAVA + BEDROCK",ui.GREEN))
+        crossplayPresets.addView(ui.space(this,9))
+        crossplayPresets.addView(ui.text(this,"Crossplay-friendly presets",18f,ui.WHITE,true))
+        crossplayPresets.addView(ui.space(this,7))
+        crossplayPresets.addView(ui.text(this,
+            "Minecraft 26.3 only. Server optimizations and vanilla-block worldgen can work with Geyser without installing Java mods on Bedrock. Packs are not guaranteed until a real Bedrock join test. Stop Minecraft first.",
+            12f,ui.MUTED))
+        crossplayPresets.addView(ui.space(this,11))
+        CrossplayAddons.Preset.values().forEach { preset ->
+            val panel=ui.column(this)
+            panel.addView(ui.text(this,preset.title,14f,ui.WHITE,true))
+            panel.addView(ui.space(this,4))
+            panel.addView(ui.text(this,preset.description,12f,ui.MUTED))
+            panel.addView(ui.space(this,8))
+            panel.addView(ui.action(this,"INSTALL "+preset.title.uppercase(Locale.ROOT),false) {
+                if(ServerService.running) {
+                    toast("Stop Minecraft first")
+                } else {
+                    AlertDialog.Builder(this).setTitle("Install "+preset.title+"?")
+                        .setMessage(preset.description+"\n\nWorld generation is not retroactive. PocketCraft checks for a matching 26.3 release and verifies the download before applying. For terrain datapacks, a world recovery ZIP is saved first (512 MB safety limit).")
+                        .setNegativeButton("CANCEL",null)
+                        .setPositiveButton("INSTALL"){_,_->
+                            downloadAsync(preset.title) {CrossplayAddons.install(this,preset)}
+                        }.show()
+                }
+            })
+            crossplayPresets.addView(panel)
+            crossplayPresets.addView(ui.space(this,12))
+        }
+        crossplayPresets.addView(ui.text(this,
+            "Tip: choose Terralith OR Tectonic for terrain unless you have verified their exact combined release. Existing chunks are not regenerated.",
+            11f,ui.MUTED))
+        body.addView(crossplayPresets)
+        body.addView(ui.space(this,14))
+        val distant=ui.card(this)
+        distant.addView(ui.pill(this,"JAVA PLAYERS ONLY",ui.PURPLE))
+        distant.addView(ui.space(this,9))
+        distant.addView(ui.text(this,"Distant Horizons",18f,ui.WHITE,true))
+        distant.addView(ui.space(this,6))
+        distant.addView(ui.text(this,
+            "Optional Fabric server-side LOD support. Java players must also install the matching Distant Horizons client mod. Bedrock does not receive distant terrain visuals. More server CPU, storage and battery may be used.",
+            12f,ui.MUTED))
+        distant.addView(ui.space(this,11))
+        distant.addView(ui.action(this,"INSTALL DISTANT HORIZONS SERVER SUPPORT",true) {
+            if(ServerService.running) {
+                toast("Stop Minecraft first")
+            } else {
+                AlertDialog.Builder(this).setTitle("Java-only Distant Horizons?")
+                    .setMessage("Checks Modrinth for a matching Fabric 26.3 build. This is optional server support, not required for Bedrock or guaranteed to improve rendering on your phone. Java clients need to install the same compatible mod themselves.")
+                    .setNegativeButton("CANCEL",null)
+                    .setPositiveButton("CHECK & INSTALL"){_,_->
+                        downloadAsync("Distant Horizons") {CrossplayAddons.installDistantHorizons(this)}
+                    }.show()
+            }
+        })
+        body.addView(distant)
+        body.addView(ui.space(this,14))
         body.addView(ui.action(this,"↓  INSTALL CROSSPLAY FILES") {
             AlertDialog.Builder(this).setTitle("Install crossplay bridge?")
                 .setMessage("Downloads matching Fabric API from Modrinth, plus the latest Geyser-Fabric and Floodgate from GeyserMC for Minecraft Java 26.3. These server files alone cannot host Minecraft: an Android Java runtime is still required.")
