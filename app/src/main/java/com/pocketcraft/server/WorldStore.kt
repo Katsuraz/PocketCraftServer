@@ -22,6 +22,7 @@ object WorldStore {
         return props.getProperty("level-name", "world")
     }
     fun activate(c: Context, world: File) {
+        if (ServerService.running) throw IOException("Stop the server before switching worlds")
         if (!world.parentFile.canonicalFile.equals(root(c).canonicalFile) || !File(world,"level.dat").isFile)
             throw IOException("Not a valid Minecraft world")
         val f = File(root(c), "server.properties")
@@ -32,6 +33,7 @@ object WorldStore {
         f.outputStream().use { props.store(it, "PocketCraft Server") }
     }
     fun backup(c: Context, world: File, uri: Uri) {
+        if (ServerService.running) throw IOException("Stop the server before making a consistent backup")
         if (!File(world, "level.dat").exists()) throw IOException("No level.dat found")
         if (world.parentFile?.canonicalFile != root(c).canonicalFile)
             throw IOException("World is outside managed storage")
@@ -51,6 +53,7 @@ object WorldStore {
         }
     }
     fun importZip(c: Context, uri: Uri): File {
+        if (ServerService.running) throw IOException("Stop the server before importing a world")
         val base = root(c)
         val folder = File(base, "world-import-" + System.currentTimeMillis())
         if (!folder.mkdir()) throw IOException("Failed to create import folder")
