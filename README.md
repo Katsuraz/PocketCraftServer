@@ -5,6 +5,8 @@ An experimental, standalone **Android Minecraft server manager** with a custom m
 ## Features implemented in v0.2
 - A four-tab Dashboard, Mods, Worlds, Console experience with custom pixel-art and status cards.
 - Server properties editor with numeric and whitelist validation; Java online authentication is kept enabled.
+- Download a Fabric server launcher from the official Fabric metadata API for Minecraft 26.3, 1.21.11 or 1.20.1; explicitly record EULA acceptance (the runtime is not included).
+- Download current Geyser-Fabric and Floodgate files for the latest supported Fabric target, or import compatible copies manually.
 - Import an existing Fabric server launcher JAR, plus third-party mod JARs via Android's document picker.
 - Enable / disable mod JAR files, inspect what's in the mods folder, remove a mod with confirmation.
 - Import a Java world ZIP with path traversal checks and a 1 GiB extraction cap.
