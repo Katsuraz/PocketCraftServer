@@ -165,8 +165,10 @@ object PlayitManager {
                     }
                 }
                 if (generation == token) {
-                    status = "OFFLINE"
-                    detail = "Playit stopped unexpectedly. Open diagnostics if it won't restart."
+                    if (!accountBlocked) {
+                        status = "OFFLINE"
+                        detail = "Playit stopped unexpectedly. Open diagnostics if it won't restart."
+                    }
                     append(c, "Playit daemon exited with code ${proc.waitFor()}")
                 }
             }.start()
@@ -268,6 +270,7 @@ object PlayitManager {
                         append(c, "Automatic Bedrock tunnel creation failed: ${e.message}")
                     }
                 }
+                if (accountBlocked) return@Thread
                 javaAddress = state.javaAddress
                 bedrockAddress = state.bedrockAddress
                 status = when {
