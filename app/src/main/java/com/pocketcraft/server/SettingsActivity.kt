@@ -1,6 +1,10 @@
 package com.pocketcraft.server
 
 import android.app.Activity
+import android.app.AlertDialog
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.os.Bundle
 import android.text.InputType
 import android.view.Gravity
@@ -8,160 +12,285 @@ import android.view.View
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
+import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 import java.io.File
 import java.util.Properties
 
-/** A dark themed, offline editor for Java server.properties. */
+/**
+ * PocketCraft v0.4 settings. Clear labels and touch-friendly choices replace raw string inputs.
+ * All Minecraft values persist to server.properties. Share address is a UI hint ONLY.
+ */
 class SettingsActivity : Activity() {
-    private val ui=PocketUi
-    private data class Field(val key:String,val title:String,val default:String,val choices:List<String>?=null,val numeric:Boolean=false)
-    private val groups=linkedMapOf(
-        "PLAYER EXPERIENCE" to listOf(
-            Field("motd","Server name","PocketCraft Server"),
-            Field("max-players","Maximum players","5",numeric=true),
-            Field("gamemode","Default game mode","survival",listOf("survival","creative","adventure","spectator")),
-            Field("difficulty","Difficulty","normal",listOf("peaceful","easy","normal","hard")),
-            Field("pvp","Player versus player","true",listOf("true","false")),
-            Field("hardcore","Hardcore mode","false",listOf("true","false"))
-        ),
-        "WORLD GENERATION" to listOf(
-            Field("level-name","World folder","world"),
-            Field("level-seed","World seed (new worlds only)",""),
-            Field("view-distance","View distance (chunks)","5",numeric=true),
-            Field("simulation-distance","Simulation distance","4",numeric=true),
-            Field("generate-structures","Structures","true",listOf("true","false")),
-            Field("spawn-protection","Spawn protection radius","0",numeric=true),
-            Field("allow-flight","Allow flight","false",listOf("true","false"))
-        ),
-        "NETWORK & SECURITY" to listOf(
-            Field("server-port","Java TCP port","25565",numeric=true),
-            Field("white-list","Use whitelist","false",listOf("true","false")),
-            Field("enforce-whitelist","Enforce whitelist","false",listOf("true","false")),
-            Field("online-mode","Java account authentication","true",listOf("true")),
-            Field("enable-rcon","Remote console disabled","false",listOf("false"))
-        )
-    )
-    private val controls=linkedMapOf<String,EditText>()
+    private val ui = PocketUi
     private val root by lazy { WorldStore.root(this) }
+    private val file by lazy { File(root, "server.properties") }
+    private val props = Properties()
+    private val editors = linkedMapOf<String, EditText>()
+    private val toggles = linkedMapOf<String, Switch>()
+    private val selectors = linkedMapOf<String, TextView>()
+    private val selected = linkedMapOf<String, String>()
+    private lateinit var advertised: EditText
+    private lateinit var heap: EditText
+
+    private fun heading(label: String, description: String): LinearLayout =
+        ui.column(this).apply {
+            addView(ui.text(this@SettingsActivity, label, 19f, ui.WHITE, true))
+            addView(ui.space(this@SettingsActivity, 5))
+            addView(ui.text(this@SettingsActivity, description, 12f, ui.MUTED))
+        }
+
+    private fun input(
+        parent: LinearLayout, key: String, title: String, default: String,
+        help: String = "", numeric: Boolean = false
+    ) {
+        val row = ui.column(this)
+        row.addView(ui.text(this, title, 14f, ui.WHITE, true))
+        if (help.isNotBlank()) {
+            row.addView(ui.space(this, 4))
+            row.addView(ui.text(this, help, 11f, ui.MUTED))
+        }
+        row.addView(ui.space(this, 9))
+        val edit = EditText(this).apply {
+            setSingleLine(true)
+            textSize = 15f
+            setTextColor(ui.WHITE)
+            setHintTextColor(ui.MUTED)
+            setText(props.getProperty(key, default))
+            if (numeric) inputType = InputType.TYPE_CLASS_NUMBER
+            background = ui.shape(this@SettingsActivity, ui.SURFACE, 12, 0xFF304862.toInt())
+            setPadding(ui.dp(this@SettingsActivity,14),ui.dp(this@SettingsActivity,13),
+                ui.dp(this@SettingsActivity,14),ui.dp(this@SettingsActivity,13))
+        }
+        editors[key] = edit
+        row.addView(edit, LinearLayout.LayoutParams(-1,-2))
+        parent.addView(row)
+        parent.addView(ui.space(this, 18))
+    }
+
+    private fun toggle(parent: LinearLayout, key: String, title: String, help: String, default: Boolean) {
+        val row=ui.row(this)
+        val labels=ui.column(this)
+        labels.addView(ui.text(this,title,14f,ui.WHITE,true))
+        labels.addView(ui.space(this,5))
+        labels.addView(ui.text(this,help,11f,ui.MUTED))
+        row.addView(labels,LinearLayout.LayoutParams(0,-2,1f))
+        val control=Switch(this).apply {
+            isChecked = props.getProperty(key,default.toString()).equals("true",true)
+            thumbTintList = android.content.res.ColorStateList.valueOf(ui.GREEN)
+        }
+        toggles[key]=control
+        row.addView(control)
+        parent.addView(row)
+        parent.addView(ui.space(this,18))
+    }
+
+    private fun select(parent:LinearLayout,key:String,title:String,default:String,choices:List<String>) {
+        parent.addView(ui.text(this,title,14f,ui.WHITE,true))
+        parent.addView(ui.space(this,9))
+        val current=props.getProperty(key,default).takeIf { it in choices } ?: default
+        selected[key]=current
+        val button=ui.action(this,current.uppercase()+"   ▾") {
+            AlertDialog.Builder(this).setTitle(title).setItems(choices.toTypedArray()) { _, index ->
+                selected[key]=choices[index]
+                selectors[key]?.text=choices[index].uppercase()+"   ▾"
+            }.setNegativeButton("CANCEL",null).show()
+        }
+        selectors[key]=button
+        parent.addView(button)
+        parent.addView(ui.space(this,18))
+    }
+
+    private fun section(body:LinearLayout,title:String,subtitle:String,fill:(LinearLayout)->Unit) {
+        body.addView(ui.space(this,19))
+        body.addView(heading(title,subtitle))
+        body.addView(ui.space(this,12))
+        val card=ui.card(this)
+        fill(card)
+        body.addView(card)
+    }
+    private fun value(key:String) = editors[key]?.text?.toString()?.trim() ?: ""
+
     override fun onCreate(savedInstanceState:Bundle?) {
         super.onCreate(savedInstanceState)
         window.statusBarColor=ui.BG
         window.navigationBarColor=ui.BG
-        val file=File(root,"server.properties")
-        val properties=Properties()
-        if(file.exists()) file.inputStream().use {properties.load(it)}
-        val screen=ui.column(this).apply {setBackgroundColor(ui.BG)}
-        val header=ui.row(this).apply {
-            setPadding(ui.dp(this@SettingsActivity,18),ui.dp(this@SettingsActivity,22),ui.dp(this@SettingsActivity,18),ui.dp(this@SettingsActivity,16))
+        if (file.exists()) file.inputStream().use { props.load(it) }
+
+        val screen=ui.column(this).apply { setBackgroundColor(ui.BG) }
+        val toolbar=ui.row(this).apply {
+            setPadding(ui.dp(this@SettingsActivity,18),ui.dp(this@SettingsActivity,20),
+                ui.dp(this@SettingsActivity,18),ui.dp(this@SettingsActivity,18))
         }
-        header.addView(ui.text(this,"‹",34f,ui.GREEN,true).apply {
-            setOnClickListener {finish()}
-            contentDescription="Back"
-            setPadding(0,0,ui.dp(this@SettingsActivity,18),0)
+        toolbar.addView(ui.text(this,"‹",34f,ui.GREEN,true).apply {
+            contentDescription="Back to dashboard"
+            setOnClickListener { finish() }
+            setPadding(0,0,ui.dp(this@SettingsActivity,19),0)
         })
-        header.addView(ui.column(this).apply {
-            addView(ui.text(this@SettingsActivity,"SERVER SETTINGS",20f,ui.WHITE,true))
-            addView(ui.text(this@SettingsActivity,"Customize your next world",11f,ui.MUTED))
+        toolbar.addView(ui.column(this).apply {
+            addView(ui.text(this@SettingsActivity,"SERVER CONTROL",20f,ui.WHITE,true))
+            addView(ui.text(this@SettingsActivity,"PLAY • CONNECT • CREATE",10f,ui.MUTED,true))
         })
-        screen.addView(header)
-        val scroll=ScrollView(this)
+        screen.addView(toolbar)
+        val scroll=ScrollView(this).apply { isVerticalScrollBarEnabled=false; isFillViewport=true }
         val body=ui.column(this).apply {
-            setPadding(ui.dp(this@SettingsActivity,18),0,ui.dp(this@SettingsActivity,18),ui.dp(this@SettingsActivity,20))
+            setPadding(ui.dp(this@SettingsActivity,18),0,ui.dp(this@SettingsActivity,18),ui.dp(this@SettingsActivity,30))
         }
-        val intro=ui.card(this)
-        intro.addView(ui.pill(this,"OFFLINE CONFIGURATION",ui.PURPLE))
-        intro.addView(ui.space(this,11))
-        intro.addView(ui.text(this,"Build the world your way",19f,ui.WHITE,true))
-        intro.addView(ui.space(this,7))
-        intro.addView(ui.text(this,"Settings are saved into server.properties. Restart the Minecraft server to apply changes once the Android engine is available.",12f,ui.MUTED))
-        body.addView(intro)
-        groups.forEach { (heading,fields) ->
-            body.addView(ui.space(this,21))
-            body.addView(ui.text(this,heading,11f,ui.GREEN,true))
-            body.addView(ui.space(this,10))
-            val section=ui.card(this)
-            fields.forEachIndexed {index,field->
-                section.addView(ui.text(this,field.title,13f,ui.WHITE,true))
-                section.addView(ui.space(this,7))
-                val edit=EditText(this).apply {
-                    setSingleLine(true)
-                    textSize=14f
-                    setTextColor(ui.WHITE);setHintTextColor(ui.MUTED)
-                    setText(properties.getProperty(field.key,field.default))
-                    background=ui.shape(this@SettingsActivity,ui.SURFACE,12,0xFF34455F.toInt())
-                    setPadding(ui.dp(this@SettingsActivity,14),ui.dp(this@SettingsActivity,11),
-                        ui.dp(this@SettingsActivity,14),ui.dp(this@SettingsActivity,11))
-                    if(field.numeric) inputType=InputType.TYPE_CLASS_NUMBER
-                }
-                controls[field.key]=edit
-                section.addView(edit,LinearLayout.LayoutParams(-1,-2))
-                if(field.choices!=null) {
-                    section.addView(ui.space(this,5))
-                    section.addView(ui.text(this,"Options: "+field.choices.joinToString(" / "),10f,ui.MUTED))
-                }
-                if(index < fields.size-1) section.addView(ui.space(this,16))
+        val hero=ui.column(this).apply {
+            background=ui.gradient(this@SettingsActivity,0xFF273C69.toInt(),0xFF165153.toInt())
+            setPadding(ui.dp(this@SettingsActivity,20),ui.dp(this@SettingsActivity,22),
+                ui.dp(this@SettingsActivity,20),ui.dp(this@SettingsActivity,22))
+        }
+        hero.addView(ui.pill(this,"✦  SERVER PROFILE",ui.GREEN))
+        hero.addView(ui.space(this,13))
+        hero.addView(ui.text(this,"Make this world yours.",23f,ui.WHITE,true))
+        hero.addView(ui.space(this,7))
+        hero.addView(ui.text(this,"Custom multiplayer options, connection details and privacy controls. Changes apply after a server restart.",12f,0xFFD7E9F8.toInt()))
+        body.addView(hero)
+
+        section(body,"Multiplayer identity","Name and share your Minecraft world") { card ->
+            input(card,"motd","Server message (MOTD)","PocketCraft Server","Shown to Minecraft Java players in their server list")
+            card.addView(ui.text(this,"SHARE ADDRESS",14f,ui.WHITE,true))
+            card.addView(ui.space(this,5))
+            card.addView(ui.text(this,"Optional domain, tunnel hostname or public address. For sharing only — this cannot create or change your public IP or DNS.",11f,ui.MUTED))
+            card.addView(ui.space(this,10))
+            advertised=EditText(this).apply {
+                setSingleLine(true);textSize=15f
+                setTextColor(ui.WHITE);setHintTextColor(ui.MUTED)
+                hint="Example: myworld.example.net"
+                setText(getSharedPreferences("pocketcraft",0).getString("shareAddress","") ?: "")
+                background=ui.shape(this@SettingsActivity,ui.SURFACE,12,0xFF304862.toInt())
+                setPadding(ui.dp(this@SettingsActivity,14),ui.dp(this@SettingsActivity,13),
+                    ui.dp(this@SettingsActivity,14),ui.dp(this@SettingsActivity,13))
             }
-            body.addView(section)
+            card.addView(advertised)
+            card.addView(ui.space(this,10))
+            card.addView(ui.action(this,"COPY SHARE ADDRESS") {
+                val address=advertised.text.toString().trim()
+                if(address.isBlank()) { toast("Enter an address first"); return@action }
+                (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
+                    .setPrimaryClip(ClipData.newPlainText("PocketCraft address",address))
+                toast("Address copied. Check that DNS/tunnel is actually configured.")
+            })
+            card.addView(ui.space(this,16))
+            input(card,"server-port","Java TCP port","25565","Local listener port — not your external tunnel port",true)
+            input(card,"max-players","Maximum players","5","Start with 2–5 players on a phone",true)
         }
-        body.addView(ui.space(this,21))
-        body.addView(ui.text(this,"JAVA RUNTIME PLAN",11f,ui.GREEN,true))
-        body.addView(ui.space(this,10))
-        val resources=ui.card(this)
-        resources.addView(ui.text(this,"Maximum RAM (MB)",13f,ui.WHITE,true))
-        resources.addView(ui.space(this,6))
-        val memoryInput=EditText(this).apply {
-            setSingleLine(true)
-            textSize=14f
-            inputType=InputType.TYPE_CLASS_NUMBER
-            setTextColor(ui.WHITE)
-            setText(getSharedPreferences("pocketcraft",0).getInt("heapMB",2048).toString())
-            background=ui.shape(this@SettingsActivity,ui.SURFACE,12,0xFF34455F.toInt())
-            setPadding(ui.dp(this@SettingsActivity,14),ui.dp(this@SettingsActivity,11),
-                ui.dp(this@SettingsActivity,14),ui.dp(this@SettingsActivity,11))
+
+        section(body,"Who can join?","Accounts, whitelist and access safety") { card ->
+            toggle(card,"online-mode","Verify Java accounts","ON = official Mojang/Microsoft authentication",true)
+            card.addView(ui.pill(this,"OFFLINE MODE WARNING",ui.RED))
+            card.addView(ui.space(this,7))
+            card.addView(ui.text(this,"Turning verification OFF allows unofficial/non-premium Java clients, but names can be impersonated. Use a whitelist and a trusted network; avoid granting operator access until you've secured authentication. This does not bypass the Minecraft EULA.",12f,ui.MUTED))
+            card.addView(ui.space(this,15))
+            toggle(card,"white-list","Whitelist players","Only approved usernames may enter (manage names through console)",false)
+            toggle(card,"enforce-whitelist","Enforce whitelist","Remove players not on the allowed list",false)
+            card.addView(ui.pill(this,"RCON REMAINS DISABLED",ui.CYAN))
+            card.addView(ui.space(this,7))
+            card.addView(ui.text(this,"No external remote console is exposed by PocketCraft.",11f,ui.MUTED))
         }
-        resources.addView(memoryInput)
-        resources.addView(ui.space(this,9))
-        resources.addView(ui.text(this,"512–4096 MB. Saved for the future Android JVM integration; it does not allocate RAM in this prototype.",11f,ui.MUTED))
-        body.addView(resources)
+
+        section(body,"Gameplay","Tune difficulty and player behavior") { card ->
+            select(card,"gamemode","Default game mode","survival",listOf("survival","creative","adventure","spectator"))
+            select(card,"difficulty","Difficulty","normal",listOf("peaceful","easy","normal","hard"))
+            toggle(card,"pvp","Player versus player","Allow players to damage each other",true)
+            toggle(card,"hardcore","Hardcore survival","Hardcore deaths and difficulty rules",false)
+            toggle(card,"allow-flight","Allow flight","Useful for server mods that support flight",false)
+            toggle(card,"generate-structures","Generate structures","Villages and other world structures",true)
+        }
+
+        section(body,"World & performance","Keep your realme 7 Pro responsive") { card ->
+            input(card,"level-name","Active world folder","world","Switch worlds from the World vault instead")
+            input(card,"level-seed","Seed for new worlds","","Does not regenerate existing chunks")
+            input(card,"view-distance","View distance (chunks)","5","Lower values save RAM and CPU",true)
+            input(card,"simulation-distance","Simulation distance (chunks)","4","Lower values improve performance",true)
+            input(card,"spawn-protection","Spawn protection radius","0","0 disables protection",true)
+            card.addView(ui.text(this,"Maximum Java heap (MB)",14f,ui.WHITE,true))
+            card.addView(ui.space(this,7))
+            heap=EditText(this).apply {
+                setSingleLine(true);inputType=InputType.TYPE_CLASS_NUMBER
+                setTextColor(ui.WHITE);textSize=15f
+                setText(getSharedPreferences("pocketcraft",0).getInt("heapMB",2048).toString())
+                background=ui.shape(this@SettingsActivity,ui.SURFACE,12,0xFF304862.toInt())
+                setPadding(ui.dp(this@SettingsActivity,14),ui.dp(this@SettingsActivity,13),
+                    ui.dp(this@SettingsActivity,14),ui.dp(this@SettingsActivity,13))
+            }
+            card.addView(heap)
+            card.addView(ui.space(this,8))
+            card.addView(ui.text(this,"512–3072 MB. Minecraft Java 26.3 still requires a compatible JVM, and Android may reclaim memory.",11f,ui.MUTED))
+        }
+
         scroll.addView(body)
         screen.addView(scroll,LinearLayout.LayoutParams(-1,0,1f))
         val footer=ui.column(this).apply {
             setPadding(ui.dp(this@SettingsActivity,18),ui.dp(this@SettingsActivity,12),
-                ui.dp(this@SettingsActivity,18),ui.dp(this@SettingsActivity,18))
+                ui.dp(this@SettingsActivity,18),ui.dp(this@SettingsActivity,17))
         }
-        footer.addView(ui.action(this,"SAVE SERVER SETTINGS  ✓",true) {
-            for(field in groups.values.flatten()) {
-                val value=controls[field.key]!!.text.toString().trim()
-                if(field.choices!=null && value !in field.choices) {
-                    Toast.makeText(this,"Invalid "+field.title,Toast.LENGTH_LONG).show()
-                    return@action
-                }
-                if(field.numeric) {
-                    val n=value.toIntOrNull()
-                    if(n==null || n<0 || (field.key=="server-port" && n !in 1..65535) ||
-                        (field.key=="max-players" && n !in 1..100) ||
-                        (field.key in listOf("view-distance","simulation-distance") && n !in 2..32)) {
-                        Toast.makeText(this,"Check "+field.title,Toast.LENGTH_LONG).show()
-                        return@action
-                    }
-                }
-            }
-            val heap=memoryInput.text.toString().toIntOrNull()
-            if(heap==null || heap !in 512..4096) {
-                Toast.makeText(this,"RAM must be 512–4096 MB",Toast.LENGTH_LONG).show()
-                return@action
-            }
-            groups.values.flatten().forEach {field->
-                properties.setProperty(field.key,controls[field.key]!!.text.toString().trim())
-            }
-            getSharedPreferences("pocketcraft",0).edit().putInt("heapMB",heap).apply()
-            file.outputStream().use {properties.store(it,"PocketCraft Server configuration")}
-            Toast.makeText(this,"Server settings saved",Toast.LENGTH_SHORT).show()
-            finish()
-        })
+        footer.addView(ui.action(this,"✓  SAVE & APPLY AFTER RESTART",true) { save() })
         screen.addView(footer)
         setContentView(screen)
     }
+
+    private fun save() {
+        if(ServerService.running) {toast("Stop the server before editing its settings");return}
+        val ranges=mapOf(
+            "server-port" to 1..65535,
+            "max-players" to 1..100,
+            "view-distance" to 2..32,
+            "simulation-distance" to 2..32,
+            "spawn-protection" to 0..256
+        )
+        for((key,range) in ranges) {
+            val n=value(key).toIntOrNull()
+            if(n==null || n !in range) {toast("Invalid $key");return}
+        }
+        val ram=heap.text.toString().toIntOrNull()
+        if(ram==null || ram !in 512..3072) {toast("Java memory must be 512–3072 MB");return}
+        val world=value("level-name")
+        if(!Regex("[A-Za-z0-9._-]{1,64}").matches(world) || world=="." || world=="..") {
+            toast("World name must be a simple folder name");return
+        }
+        val share=advertised.text.toString().trim()
+        if(share.length>253 || share.contains(Regex("[\\s/\\\\]")) || share.contains("@")) {
+            toast("Enter a hostname or address, without spaces or URLs");return
+        }
+        val motd=value("motd")
+        if(motd.length>120 || motd.contains("\n") || motd.contains("\r")) {
+            toast("MOTD is too long");return
+        }
+        val online=toggles.getValue("online-mode").isChecked
+        val whitelist=toggles.getValue("white-list").isChecked
+        if(!online) {
+            AlertDialog.Builder(this).setTitle("Enable non-premium Java clients?")
+                .setMessage("Account verification will be disabled (online-mode=false). Players may impersonate names, and whitelist alone is not strong identity verification. Never expose this publicly without an authentication solution. Continue?")
+                .setNegativeButton("CANCEL",null)
+                .setPositiveButton("I UNDERSTAND") {_,_-> commit(share,ram) }
+                .show()
+        } else commit(share,ram)
+    }
+
+    private fun commit(share:String,ram:Int) {
+        for((key,input) in editors) props.setProperty(key,input.text.toString().trim())
+        for((key,control) in toggles) props.setProperty(key,control.isChecked.toString())
+        for((key,value) in selected) props.setProperty(key,value)
+        // RCON is deliberately disabled regardless of old settings.
+        props.setProperty("enable-rcon","false")
+        props.setProperty("server-ip","")
+        file.parentFile?.mkdirs()
+        try {
+            val temp=File(file.parentFile,"server.properties.tmp")
+            temp.outputStream().use { props.store(it,"PocketCraft Server settings") }
+            if(!temp.renameTo(file)) {
+                file.outputStream().use { props.store(it,"PocketCraft Server settings") }
+                temp.delete()
+            }
+            getSharedPreferences("pocketcraft",0).edit()
+                .putInt("heapMB",ram).putString("shareAddress",share).apply()
+            toast("Saved. Restart the server to apply.")
+            finish()
+        } catch(e:Exception) {toast("Could not save: "+(e.message ?: "storage error"))}
+    }
+
+    private fun toast(message:String) = Toast.makeText(this,message,Toast.LENGTH_LONG).show()
 }
