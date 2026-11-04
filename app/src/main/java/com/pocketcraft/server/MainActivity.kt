@@ -255,6 +255,12 @@ class MainActivity : Activity() {
         box.addView(ui.action(this,if(RuntimeStore.isInstalled(this))"☕  REINSTALL JAVA 25" else "☕  INSTALL JAVA 25") {
             installJavaPrompt()
         })
+        if(RuntimeStore.isInstalled(this)) {
+            box.addView(ui.space(this,8))
+            box.addView(ui.action(this,"✓  TEST JAVA ENGINE",false) {
+                downloadAsync("Java self-test") { RuntimeStore.probe(this) }
+            })
+        }
         box.addView(ui.space(this,8))
         box.addView(ui.text(this,"Experimental: on-device execution and Java compatibility require phone testing. Stop the server before changing worlds or mods.",11f,ui.MUTED))
         return box
