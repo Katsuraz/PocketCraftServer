@@ -2020,14 +2020,7 @@ class MainActivity : Activity() {
                         .setNegativeButton("CANCEL",null)
                         .setPositiveButton("INSTALL"){_,_->
                             if(ServerService.running){toast("Stop the server first");return@setPositiveButton}
-                            val version=getSharedPreferences("pocketcraft",0)
-                                .getString("gameVersion",null)
-                            if(version.isNullOrBlank()){toast("Install a Fabric server first");return@setPositiveButton}
-                            downloadAsync("Modrinth: "+pack.title){
-                                val uri=ModrinthDiscovery.downloadLatest(this@MainActivity,pack,version)
-                                try {ModpackImporter.install(this@MainActivity,uri).description()}
-                                finally{File(uri.path ?: "").delete()}
-                            }
+                            installSelectedModrinthPack(pack)
                         }.show()
                 }
             }
@@ -2064,6 +2057,13 @@ class MainActivity : Activity() {
     }
 
     private fun installModpack(uri:android.net.Uri,key:String?) {
+        val info=ServerVersionManager.current(this)
+        if(!info.launcherPresent){toast("Fabric launcher is missing. Import it first.");return}
+        if(info.version==null) {
+            showServerVersionPrompt {installModpack(uri,key)}
+            return
+        }
+        if(ServerService.running){toast("Stop Minecraft before installing");return}
         downloadAsync("Modpack installation") {
             ModpackImporter.install(this,uri,key).description()
         }
@@ -2121,7 +2121,16 @@ class MainActivity : Activity() {
                     if(kind==1 && oldFile.exists()) oldFile.renameTo(target)
                     error("Unable to install imported JAR")
                 }
-                runOnUiThread {toast("Imported "+filename);render()}
+                if(kind==1) {
+                    // Imported server JARs may target a new Minecraft version.
+                    // Do not reuse the old version preference after replacing a launcher.
+                    getSharedPreferences("pocketcraft",0).edit().remove("gameVersion").apply()
+                }
+                runOnUiThread {
+                    toast("Imported "+filename)
+                    render()
+                    if(kind==1)showServerVersionPrompt()
+                }
             } catch(e:Exception) {runOnUiThread {toast("Import failed: "+e.message)}}
             finally {temp.delete()}
         }.start()
