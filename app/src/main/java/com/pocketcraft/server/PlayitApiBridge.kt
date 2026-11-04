@@ -16,6 +16,7 @@ internal object PlayitApiBridge {
         val agentId: String,
         val javaAddress: String?,
         val javaTunnelCount: Int,
+        val pendingJavaCount: Int,
         val paid: Boolean
     )
 
@@ -67,6 +68,7 @@ internal object PlayitApiBridge {
         val tunnels = data.optJSONArray("tunnels")
         var address: String? = null
         var javaCount = 0
+        var pendingJava = 0
         if (tunnels != null) {
             for (i in 0 until tunnels.length()) {
                 val tunnel = tunnels.optJSONObject(i) ?: continue
@@ -78,10 +80,17 @@ internal object PlayitApiBridge {
                 }
             }
         }
+        val pending = data.optJSONArray("pending")
+        if (pending != null) {
+            for (i in 0 until pending.length()) {
+                if (pending.optJSONObject(i)?.optString("tunnel_type") == "minecraft-java") pendingJava++
+            }
+        }
         return Snapshot(
             agentId = data.optString("agent_id"),
             javaAddress = address,
             javaTunnelCount = javaCount,
+            pendingJavaCount = pendingJava,
             paid = data.optJSONObject("permissions")?.optBoolean("has_premium") ?: false
         )
     }
