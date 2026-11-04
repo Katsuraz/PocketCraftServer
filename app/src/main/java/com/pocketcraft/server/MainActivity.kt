@@ -126,7 +126,7 @@ class MainActivity : Activity() {
         body.addView(ui.space(this,10))
         val row2 = ui.row(this)
         row2.addView(stat(WorldStore.worlds(this).size.toString(), "WORLDS", "▧"),ui.weight(this))
-        row2.addView(stat("2 GB", "RAM TARGET", "◉"),LinearLayout.LayoutParams(0,-2,1f))
+        row2.addView(stat((getSharedPreferences("pocketcraft",0).getInt("heapMB",2048)/1024f).let { String.format(Locale.ROOT,"%.1f GB",it) }, "RAM TARGET", "◉"),LinearLayout.LayoutParams(0,-2,1f))
         body.addView(row2)
         body.addView(ui.space(this,17))
         body.addView(h("Quick actions"))
