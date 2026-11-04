@@ -17,6 +17,9 @@ internal object PlayitApiBridge {
         val javaAddress: String?,
         val javaTunnelCount: Int,
         val pendingJavaCount: Int,
+        val bedrockAddress: String?,
+        val bedrockTunnelCount: Int,
+        val pendingBedrockCount: Int,
         val paid: Boolean
     )
 
@@ -69,21 +72,31 @@ internal object PlayitApiBridge {
         var address: String? = null
         var javaCount = 0
         var pendingJava = 0
+        var bedrockAddress: String? = null
+        var bedrockCount = 0
+        var pendingBedrock = 0
         if (tunnels != null) {
             for (i in 0 until tunnels.length()) {
                 val tunnel = tunnels.optJSONObject(i) ?: continue
-                if (tunnel.optString("tunnel_type") == "minecraft-java" &&
-                    tunnel.isNull("disabled_reason")) {
+                if (!tunnel.isNull("disabled_reason")) continue
+                val type = tunnel.optString("tunnel_type")
+                val addr = tunnel.optString("display_address").trim()
+                if (type == "minecraft-java") {
                     javaCount++
-                    val addr = tunnel.optString("display_address").trim()
                     if (addr.isNotBlank()) address = addr
+                } else if (type == "nethernet" || type == "minecraft-bedrock") {
+                    bedrockCount++
+                    if (addr.isNotBlank()) bedrockAddress = addr
                 }
             }
         }
         val pending = data.optJSONArray("pending")
         if (pending != null) {
             for (i in 0 until pending.length()) {
-                if (pending.optJSONObject(i)?.optString("tunnel_type") == "minecraft-java") pendingJava++
+                when (pending.optJSONObject(i)?.optString("tunnel_type")) {
+                    "minecraft-java" -> pendingJava++
+                    "nethernet", "minecraft-bedrock" -> pendingBedrock++
+                }
             }
         }
         return Snapshot(
@@ -91,6 +104,9 @@ internal object PlayitApiBridge {
             javaAddress = address,
             javaTunnelCount = javaCount,
             pendingJavaCount = pendingJava,
+            bedrockAddress = bedrockAddress,
+            bedrockTunnelCount = bedrockCount,
+            pendingBedrockCount = pendingBedrock,
             paid = data.optJSONObject("permissions")?.optBoolean("has_premium") ?: false
         )
     }
@@ -110,6 +126,29 @@ internal object PlayitApiBridge {
             .put("origin", JSONObject().put("type", "agent").put("data", originData))
             .put("enabled", true)
             .put("name", "PocketCraft Java")
+            .put("alloc", JSONObject.NULL)
+            .put("firewall_id", JSONObject.NULL)
+        call(c, "/v1/tunnels/create", request)
+    }
+
+    /**
+     * Provider-created Minecraft NetherNet tunnel, not a premium custom TCP/UDP port.
+     * Playit may reject this if unsupported for the account or agent.
+     */
+    fun createBedrock(c: Context, agentId: String, localPort: Int) {
+        if (!agentId.matches(Regex("[0-9a-fA-F-]{36}")))
+            throw IOException("Playit did not return an agent identifier")
+        if (localPort !in 1..65535) throw IOException("Invalid Bedrock listener port")
+        val fields = org.json.JSONArray()
+            .put(JSONObject().put("name", "local_ip").put("value", "127.0.0.1"))
+            .put(JSONObject().put("name", "local_port").put("value", localPort.toString()))
+        val originData = JSONObject().put("agent_id", agentId)
+            .put("config", JSONObject().put("fields", fields))
+        val request = JSONObject()
+            .put("ports", JSONObject().put("type", "tunnel-type").put("details", "nethernet"))
+            .put("origin", JSONObject().put("type", "agent").put("data", originData))
+            .put("enabled", true)
+            .put("name", "PocketCraft Bedrock")
             .put("alloc", JSONObject.NULL)
             .put("firewall_id", JSONObject.NULL)
         call(c, "/v1/tunnels/create", request)
