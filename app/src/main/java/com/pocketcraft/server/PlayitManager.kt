@@ -21,6 +21,8 @@ object PlayitManager {
         private set
     @Volatile var javaAddress: String? = null
         private set
+    @Volatile var bedrockAddress: String? = null
+        private set
     @Volatile var accountConnected = false
         private set
     @Volatile var creationNeedsHelp = false
@@ -32,6 +34,10 @@ object PlayitManager {
     private val polling = AtomicBoolean(false)
     @Volatile private var generation = 0
     @Volatile private var requestedJavaPort = 25565
+    @Volatile private var requestedBedrockPort = 19132
+    @Volatile private var autoBedrockRequested = false
+    @Volatile private var bedrockCreationAttempted = false
+    @Volatile private var bedrockCreationNeedsHelp = false
     @Volatile private var autoCreateRequested = false
     @Volatile private var autoCreationAttempted = false
 
@@ -80,8 +86,12 @@ object PlayitManager {
     }
 
     /** User's Go Online action explicitly authorizes creating ONE free Java tunnel. */
-    @Synchronized fun goOnline(c: Context, javaPort: Int) {
+    @Synchronized fun goOnline(c: Context, javaPort: Int, bedrockPort: Int = 19132, enableBedrock: Boolean = true) {
         requestedJavaPort = javaPort.coerceIn(1, 65535)
+        requestedBedrockPort = bedrockPort.coerceIn(1, 65535)
+        autoBedrockRequested = enableBedrock
+        bedrockCreationAttempted = false
+        bedrockCreationNeedsHelp = false
         autoCreateRequested = true
         autoCreationAttempted = false
         creationNeedsHelp = false
@@ -98,6 +108,7 @@ object PlayitManager {
         status = "STARTING"
         detail = "Starting Playit in PocketCraft..."
         javaAddress = null
+        bedrockAddress = null
         accountConnected = false
         claimUrl = null
         val dir = root(c)
@@ -203,14 +214,34 @@ object PlayitManager {
                         append(c, "Automatic tunnel creation failed: ${e.message}")
                     }
                 }
+                if (autoBedrockRequested && state.bedrockTunnelCount == 0 &&
+                    state.pendingBedrockCount == 0 && !bedrockCreationAttempted) {
+                    bedrockCreationAttempted = true
+                    status = "CONFIGURING BEDROCK"
+                    detail = "Requesting a free Bedrock NetherNet tunnel..."
+                    try {
+                        PlayitApiBridge.createBedrock(c, state.agentId, requestedBedrockPort)
+                        append(c, "Requested Bedrock tunnel for port $requestedBedrockPort")
+                        state = PlayitApiBridge.fetch(c)
+                    } catch (e:Exception) {
+                        bedrockCreationNeedsHelp = true
+                        append(c, "Automatic Bedrock tunnel creation failed: ${e.message}")
+                    }
+                }
                 javaAddress = state.javaAddress
+                bedrockAddress = state.bedrockAddress
                 status = when {
-                    javaAddress != null -> "ADDRESS ASSIGNED"
+                    javaAddress != null && (!autoBedrockRequested || bedrockAddress != null) -> "ADDRESSES ASSIGNED"
+                    javaAddress != null -> "JAVA ADDRESS ASSIGNED"
                     creationNeedsHelp -> "SETUP HELP NEEDED"
                     else -> "CONFIGURING"
                 }
                 if (javaAddress != null) {
-                    detail = "Playit assigned a Java address. Invite a friend to test from another network."
+                    detail = if (bedrockCreationNeedsHelp)
+                        "Java address assigned. Bedrock tunnel requires provider setup."
+                    else if (autoBedrockRequested && bedrockAddress == null)
+                        "Java ready; waiting for your Bedrock address."
+                    else "Public address assigned. Test joining from another network."
                 } else if (!creationNeedsHelp) {
                     detail = if (state.pendingJavaCount > 0) "Playit is allocating your free Java address..." else "No Java tunnel yet. Tap Finish Setup if automatic creation is unavailable."
                 }
@@ -226,6 +257,8 @@ object PlayitManager {
     @Synchronized fun retryTunnel(c: Context) {
         autoCreateRequested = true
         autoCreationAttempted = false
+        bedrockCreationAttempted = false
+        bedrockCreationNeedsHelp = false
         creationNeedsHelp = false
         refreshAsync(c)
     }
@@ -237,10 +270,14 @@ object PlayitManager {
         client = null
         daemon = null
         javaAddress = null
+        bedrockAddress = null
         accountConnected = false
         claimUrl = null
         autoCreateRequested = false
+        autoBedrockRequested = false
         autoCreationAttempted = false
+        bedrockCreationAttempted = false
+        bedrockCreationNeedsHelp = false
         creationNeedsHelp = false
         status = "OFFLINE"
         detail = "Tunnel stopped. Start it when you want remote players to join."
