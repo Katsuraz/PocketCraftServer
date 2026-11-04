@@ -58,7 +58,7 @@ object PlayitManager {
     /**
      * Android 10+ target 29+ cannot execute ELF binaries copied to writable
      * filesDir. The package manager extracts executable ELF files under
-     * nativeLibraryDir from lib/arm64-v8a/*.so at install time.
+     * nativeLibraryDir from the APK's ARM64 native-library entries at install time.
      */
     private fun executable(c: Context, assetName: String): File {
         if (!android.os.Build.SUPPORTED_ABIS.contains("arm64-v8a"))
