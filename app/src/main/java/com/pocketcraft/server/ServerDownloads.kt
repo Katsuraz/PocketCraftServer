@@ -43,6 +43,7 @@ object ServerDownloads {
     }
     private fun download(url: String, destination: File) {
         val temp = File(destination.parentFile,destination.name+".part")
+        InstallProgress.emit("Connecting to download server…")
         val c=connection(url)
         try {
             if(c.contentLengthLong > MAX_JAR_BYTES) throw IOException("File exceeds safe size limit")
@@ -54,11 +55,13 @@ object ServerDownloads {
                         val n=input.read(buffer)
                         if(n<0)break
                         bytes+=n
+                        InstallProgress.emit("Downloading "+destination.name,bytes,c.contentLengthLong)
                         if(bytes>MAX_JAR_BYTES) throw IOException("Download exceeded safe size limit")
                         output.write(buffer,0,n)
                     }
                 }
             }
+            InstallProgress.emit("Verifying "+destination.name)
             temp.inputStream().use {
                 val magic=ByteArray(2)
                 if(it.read(magic)!=2 || magic[0]!=0x50.toByte() || magic[1]!=0x4B.toByte())
@@ -74,6 +77,7 @@ object ServerDownloads {
                 throw IOException("Could not install downloaded JAR")
             }
             old.delete()
+            InstallProgress.emit("Installed "+destination.name,1,1)
         } finally {c.disconnect();temp.delete()}
     }
 
@@ -81,6 +85,7 @@ object ServerDownloads {
         if (ServerService.running) throw IOException("Stop the Minecraft server before changing its version")
         if(version !in listOf("26.3","1.21.11","1.20.1"))
             throw IOException("Unsupported version selection")
+        InstallProgress.emit("Checking Fabric versions…")
         val loader=latestStable(readJsonArray(FABRIC_META+"/loader"))
         val installer=latestStable(readJsonArray(FABRIC_META+"/installer"))
         val url=FABRIC_META+"/loader/"+encoded(version)+"/"+encoded(loader)+"/"+encoded(installer)+"/server/jar"
@@ -105,6 +110,7 @@ object ServerDownloads {
         if (ServerService.running) throw IOException("Stop the Minecraft server before updating mods")
         val version=context.getSharedPreferences("pocketcraft",0).getString("gameVersion",null)
         if(version!="26.3") throw IOException("Auto-install supports only Java 26.3. Older Fabric needs a compatible proxy.")
+        InstallProgress.emit("Resolving crossplay dependencies…")
         val mods=File(WorldStore.root(context),"mods").apply {mkdirs()}
         val loaders=encoded("[\"fabric\"]")
         val versions=encoded("[\"26.3\"]")
