@@ -42,6 +42,50 @@ object PlayitManager {
     @Volatile private var autoCreateRequested = false
     @Volatile private var autoCreationAttempted = false
 
+    /**
+     * Explicitly reuse an agent owned by the user, after they stop it on its
+     * previous device. The key NEVER enters logs, telemetry or GitHub.
+     * Accept either the raw hex key or the secret_key TOML assignment used
+     * by Playit 1.x. Only app-private storage holds the resulting secret.
+     */
+    @Synchronized fun importExistingAgent(c: Context, raw: String) {
+        if (isActive()) throw IllegalStateException("Go Offline before switching agents")
+        val value = raw.trim().let { text ->
+            val matched = Regex("""(?s)^secret_key\\s*=\\s*["']([0-9a-fA-F]+)["']\\s*$""")
+                .matchEntire(text)
+            matched?.groupValues?.get(1) ?: text
+        }
+        if(value.length !in 32..512 || value.length % 2 != 0 ||
+            !value.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }) {
+            throw IllegalArgumentException("Invalid Playit agent secret format. Copy the hex secret from your own existing Playit agent config.")
+        }
+        val store = root(c)
+        val target = File(store,"secret.toml")
+        val stage = File(store,".secret-import.tmp")
+        try {
+            java.io.FileOutputStream(stage).use {
+                it.write(("secret_key = \\"" + value + "\\"\\n").toByteArray(Charsets.UTF_8))
+                it.fd.sync()
+            }
+            stage.setReadable(false,false)
+            stage.setReadable(true,true)
+            stage.setWritable(false,false)
+            stage.setWritable(true,true)
+            if (!stage.renameTo(target)) throw java.io.IOException("Could not save existing agent credentials")
+        } finally {
+            stage.delete()
+        }
+        generation++
+        accountBlocked = false
+        accountConnected = false
+        claimUrl = null
+        javaAddress = null
+        bedrockAddress = null
+        status = "OFFLINE"
+        detail = "Existing Playit agent imported locally. Stop the agent on its old device, then tap Use Playit."
+        // Deliberately do not log agent ID, secret or source configuration.
+    }
+
     fun isActive() = daemon?.isAlive == true
     private fun root(c: Context) = File(c.filesDir, "playit").apply { mkdirs() }
 
