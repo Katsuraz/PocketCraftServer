@@ -212,14 +212,17 @@ class MainActivity : Activity() {
         }
         list.forEach { file ->
             val enabled=file.name.endsWith(".jar")
+            val meta=ModInspector.inspect(file)
             val card=ui.card(this)
             val top=ui.row(this)
             top.addView(ui.text(this,"⬡",22f,ui.PURPLE,true))
-            top.addView(ui.text(this,file.name.removeSuffix(".disabled"),13f,ui.WHITE,true).apply {
+            top.addView(ui.text(this,meta.title,13f,ui.WHITE,true).apply {
                 setPadding(ui.dp(this@MainActivity,10),0,0,0); maxLines=2
             },LinearLayout.LayoutParams(0,-2,1f))
             top.addView(ui.pill(this,if(enabled)"ON" else "OFF",if(enabled)ui.GREEN else ui.MUTED))
             card.addView(top)
+            card.addView(ui.space(this,6))
+            card.addView(ui.text(this,meta.version+"  •  "+(if(meta.fabric)"Fabric mod" else "Check format"),11f,ui.MUTED))
             card.addView(ui.space(this,10))
             val lower=ui.row(this)
             lower.addView(ui.action(this,if(enabled)"Disable" else "Enable") {
