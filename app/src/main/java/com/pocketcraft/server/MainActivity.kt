@@ -375,6 +375,8 @@ class MainActivity : Activity() {
         hero.addView(ui.space(this,9))
         hero.addView(ui.action(this,"SERVER HEALTH & DIAGNOSTICS") { showHealthCenter() })
         body.addView(hero)
+        body.addView(ui.space(this,14))
+        body.addView(connectionJourneyPanel())
         body.addView(ui.space(this,16))
         body.addView(setupJourney())
         body.addView(ui.space(this,14))
@@ -438,6 +440,134 @@ class MainActivity : Activity() {
         note.addView(ui.text(this,"Geyser-Fabric + Floodgate must match your Fabric version. Non-premium Java access and Bedrock authentication are separate settings; neither proves that public multiplayer works.",12f,ui.MUTED))
         body.addView(note)
     }
+    /**
+     * Simplified Anvil-inspired hosting workflow, using PocketCraft's real
+     * readiness signals rather than promising one-tap internet access.
+     */
+    private fun connectionJourneyPanel(): LinearLayout {
+        val card = ui.card(this)
+        card.addView(ui.text(this, "PLAY TOGETHER", 11f, ui.CYAN, true))
+        card.addView(ui.space(this, 8))
+        card.addView(ui.text(this, "Get your friends connected", 18f, ui.WHITE, true))
+        card.addView(ui.space(this, 8))
+        card.addView(ui.text(this,
+            "Choose Java or Bedrock, then LAN or internet. PocketCraft shows the next step and only shares an address when the required listener is detected.",
+            12f, ui.MUTED))
+        card.addView(ui.space(this, 11))
+        val indicators = ui.row(this)
+        indicators.addView(ui.pill(this,
+            if (ServerService.javaReady) "✓ JAVA READY" else "○ JAVA WAITING",
+            if (ServerService.javaReady) ui.GREEN else ui.MUTED))
+        indicators.addView(ui.space(this, 7))
+        indicators.addView(ui.pill(this,
+            if (ServerService.bedrockReady) "✓ BEDROCK LISTENER" else "○ BEDROCK WAITING",
+            if (ServerService.bedrockReady) ui.GREEN else ui.MUTED))
+        card.addView(indicators)
+        if (ServerService.nethernetNativeFailure) {
+            card.addView(ui.space(this, 10))
+            card.addView(ui.text(this,
+                "Bedrock blocker detected: Android WebRTC native library failed to load. Open the guide for diagnostics.",
+                12f, ui.RED))
+        }
+        card.addView(ui.space(this, 13))
+        card.addView(ui.action(this, "PLAY WITH FRIENDS — GET ADDRESS", true) {
+            showConnectionChooser()
+        })
+        card.addView(ui.space(this, 8))
+        card.addView(ui.text(this,
+            "Public addresses and listener messages are not proof that a friend can join. Always test from a second device.",
+            11f, ui.MUTED))
+        return card
+    }
+
+    private fun showConnectionChooser() {
+        val targets = ConnectionJourney.Target.values()
+        AlertDialog.Builder(this)
+            .setTitle("Who is joining your world?")
+            .setItems(targets.map { it.label }.toTypedArray()) { _, which ->
+                showConnectionGuide(targets[which])
+            }
+            .setNegativeButton("CANCEL", null)
+            .show()
+    }
+
+    private fun showConnectionGuide(target: ConnectionJourney.Target) {
+        val state = ConnectionJourney.State(
+            javaReady = ServerService.javaReady,
+            serverRunning = ServerService.running,
+            geyserInstalled = modFiles().any {
+                it.name.startsWith("Geyser", true) && it.name.endsWith(".jar")
+            },
+            bedrockListener = ServerService.bedrockReady,
+            nethernetNativeFailure = ServerService.nethernetNativeFailure,
+            nethernetRegistered = ServerService.nethernetReady,
+            lanIp = NetworkInfo.lanAddress(),
+            javaPort = serverProperty("server-port", "25565"),
+            playitRunning = PlayitManager.isActive(),
+            playitAccountConnected = PlayitManager.accountConnected,
+            playitClaimAvailable = !PlayitManager.claimUrl.isNullOrBlank(),
+            javaPublicAddress = PlayitManager.javaAddress,
+            bedrockPublicAddress = PlayitManager.bedrockAddress
+        )
+        val result = ConnectionJourney.assess(target, state)
+        val content = ui.column(this).apply {
+            setPadding(ui.dp(this@MainActivity,20), ui.dp(this@MainActivity,12),
+                ui.dp(this@MainActivity,20), ui.dp(this@MainActivity,14))
+        }
+        content.addView(ui.pill(this, target.label.uppercase(Locale.ROOT), ui.CYAN))
+        content.addView(ui.space(this, 12))
+        content.addView(ui.text(this, result.title, 19f, ui.WHITE, true))
+        content.addView(ui.space(this, 9))
+        content.addView(ui.text(this, result.detail, 13f, ui.MUTED))
+        result.address?.let { address ->
+            content.addView(ui.space(this, 14))
+            val addressCard = ui.card(this)
+            addressCard.addView(ui.text(this,
+                if (target.online) "ASSIGNED • NOT VERIFIED" else "LOCAL • TEST JOIN",
+                11f, ui.CYAN, true))
+            addressCard.addView(ui.space(this, 5))
+            addressCard.addView(ui.text(this, address, 17f, ui.WHITE, true))
+            content.addView(addressCard)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Connect friends")
+            .setView(content)
+            .setNegativeButton("CLOSE", null)
+            .setNeutralButton("SERVER HEALTH") { _, _ -> showHealthCenter() }
+            .setPositiveButton(result.actionLabel) { _, _ ->
+                when (result.action) {
+                    ConnectionJourney.Action.START_SERVER -> startMinecraft()
+                    ConnectionJourney.Action.OPEN_CONSOLE -> { tab = 3; render() }
+                    ConnectionJourney.Action.OPEN_MODS -> { tab = 1; render() }
+                    ConnectionJourney.Action.OPEN_NETWORK_SETTINGS -> {
+                        startActivity(Intent(android.provider.Settings.ACTION_WIFI_SETTINGS))
+                    }
+                    ConnectionJourney.Action.START_PLAYIT -> {
+                        startForegroundService(Intent(this, ServerService::class.java)
+                            .setAction(ServerService.ACTION_TUNNEL_START))
+                        toast("Starting Playit; check the Internet Hosting panel for status.")
+                    }
+                    ConnectionJourney.Action.CONNECT_PLAYIT -> {
+                        PlayitManager.claimUrl?.let { url ->
+                            startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)))
+                        } ?: toast("Playit approval link is not ready. Check Internet Hosting.")
+                    }
+                    ConnectionJourney.Action.VIEW_PLAYIT -> {
+                        startActivity(Intent(Intent.ACTION_VIEW,
+                            android.net.Uri.parse("https://playit.gg/account/tunnels")))
+                    }
+                    ConnectionJourney.Action.COPY_ADDRESS -> {
+                        result.address?.let { address ->
+                            (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
+                                .setPrimaryClip(ClipData.newPlainText("Minecraft server address", address))
+                            toast("Address copied. Ask a friend to test joining.")
+                        }
+                    }
+                }
+            }
+            .show()
+    }
+
     /** Setup checks separate core prerequisites from optional crossplay. */
     private fun setupJourney(): LinearLayout {
         val card = ui.card(this)
