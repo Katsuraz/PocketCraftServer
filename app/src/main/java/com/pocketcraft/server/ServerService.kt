@@ -34,7 +34,12 @@ class ServerService : Service() {
             private set
         @Volatile var failure = ""
             private set
+        @Volatile var javaReady = false
+            private set
+        @Volatile var bedrockReady = false
+            private set
     }
+    private val readiness = ReadinessSignals()
     private var server: Process? = null
     private var writer: BufferedWriter? = null
     private var wakeLock: PowerManager.WakeLock? = null
@@ -96,6 +101,9 @@ class ServerService : Service() {
         notice("Checking server prerequisites…")
         status = "STARTING"
         failure = ""
+        readiness.reset()
+        javaReady = false
+        bedrockReady = false
         Thread {
             try {
                 val launcher = File(root, "fabric-server-launch.jar")
@@ -157,10 +165,16 @@ class ServerService : Service() {
                 proc.inputStream.bufferedReader().useLines { lines ->
                     lines.forEach { line ->
                         append(line)
-                        if(line.contains("Done (") && line.contains("For help")) {
-                            status = "READY"
-                            notice("Minecraft server ready on LAN")
-                            append("Minecraft startup confirmed from server output")
+                        val previous = status
+                        readiness.observe(line)
+                        javaReady = readiness.javaReady
+                        bedrockReady = readiness.bedrockListener
+                        if (javaReady) {
+                            status = readiness.state()
+                            if (previous != status) {
+                                append("Readiness changed: $status")
+                                notice(if(bedrockReady) "Java + Geyser listener detected" else "Minecraft Java server ready")
+                            }
                         }
                     }
                 }
@@ -199,6 +213,9 @@ class ServerService : Service() {
         }
         server = null
         running = false
+        javaReady = false
+        bedrockReady = false
+        readiness.reset()
         status = if (failure.isBlank()) "OFFLINE" else "ERROR"
         try { wakeLock?.takeIf { it.isHeld }?.release() } catch (_: Exception) {}
         wakeLock = null
