@@ -1735,6 +1735,29 @@ class MainActivity : Activity() {
             popup.addView(item)
             popup.addView(ui.space(this,9))
         }
+        popup.addView(ui.action(this,"OTHER MINECRAFT VERSION") {
+            dialog.dismiss()
+            val input=android.widget.EditText(this).apply {
+                hint="e.g. 1.21.4"
+                setSingleLine(true)
+                setTextColor(ui.WHITE)
+                setHintTextColor(ui.MUTED)
+                inputType=android.text.InputType.TYPE_CLASS_TEXT
+                setPadding(ui.dp(this@MainActivity,18),ui.dp(this@MainActivity,14),
+                    ui.dp(this@MainActivity,18),ui.dp(this@MainActivity,14))
+            }
+            AlertDialog.Builder(this).setTitle("Minecraft version")
+                .setMessage("Enter an official Minecraft version supported by Fabric. The Android Java runtime must also support this version.")
+                .setView(input)
+                .setNegativeButton("CANCEL",null)
+                .setPositiveButton("CONTINUE"){_,_->
+                    val selected=input.text.toString().trim()
+                    if(selected.matches(Regex("[0-9][A-Za-z0-9._+-]{0,35}")))
+                        confirmFabricInstall(selected)
+                    else toast("Enter a valid Minecraft version")
+                }.show()
+        })
+        popup.addView(ui.space(this,9))
         dialog.setOnShowListener {
             dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
             dialog.window?.setBackgroundDrawable(ui.shape(this,ui.PANEL,22))
