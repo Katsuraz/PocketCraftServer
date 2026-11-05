@@ -26,6 +26,10 @@ class WorldSettingsActivity : Activity() {
     private lateinit var simulationDistance: EditText
     private lateinit var spawnProtection: EditText
     private lateinit var pvp: Switch
+    private lateinit var allowFlight: Switch
+    private lateinit var hardcore: Switch
+    private lateinit var generateStructures: Switch
+    private lateinit var levelSeed: EditText
     private var difficulty = "normal"
     private var gamemode = "survival"
 
@@ -86,6 +90,21 @@ class WorldSettingsActivity : Activity() {
         }
         parent.addView(label)
         parent.addView(ui.space(this,17))
+    }
+
+    private fun addToggle(parent: LinearLayout, title: String,
+                          description: String, checked: Boolean): Switch {
+        val row = ui.row(this)
+        row.addView(ui.column(this).apply {
+            addView(ui.text(this@WorldSettingsActivity,title,14f,ui.WHITE,true))
+            addView(ui.space(this@WorldSettingsActivity,4))
+            addView(ui.text(this@WorldSettingsActivity,description,11f,ui.MUTED))
+        },LinearLayout.LayoutParams(0,-2,1f))
+        val toggle = Switch(this).apply { isChecked = checked }
+        row.addView(toggle)
+        parent.addView(row)
+        parent.addView(ui.space(this,16))
+        return toggle
     }
 
     private fun render() {
@@ -156,6 +175,20 @@ class WorldSettingsActivity : Activity() {
             values.getProperty("simulation-distance","4"),numeric=true)
         spawnProtection = addInput(card,"Spawn protection","0 disables spawn protection.",
             values.getProperty("spawn-protection","0"),numeric=true)
+        card.addView(ui.text(this,"ADVANCED WORLD OPTIONS",12f,ui.CYAN,true))
+        card.addView(ui.space(this,10))
+        allowFlight = addToggle(card,"Allow flight",
+            "Allow flying players without being kicked.",
+            values.getProperty("allow-flight","false")=="true")
+        hardcore = addToggle(card,"Hardcore flag",
+            "For newly generated worlds; changing this may not alter existing world metadata.",
+            values.getProperty("hardcore","false")=="true")
+        generateStructures = addToggle(card,"Generate structures",
+            "Controls new generation; does not regenerate existing chunks.",
+            values.getProperty("generate-structures","true")=="true")
+        levelSeed = addInput(card,"World seed",
+            "Used for initial generation only. Existing world seeds are not changed by this option.",
+            values.getProperty("level-seed",""))
         card.addView(ui.action(this,"SAVE THIS WORLD'S SETTINGS",true,stopped()) { save() })
         card.addView(ui.space(this,10))
         card.addView(ui.text(this,
@@ -178,7 +211,11 @@ class WorldSettingsActivity : Activity() {
             "pvp" to pvp.isChecked.toString(),
             "view-distance" to viewDistance.text.toString().trim(),
             "simulation-distance" to simulationDistance.text.toString().trim(),
-            "spawn-protection" to spawnProtection.text.toString().trim()
+            "spawn-protection" to spawnProtection.text.toString().trim(),
+            "allow-flight" to allowFlight.isChecked.toString(),
+            "hardcore" to hardcore.isChecked.toString(),
+            "generate-structures" to generateStructures.isChecked.toString(),
+            "level-seed" to levelSeed.text.toString().trim()
         )
         try {
             val current = WorldHostingProfiles.readForEditor(this,worldName)
