@@ -9,8 +9,8 @@ android {
         applicationId = "com.pocketcraft.server"
         minSdk = 26
         targetSdk = 34
-        versionCode = 28
-        versionName = "0.8.6"
+        versionCode = 29
+        versionName = "0.8.7"
     }
     signingConfigs {
         create("pocketcraftUpdates") {

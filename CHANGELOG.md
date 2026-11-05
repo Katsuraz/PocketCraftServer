@@ -1,5 +1,18 @@
 # PocketCraft changelog
 
+## v0.8.7 (versionCode 29) — Mojangles-inspired UI and sounds
+
+- Added user-importable Mojangles `.ttf` / `.otf` font using Android's document picker; imported fonts stay in private app files and are never redistributed in APKs.
+- Bundled SIL OFL Monocraft for the default Minecraft-like font when no custom Mojangles font is imported, replacing the former Pixelify Sans/Press Start 2P look.
+- Added original synthesized wooden click/tap and tab-change effects, with server start/Java-ready/stop/error cues tied to actual process state.
+- Added sound mute switch, volume control, and preview buttons under Settings. No copyrighted Minecraft sounds are used.
+- Replaced midnight-teal bottom navigation and blue console accents in the woodland theme with oak, amber and dark walnut.
+- Replaced the neon cube app icon with an original warm lantern-and-workshop vector icon.
+- Updated package metadata and bundled font license verification.
+
+**Validation:** CI build success verifies APK creation, not real-device sound timing, font import from every file provider, or actual server/Geyser/Playit operation.
+
+
 ## v0.8.6 (versionCode 28) — Woodland workshop
 
 - Homestead Woodland style now defaults to original carved timber panels with moss and parchment colors.

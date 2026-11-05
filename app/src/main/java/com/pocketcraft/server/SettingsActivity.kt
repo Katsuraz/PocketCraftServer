@@ -15,6 +15,9 @@ import android.widget.ScrollView
 import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
+import android.widget.SeekBar
+import android.content.Intent
+import android.net.Uri
 import android.util.AtomicFile
 import java.io.File
 import java.util.Properties
@@ -174,15 +177,32 @@ class SettingsActivity : Activity() {
             card.addView(ui.space(this,8))
             card.addView(ui.text(this,"Theme changes apply immediately and never modify Minecraft server files.",11f,ui.MUTED))
         }
-        section(body,"Font style","Pixelated and easy to read") { card ->
-            card.addView(ui.text(this,"Choose your lettering",16f,ui.WHITE,true))
-            card.addView(ui.space(this,8))
+        section(body,"Mojangles font","Real Minecraft-style lettering across the interface") { card ->
             card.addView(ui.text(this,
-                "Pixelify Sans for controls, Press Start 2P for short headers; normal Android fonts remain available for accessibility.",
+                if (ui.hasCustomMojangles(this)) "✓ CUSTOM MOJANGLES IMPORTED" else "MONOCRAFT • MOJANGLES-STYLE FALLBACK",
+                13f,ui.CYAN,true))
+            card.addView(ui.space(this,7))
+            card.addView(ui.text(this,
+                "PocketCraft uses the licensed Monocraft font by default. To use the exact Mojangles font, import a font file you are allowed to use from your phone. PocketCraft never redistributes it.",
                 12f,ui.MUTED))
             card.addView(ui.space(this,12))
+            card.addView(ui.action(this,"IMPORT MOJANGLES .TTF / .OTF",true) {
+                val chooser = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    type = "*/*"
+                }
+                startActivityForResult(chooser,71)
+            })
+            if (ui.hasCustomMojangles(this)) {
+                card.addView(ui.space(this,8))
+                card.addView(ui.action(this,"REMOVE IMPORTED FONT") {
+                    ui.removeCustomMojangles(this)
+                    recreate()
+                })
+            }
+            card.addView(ui.space(this,9))
             card.addView(ui.action(this,
-                if (ui.pixelFont()) "✓ MINECRAFT PIXEL • ACTIVE" else "USE MINECRAFT PIXEL",true) {
+                if (ui.pixelFont()) "✓ PIXEL FONT • ACTIVE" else "USE MOJANGLES-STYLE FONT",true) {
                 if (!ui.pixelFont()) { ui.setFontStyle(this,true); recreate() }
             })
             card.addView(ui.space(this,8))
@@ -190,6 +210,57 @@ class SettingsActivity : Activity() {
                 if (!ui.pixelFont()) "✓ CLASSIC ANDROID • ACTIVE" else "USE CLASSIC ANDROID") {
                 if (ui.pixelFont()) { ui.setFontStyle(this,false); recreate() }
             })
+        }
+        section(body,"Sound effects","Original wooden menu clicks and server cues") { card ->
+            card.addView(ui.text(this,"PocketCraft soundscape",16f,ui.WHITE,true))
+            card.addView(ui.space(this,7))
+            card.addView(ui.text(this,
+                "Soft wooden-style menu ticks, a short ready chime, and distinct start, stop, and error sounds. Original synthesized audio; no extracted Minecraft sound assets.",
+                12f,ui.MUTED))
+            card.addView(ui.space(this,14))
+            val soundRow = ui.row(this)
+            soundRow.addView(ui.text(this,"Enable sound effects",14f,ui.WHITE,true),
+                LinearLayout.LayoutParams(0,-2,1f))
+            soundRow.addView(Switch(this).apply {
+                isChecked = PocketSounds.isEnabled(this@SettingsActivity)
+                thumbTintList = android.content.res.ColorStateList.valueOf(ui.CYAN)
+                setOnCheckedChangeListener { _,checked ->
+                    PocketSounds.setEnabled(this@SettingsActivity,checked)
+                    if (checked) PocketSounds.play(this@SettingsActivity,PocketSounds.Event.SELECT)
+                }
+            })
+            card.addView(soundRow)
+            card.addView(ui.space(this,12))
+            val volumeLabel = ui.text(this,"Sound volume: " + PocketSounds.volume(this) + "%",12f,ui.MUTED)
+            card.addView(volumeLabel)
+            card.addView(SeekBar(this).apply {
+                max = 100
+                progress = PocketSounds.volume(this@SettingsActivity)
+                progressTintList = android.content.res.ColorStateList.valueOf(ui.CYAN)
+                thumbTintList = android.content.res.ColorStateList.valueOf(ui.CYAN)
+                setOnSeekBarChangeListener(object: SeekBar.OnSeekBarChangeListener {
+                    override fun onProgressChanged(seekBar: SeekBar?, p: Int, fromUser: Boolean) {
+                        volumeLabel.text = "Sound volume: " + p + "%"
+                        if (fromUser) PocketSounds.setVolume(this@SettingsActivity,p)
+                    }
+                    override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+                    override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                        PocketSounds.play(this@SettingsActivity,PocketSounds.Event.SELECT)
+                    }
+                })
+            })
+            card.addView(ui.space(this,8))
+            card.addView(ui.action(this,"▶ PREVIEW MENU CLICK") {
+                PocketSounds.play(this,PocketSounds.Event.SELECT)
+            })
+            card.addView(ui.space(this,7))
+            card.addView(ui.action(this,"▶ PREVIEW SERVER READY") {
+                PocketSounds.play(this,PocketSounds.Event.SERVER_READY)
+            })
+            card.addView(ui.space(this,6))
+            card.addView(ui.text(this,
+                "Sound preferences are stored only in PocketCraft. Device silent-mode and system sound controls still apply.",
+                11f,ui.MUTED))
         }
         section(body,"App updates","Check GitHub Releases and install verified APKs") { card ->
             val installed = PocketUpdates.installedName(this)
@@ -380,6 +451,33 @@ class SettingsActivity : Activity() {
             toast("Saved. Restart the server to apply.")
             finish()
         } catch(e:Exception) {toast("Could not save: "+(e.message ?: "storage error"))}
+    }
+
+    @Deprecated("Activity result callback")
+    override fun onActivityResult(requestCode:Int,resultCode:Int,data:Intent?) {
+        super.onActivityResult(requestCode,resultCode,data)
+        if (requestCode != 71 || resultCode != RESULT_OK) return
+        val fontUri = data?.data ?: return
+        val filename = runCatching {
+            contentResolver.query(fontUri,arrayOf(android.provider.OpenableColumns.DISPLAY_NAME),
+                null,null,null)?.use {
+                if (it.moveToFirst()) it.getString(0) else ""
+            } ?: ""
+        }.getOrDefault("")
+        if (!(filename.endsWith(".ttf",true) || filename.endsWith(".otf",true))) {
+            toast("Select a .ttf or .otf font file.")
+            return
+        }
+        Thread {
+            val result = runCatching { ui.importMojangles(this,fontUri) }
+            runOnUiThread {
+                result.onSuccess {
+                    ui.setFontStyle(this,true)
+                    toast("Custom Mojangles font imported.")
+                    recreate()
+                }.onFailure { toast("Cannot import font: " + it.message) }
+            }
+        }.start()
     }
 
     private fun toast(message:String) = Toast.makeText(this,message,Toast.LENGTH_LONG).show()

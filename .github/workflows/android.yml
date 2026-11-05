@@ -272,6 +272,14 @@ jobs:
           test "$actual" = '39adf42efa597906e53be689474ac82214112124' || {
             echo "::error::Press Start 2P font hash differs from vetted source"; exit 1;
           }
+          curl --fail --location --retry 3 --connect-timeout 15 --max-time 90 \
+            'https://raw.githubusercontent.com/IdreesInc/Monocraft/main/dist/Monocraft-ttf/Monocraft.ttf' \
+            -o app/src/main/assets/fonts/Monocraft.ttf
+          actual="$(git hash-object app/src/main/assets/fonts/Monocraft.ttf)"
+          test "$actual" = '8b7e08a769fbe81babbecf95a9be9b5e99780ac5' || {
+            echo "::error::Monocraft font hash differs from verified source"; exit 1;
+          }
+          test -s app/src/main/assets/licenses/Monocraft-OFL.txt
           test -s app/src/main/assets/licenses/PixelifySans-OFL.txt
           test -s app/src/main/assets/licenses/PressStart2P-OFL.txt
           echo 'Licensed, verified pixel fonts ready for offline APK packaging'
@@ -295,6 +303,8 @@ jobs:
           APK=app/build/outputs/apk/debug/app-debug.apk
           unzip -l "$APK" | grep -F 'assets/fonts/PixelifySans.ttf'
           unzip -l "$APK" | grep -F 'assets/fonts/PressStart2P-Regular.ttf'
+          unzip -l "$APK" | grep -F 'assets/fonts/Monocraft.ttf'
+          unzip -l "$APK" | grep -F 'assets/licenses/Monocraft-OFL.txt'
           unzip -l "$APK" | grep -F 'assets/licenses/PixelifySans-OFL.txt'
           unzip -l "$APK" | grep -F 'assets/licenses/PressStart2P-OFL.txt'
       - name: Verify bundled tunnel binaries
