@@ -152,8 +152,10 @@ object WebsiteModInstaller {
                 val loaders = encode("[\"fabric\"]")
                 val mc = encode("[\"" + current + "\"]")
                 val versions = array("https://api.modrinth.com/v2/project/" + encode(slug) +
-                    "/version?loaders=" + loaders + "&game_versions=" + mc)
-                if (versions.length() == 0) throw IOException("No Fabric release compatible with Minecraft $current")
+            "/version?loaders=" + encode("[\"fabric\"]") +
+            "&game_versions=" + encode("[\"" + current + "\"]") +
+            "&include_changelog=false")
+        if (versions.length() == 0) throw IOException("No Fabric release compatible with Minecraft $current")
                 versions.getJSONObject(0)
             }
             if (!version.optString("project_id").equals(project.getString("id"), true))
