@@ -104,6 +104,27 @@ class ConnectionJourneyTest {
         assertNull(result.address)
     }
 
+    @Test fun externalOnlyNethernetDoesNotMisleadLocalPlayers() {
+        val result = ConnectionJourney.assess(ConnectionJourney.Target.BEDROCK_LAN,
+            ready().copy(signalingMode="nxs"))
+        assertEquals(ConnectionJourney.Action.OPEN_CONSOLE, result.action)
+        assertNull(result.address)
+        assertTrue(result.title.contains("Local"))
+    }
+
+    @Test fun hybridNethernetStillOffersLocalTestAddress() {
+        val result = ConnectionJourney.assess(ConnectionJourney.Target.BEDROCK_LAN,
+            ready().copy(signalingMode="hybrid"))
+        assertEquals("192.168.1.50:19132",result.address)
+    }
+
+    @Test fun builtInOnlyNethernetWarnsAboutPlayit() {
+        val result = ConnectionJourney.assess(ConnectionJourney.Target.BEDROCK_ONLINE,
+            ready().copy(signalingMode="builtin"))
+        assertEquals(ConnectionJourney.Action.OPEN_CONSOLE,result.action)
+        assertNull(result.address)
+    }
+
     @Test fun publicAddressIsAssignedNotGuaranteed() {
         val result = ConnectionJourney.assess(ConnectionJourney.Target.BEDROCK_ONLINE, ready())
         assertEquals(ConnectionJourney.Action.COPY_ADDRESS, result.action)
