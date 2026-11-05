@@ -49,6 +49,8 @@ class ServerService : Service() {
             private set
         @Volatile var nethernetNativeFailure = false
             private set
+        @Volatile var startedElapsedMs = 0L
+            private set
     }
     private val readiness = ReadinessSignals()
     private var server: Process? = null
@@ -164,6 +166,8 @@ class ServerService : Service() {
         PocketSounds.play(this, PocketSounds.Event.SERVER_START)
         failure = ""
         readiness.reset()
+        PlayerActivity.reset()
+        startedElapsedMs = 0L
         // Floodgate's username prefix is public config, not an authentication
         // secret. Read it to identify real Bedrock logins in Java server output.
         runCatching {
@@ -247,6 +251,7 @@ class ServerService : Service() {
                 server = proc
                 synchronized(lock) { writer = BufferedWriter(OutputStreamWriter(proc.outputStream)) }
                 running = true
+                startedElapsedMs = android.os.SystemClock.elapsedRealtime()
                 status = "RUNNING"
                 val pm = getSystemService(POWER_SERVICE) as PowerManager
                 wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "PocketCraft:Server").apply {
@@ -257,6 +262,7 @@ class ServerService : Service() {
                 proc.inputStream.bufferedReader().useLines { lines ->
                     lines.forEach { line ->
                         append(line)
+                        PlayerActivity.observe(line)
                         ServerCommandHints.observe(line)
                         // Vanilla's /help is paginated. Read every reported page
                         // once to capture mod commands without guessing their names.
@@ -346,6 +352,8 @@ class ServerService : Service() {
         }
         server = null
         running = false
+        startedElapsedMs = 0L
+        PlayerActivity.reset()
         javaReady = false
         bedrockReady = false
         nethernetReady = false

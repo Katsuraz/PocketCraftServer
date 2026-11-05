@@ -1,5 +1,17 @@
 # PocketCraft changelog
 
+## v0.8.26 (versionCode 48) — Homestead professional server management
+
+- Keep the existing Homestead wood-and-parchment UI, simplify the Home page to one main start/stop button and a small management menu; move repetitive setup buttons into collapsible Advanced & Setup.
+- Add a world manager: create and assign a new world, select any existing world, rename, duplicate, export and safely delete inactive worlds, with strict stopped-server checks. New worlds generate on first server start.
+- Add offline local ZIP snapshots for generated worlds (maximum five per world, size and file-count limits) and restore snapshots into a new world without overwriting existing worlds. Encourage exporting ZIP backups off the phone.
+- Add a dedicated player management dialog with observed online names, refresh player list, whitelist list, confirmed kick and trusted permission commands through actual server stdin.
+- Add a phone-safe status summary: local available RAM, battery level, Android thermal status, observed players and server uptime. Do not claim unavailable JVM TPS/heap data.
+- Improve Console usability with log searching, error/player filters, and an in-place refresh that does not redraw the page. Keep the existing bounded asynchronous log tail.
+- Preserve Java/Fabric, Geyser + Floodgate crossplay, Playit, datapacks, modpack installers, signing, sound effects, and existing server data.
+- Android build and unit tests validate compilation; real-device hosting, memory pressure and joining must still be tested on a phone.
+
+
 ## v0.8.25 (versionCode 47) — Detect Bedrock joins from Minecraft's normal logs
 
 - Detect successful Floodgate-prefixed Bedrock player logins in Minecraft's ordinary server log, not only Geyser-tagged startup messages; reject generic Java joins, fake chat messages and failed logins.

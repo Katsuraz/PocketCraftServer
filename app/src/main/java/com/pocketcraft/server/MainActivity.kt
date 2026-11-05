@@ -27,6 +27,8 @@ class MainActivity : Activity() {
     private val uiHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private var readyText: TextView? = null
     private var heroState: TextView? = null
+    private var vitalsText: TextView? = null
+    private var lastVitalsUpdate = 0L
     private var onlineHost: FrameLayout? = null
     private var lastOnlineSignature = ""
     private var phoneHost: FrameLayout? = null
@@ -44,6 +46,8 @@ class MainActivity : Activity() {
     private var lastConsoleModified = -1L
     private var consoleViewVersion = 0
     private var consoleCachedTail = "[PocketCraft] Loading console…"
+    private var consoleLogFilter = "ALL"
+    private var consoleLogSearch = ""
     private val consoleReadPending = java.util.concurrent.atomic.AtomicBoolean(false)
     // Log I/O and decoding must never compete with the Android main thread.
     private val consoleReader = java.util.concurrent.Executors.newSingleThreadExecutor { job ->
@@ -63,6 +67,12 @@ class MainActivity : Activity() {
                 ServerService.javaReady && ServerService.bedrockReady -> "●  JAVA + BEDROCK"
                 ServerService.javaReady -> "●  JAVA READY"
                 else -> "●  STARTING"
+            }
+            val now=android.os.SystemClock.elapsedRealtime()
+            if(tab==0 && now-lastVitalsUpdate>=5000) {
+                lastVitalsUpdate=now
+                vitalsText?.text=runCatching {ServerVitals.device(this@MainActivity)}
+                    .getOrElse {"Device metrics unavailable"}
             }
             // Keep live hosting state up to date without redrawing the entire
             // page or unexpectedly resetting the user's scroll position.
@@ -194,7 +204,8 @@ class MainActivity : Activity() {
                                     (it.getChildAt(0)?.height ?: 0) - ui.dp(this, 52)
                             } ?: true
                             consoleCachedTail = tail
-                            if (viewer.text.toString() != tail) viewer.text = tail
+                            val visible=filterConsoleLog(tail)
+                            if (viewer.text.toString() != visible) viewer.text = visible
                             // Scroll position, not keyboard/text-selection focus.
                             if (nearBottom && scroller != null) {
                                 scroller.post {
@@ -213,6 +224,20 @@ class MainActivity : Activity() {
         } catch (_: java.util.concurrent.RejectedExecutionException) {
             consoleReadPending.set(false)
         }
+    }
+
+    private fun filterConsoleLog(raw: String): String {
+        val query=consoleLogSearch.trim().lowercase(Locale.ROOT)
+        val lines=raw.lineSequence().filter { line ->
+            val lower=line.lowercase(Locale.ROOT)
+            val typeMatch=when(consoleLogFilter) {
+                "ERRORS" -> listOf("error","warn","exception","failed","fatal").any { it in lower }
+                "PLAYERS" -> listOf("joined the game","left the game","logged in","lost connection","players online").any { it in lower }
+                else -> true
+            }
+            typeMatch && (query.isEmpty() || query in lower)
+        }.toList().takeLast(110).joinToString("\n")
+        return if(lines.isBlank()) "No recent log lines match the current filter." else lines
     }
 
     private fun showCrashReport() {
@@ -512,16 +537,16 @@ class MainActivity : Activity() {
         header.addView(ui.text(this,"FABRIC",11f,ui.MUTED,true))
         hero.addView(header)
         hero.addView(ui.space(this,16))
-        hero.addView(ui.text(this,"My server",23f,ui.WHITE,true))
+        hero.addView(ui.text(this,"My server  •  "+WorldStore.active(this),21f,ui.WHITE,true))
         hero.addView(ui.space(this,13))
         val readyForStart = HostingHealth.startBlockers(healthSnapshot()) == 0
         hero.addView(ui.action(this,when {
-            ServerService.running -> "OPEN CONSOLE"
+            ServerService.running -> "■  STOP SERVER"
             readyForStart -> "▶  START SERVER"
             else -> "SET UP SERVER"
         },true) {
             when {
-                ServerService.running -> { tab=3; render() }
+                ServerService.running -> confirmStopMinecraft()
                 readyForStart -> startMinecraft()
                 !serverJar.isFile -> installFabricPrompt()
                 !ServerDownloads.eulaAccepted(this) -> offerEula()
@@ -529,11 +554,19 @@ class MainActivity : Activity() {
                 else -> showHealthCenter()
             }
         })
-        if (ServerService.running) {
-            hero.addView(ui.space(this,8))
-            hero.addView(ui.action(this,"STOP SERVER") { confirmStopMinecraft() })
-        }
         body.addView(hero)
+        body.addView(ui.space(this,10))
+        val vitals=ui.card(this)
+        vitals.addView(ui.text(this,"DEVICE & SERVER STATUS",11f,ui.CYAN,true))
+        vitals.addView(ui.space(this,7))
+        vitals.addView(ui.text(this,runCatching { ServerVitals.device(this) }
+            .getOrDefault("Device metrics unavailable"),12f,ui.WHITE).also { vitalsText=it })
+        vitals.addView(ui.space(this,5))
+        vitals.addView(ui.text(this,
+            "Players observed: "+PlayerActivity.count()+
+            "  •  TPS / JVM heap: not available without server metrics integration",
+            11f,ui.MUTED))
+        body.addView(vitals)
         body.addView(ui.space(this,12))
         val crossplaySummary = FrameLayout(this)
         crossplaySummary.addView(crossplaySummaryPanel())
@@ -542,28 +575,38 @@ class MainActivity : Activity() {
         body.addView(crossplaySummary)
         body.addView(ui.space(this,16))
 
+        // Common actions live here; setup/troubleshooting is collapsed to remove redundancy.
         val actions = ui.card(this)
-        if (PocketCraftCrashReports.hasReport(this)) {
-            actions.addView(actionRow("!","Crash report available") { showCrashReport() })
-            actions.addView(line())
-        }
+        actions.addView(ui.text(this,"MANAGE SERVER",11f,ui.CYAN,true))
+        actions.addView(ui.space(this,7))
+        actions.addView(actionRow("▧","Worlds & backups") { tab=2; render() })
+        actions.addView(line())
+        actions.addView(actionRow("♟","Players & permissions") {showPlayerManager()})
+        actions.addView(line())
+        actions.addView(actionRow("▤","Server files") {openServerFiles()})
+        actions.addView(line())
         actions.addView(actionRow("⚙","Settings") {
             startActivity(Intent(this,SettingsActivity::class.java))
         })
-        actions.addView(line())
-        actions.addView(actionRow("▤","Files") { openServerFiles() })
-        actions.addView(line())
-        actions.addView(actionRow("✦","Fabric") { installFabricPrompt() })
-        actions.addView(line())
-        actions.addView(actionRow("☕","Java runtime") { installJavaPrompt() })
-        actions.addView(line())
-        actions.addView(actionRow("↓","Import server") { picker(1) })
-        actions.addView(line())
-        actions.addView(actionRow("✓","Health") { showHealthCenter() })
-        actions.addView(line())
-        actions.addView(actionRow("!","Crash diagnostics") { showCrashReport() })
-        actions.addView(line())
-        actions.addView(actionRow("ⓘ","About") { about() })
+        val technical=ui.column(this)
+        technical.addView(line())
+        technical.addView(actionRow("✦","Install Fabric") {installFabricPrompt()})
+        technical.addView(line())
+        technical.addView(actionRow("☕","Java runtime") {installJavaPrompt()})
+        technical.addView(line())
+        technical.addView(actionRow("↓","Import full server") {picker(1)})
+        technical.addView(line())
+        technical.addView(actionRow("✓","Server health") {showHealthCenter()})
+        technical.addView(line())
+        technical.addView(actionRow("!","Crash diagnostics") {showCrashReport()})
+        technical.addView(line())
+        technical.addView(actionRow("ⓘ","About PocketCraft") {about()})
+        technical.visibility=View.GONE
+        actions.addView(ui.space(this,8))
+        actions.addView(ui.action(this,"＋  ADVANCED & SETUP TOOLS") {
+            technical.visibility=if(technical.visibility==View.VISIBLE)View.GONE else View.VISIBLE
+        })
+        actions.addView(technical)
         body.addView(actions)
         body.addView(ui.space(this,16))
 
@@ -1839,54 +1882,317 @@ class MainActivity : Activity() {
             (resources.displayMetrics.heightPixels*.82).toInt())
     }
 
+    /** All destructive world operations are stopped-server-only and guarded by WorldStore. */
     private fun worldsPage(body:LinearLayout) {
-        body.addView(h("World vault","Protect every block you've placed"))
-        body.addView(ui.space(this,15))
-        body.addView(ui.action(this,"▤  SERVER FILES & FULL BACKUP",true) {openServerFiles()})
-        body.addView(ui.space(this,10))
-        body.addView(ui.action(this,"+  IMPORT WORLD ZIP",true) {picker(3)})
-        body.addView(ui.space(this,9))
-        body.addView(ui.action(this,"▣  MANAGE DATAPACKS",true) {showDatapacks()})
-        body.addView(ui.space(this,16))
-        val list=WorldStore.worlds(this)
-        val current=WorldStore.active(this)
-        if (list.isEmpty()) body.addView(empty("▧","No worlds yet","Import a Java Edition world ZIP containing level.dat."))
-        list.forEach { file ->
+        body.addView(h("World manager","Assign, create, duplicate, and protect Java + Bedrock worlds"))
+        body.addView(ui.space(this,13))
+        val active=WorldStore.active(this)
+        val activeCard=ui.card(this)
+        activeCard.addView(ui.text(this,"ASSIGNED SERVER WORLD",11f,ui.CYAN,true))
+        activeCard.addView(ui.space(this,6))
+        activeCard.addView(ui.text(this,active,19f,ui.WHITE,true))
+        activeCard.addView(ui.space(this,5))
+        activeCard.addView(ui.text(this,
+            if(ServerService.running || ServerService.status=="STARTING")
+                "Stop Minecraft before switching or editing worlds."
+            else "This is the world Minecraft will open on its next start.",
+            12f,ui.MUTED))
+        body.addView(activeCard)
+        body.addView(ui.space(this,11))
+        val actions=ui.row(this)
+        actions.addView(ui.action(this,"＋ NEW WORLD",true,!ServerService.running &&
+            ServerService.status !in listOf("STARTING","STOPPING")) {newWorldPrompt()},ui.weight(this))
+        actions.addView(ui.action(this,"IMPORT ZIP") {picker(3)},
+            LinearLayout.LayoutParams(0,-2,1f))
+        body.addView(actions)
+        body.addView(ui.space(this,8))
+        val tools=ui.row(this)
+        tools.addView(ui.action(this,"BACKUPS") {showSnapshotManager()},
+            ui.weight(this))
+        tools.addView(ui.action(this,"DATAPACKS") {showDatapacks()},
+            LinearLayout.LayoutParams(0,-2,1f))
+        body.addView(tools)
+        body.addView(ui.space(this,13))
+        val worlds=WorldStore.worlds(this)
+        if(worlds.isEmpty())body.addView(empty("▧","No generated worlds yet",
+            "Create a new world, then start Minecraft to generate it, or import an existing Java world ZIP."))
+        worlds.forEach { file ->
             val card=ui.card(this)
             val heading=ui.row(this)
-            heading.addView(ui.text(this,"▧",23f,ui.GREEN,true))
-            heading.addView(ui.text(this,file.name,15f,ui.WHITE,true).apply {
-                setPadding(ui.dp(this@MainActivity,9),0,0,0)
-            },LinearLayout.LayoutParams(0,-2,1f))
-            if(file.name==current) heading.addView(ui.pill(this,"ACTIVE",ui.GREEN))
+            val text=ui.column(this)
+            text.addView(ui.text(this,file.name,16f,ui.WHITE,true))
+            text.addView(ui.space(this,5))
+            text.addView(ui.text(this,if(WorldStore.isPending(file))
+                "Ready to generate on first start" else "Generated world",
+                11f,ui.MUTED))
+            heading.addView(text,LinearLayout.LayoutParams(0,-2,1f))
+            if(file.name==active)heading.addView(ui.pill(this,"ACTIVE",ui.GREEN))
             card.addView(heading)
             card.addView(ui.space(this,11))
-            val controls=ui.row(this)
-            controls.addView(ui.action(this,"Use world") {
-                try { WorldStore.activate(this,file); render();toast("Active world changed") }
-                catch(e:Exception) { toast(e.message ?: "Unable to activate") }
-            },ui.weight(this))
-            controls.addView(ui.action(this,"Export ZIP") { pendingBackup=file;createBackupDocument(file) },
-                LinearLayout.LayoutParams(0,-2,1f))
-            card.addView(controls)
-            card.addView(ui.space(this,7))
-            card.addView(ui.text(this,"Delete world",12f,ui.RED).apply {
-                gravity=Gravity.END
-                setOnClickListener {
-                    AlertDialog.Builder(this@MainActivity).setTitle("Delete this world?")
-                        .setMessage("This permanently deletes "+file.name+". Export a backup first.")
-                        .setNegativeButton("Cancel",null)
-                        .setPositiveButton("Delete") {_,_->if(file.deleteRecursively()) render() else toast("Could not delete world")}
-                        .show()
-                }
+            card.addView(ui.action(this,if(file.name==active)"MANAGE ACTIVE WORLD" else
+                "SELECT / MANAGE WORLD",file.name!=active) {
+                showWorldActions(file)
             })
-            body.addView(card);body.addView(ui.space(this,10))
+            body.addView(card)
+            body.addView(ui.space(this,10))
         }
-        val note=ui.card(this)
-        note.addView(ui.text(this,"World safety",15f,ui.WHITE,true))
-        note.addView(ui.space(this,8))
-        note.addView(ui.text(this,"Exports are saved to a location you choose. Imports use path checks and a 1 GB extracted-size limit. Always back up a world before replacing it.",12f,ui.MUTED))
-        body.addView(note)
+        body.addView(ui.text(this,"Backups stay on this phone until exported. Always keep an off-device ZIP copy before uninstalling PocketCraft or resetting Android.",
+            11f,ui.MUTED))
+    }
+
+    private fun askWorldName(title:String,hint:String,default:String="",onDone:(String)->Unit) {
+        val input=android.widget.EditText(this).apply {
+            setSingleLine(true)
+            this.hint=hint
+            setText(default)
+            setSelectAllOnFocus(true)
+            setTextColor(ui.WHITE)
+            setHintTextColor(ui.MUTED)
+            background=ui.shape(this@MainActivity,ui.SURFACE,12,ui.BORDER)
+            setPadding(ui.dp(this@MainActivity,14),ui.dp(this@MainActivity,13),
+                ui.dp(this@MainActivity,14),ui.dp(this@MainActivity,13))
+        }
+        val panel=ui.column(this).apply {
+            setPadding(ui.dp(this@MainActivity,20),ui.dp(this@MainActivity,10),
+                ui.dp(this@MainActivity,20),ui.dp(this@MainActivity,14))
+            addView(ui.text(this@MainActivity,
+                "World names: 1–48 letters, numbers, dots, underscores or dashes, starting with a letter or number. Existing worlds are never overwritten.",
+                12f,ui.MUTED))
+            addView(ui.space(this@MainActivity,12))
+            addView(input)
+        }
+        val dialog=AlertDialog.Builder(this).setTitle(title)
+            .setView(panel).setNegativeButton("CANCEL",null)
+            .setPositiveButton("CONTINUE",null).create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val name=input.text.toString().trim()
+                if(!Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,47}").matches(name)) {
+                    input.error="Enter a safe world name"
+                    return@setOnClickListener
+                }
+                dialog.dismiss()
+                onDone(name)
+            }
+        }
+        dialog.show()
+    }
+
+    private fun newWorldPrompt() {
+        if(ServerService.running || ServerService.status in listOf("STARTING","STOPPING")) {
+            toast("Stop the server before creating or switching worlds")
+            return
+        }
+        askWorldName("Create & assign new world","New world name","new-world") { name ->
+            AlertDialog.Builder(this).setTitle("Create world: "+name+"?")
+                .setMessage("Creates an empty world slot and assigns it for Minecraft to generate on the next server start. Your existing worlds and mods remain unchanged.")
+                .setNegativeButton("CANCEL",null)
+                .setPositiveButton("CREATE & ASSIGN") { _,_ ->
+                    downloadAsync("Create world") {
+                        WorldStore.create(this,name)
+                        "Created and assigned world: "+name+". Start Minecraft to generate it."
+                    }
+                }.show()
+        }
+    }
+
+    private fun showWorldActions(file:File) {
+        val offline=!ServerService.running && ServerService.status !in listOf("STARTING","STOPPING")
+        val panel=ui.column(this).apply {
+            setPadding(ui.dp(this@MainActivity,16),ui.dp(this@MainActivity,10),
+                ui.dp(this@MainActivity,16),ui.dp(this@MainActivity,12))
+        }
+        panel.addView(ui.text(this,if(file.name==WorldStore.active(this))
+            "Currently assigned to Minecraft" else "Available server world",
+            12f,ui.MUTED))
+        panel.addView(ui.space(this,9))
+        lateinit var dialog:AlertDialog
+        fun item(label:String,enabled:Boolean=true,action:()->Unit) {
+            panel.addView(ui.action(this,label,false,enabled) {
+                dialog.dismiss()
+                action()
+            })
+            panel.addView(ui.space(this,8))
+        }
+        if(file.name!=WorldStore.active(this))item("✓ ASSIGN THIS WORLD",offline) {
+            downloadAsync("Switch world"){WorldStore.activate(this,file)
+                "Assigned "+file.name+". Start the server to play it."}
+        }
+        if(!WorldStore.isPending(file))item("CREATE LOCAL SNAPSHOT",offline) {
+            downloadAsync("Backup world") {
+                val snapshot=WorldSnapshots.create(this,file)
+                "Snapshot saved on this device: "+snapshot.name
+            }
+        }
+        item("DUPLICATE WORLD",offline) {
+            askWorldName("Duplicate "+file.name,"New copy name",file.name.take(32)+"-copy") { name ->
+                downloadAsync("Duplicate world") {
+                    WorldStore.duplicate(this,file,name)
+                    "Created an independent copy named "+name
+                }
+            }
+        }
+        item("RENAME WORLD",offline) {
+            askWorldName("Rename "+file.name,"New world name",file.name) { name ->
+                downloadAsync("Rename world") {
+                    WorldStore.rename(this,file,name)
+                    "World renamed to "+name
+                }
+            }
+        }
+        if(!WorldStore.isPending(file))item("EXPORT WORLD ZIP",offline) {
+            pendingBackup=file
+            createBackupDocument(file)
+        }
+        item("VIEW WORLD FILES") {openServerFiles(file.name)}
+        item("DELETE WORLD",offline) {
+            AlertDialog.Builder(this).setTitle("Permanently delete "+file.name+"?")
+                .setMessage("This permanently deletes this world. Make an off-device backup first. Active worlds cannot be deleted; assign another world instead.")
+                .setNegativeButton("CANCEL",null)
+                .setPositiveButton("DELETE") { _,_ ->
+                    downloadAsync("Delete world"){
+                        WorldStore.delete(this,file)
+                        "Deleted "+file.name
+                    }
+                }.show()
+        }
+        dialog=AlertDialog.Builder(this).setTitle("World • "+file.name)
+            .setView(ScrollView(this).apply{addView(panel)})
+            .setNegativeButton("CLOSE",null).create()
+        dialog.show()
+    }
+
+    private fun showSnapshotManager() {
+        val panel=ui.column(this).apply {
+            setPadding(ui.dp(this@MainActivity,16),ui.dp(this@MainActivity,10),
+                ui.dp(this@MainActivity,16),ui.dp(this@MainActivity,15))
+        }
+        panel.addView(ui.text(this,
+            "Local snapshots keep the five newest copies of each world. They require the server to be stopped and use phone storage. Export ZIPs off-device for disaster recovery.",
+            12f,ui.MUTED))
+        panel.addView(ui.space(this,13))
+        val all=WorldSnapshots.list(this)
+        val offline=!ServerService.running && ServerService.status !in listOf("STARTING","STOPPING")
+        if(all.isEmpty())panel.addView(ui.text(this,"No local snapshots yet. Use a world's Manage menu to create one.",12f,ui.MUTED))
+        lateinit var dialog:AlertDialog
+        all.take(60).forEach { snapshot ->
+            val card=ui.card(this)
+            card.addView(ui.text(this,snapshot.name,12f,ui.WHITE,true))
+            card.addView(ui.space(this,6))
+            card.addView(ui.text(this,ServerFileOps.humanSize(snapshot.length())+
+                "  •  "+java.text.DateFormat.getDateTimeInstance().format(java.util.Date(snapshot.lastModified())),
+                11f,ui.MUTED))
+            card.addView(ui.space(this,9))
+            val actions=ui.row(this)
+            actions.addView(ui.action(this,"RESTORE AS NEW",false,offline) {
+                dialog.dismiss()
+                askWorldName("Restore snapshot as new world","New world name","restored-world") { name ->
+                    downloadAsync("Restore world snapshot") {
+                        WorldSnapshots.restore(this,snapshot,name)
+                        "Restored a separate world named "+name+". Select it from Worlds to play."
+                    }
+                }
+            },ui.weight(this))
+            actions.addView(ui.action(this,"DELETE",false,offline) {
+                dialog.dismiss()
+                AlertDialog.Builder(this).setTitle("Delete saved snapshot?")
+                    .setMessage(snapshot.name)
+                    .setNegativeButton("CANCEL",null)
+                    .setPositiveButton("DELETE"){_,_->
+                        downloadAsync("Delete snapshot") {
+                            WorldSnapshots.delete(this,snapshot)
+                            "Removed local snapshot"
+                        }
+                    }.show()
+            },LinearLayout.LayoutParams(0,-2,1f))
+            card.addView(actions)
+            panel.addView(card)
+            panel.addView(ui.space(this,8))
+        }
+        dialog=AlertDialog.Builder(this).setTitle("World backups")
+            .setView(ScrollView(this).apply{addView(panel)})
+            .setNegativeButton("CLOSE",null).create()
+        dialog.show()
+        dialog.window?.setLayout((resources.displayMetrics.widthPixels*.94).toInt(),
+            (resources.displayMetrics.heightPixels*.75).toInt())
+    }
+
+    /** Common player moderation commands are sent to the real Java server stdin. */
+    private fun showPlayerManager() {
+        val online=PlayerActivity.names()
+        val shell=ui.column(this).apply {
+            setPadding(ui.dp(this@MainActivity,16),ui.dp(this@MainActivity,9),
+                ui.dp(this@MainActivity,16),ui.dp(this@MainActivity,13))
+        }
+        shell.addView(ui.text(this,
+            "Players detected from Minecraft join/leave messages. For the newest full list, tap Refresh; results appear in the Console. Admin commands require a running server.",
+            12f,ui.MUTED))
+        shell.addView(ui.space(this,11))
+        shell.addView(ui.pill(this,
+            online.size.toString()+" ONLINE OBSERVED",if(online.isNotEmpty())ui.GREEN else ui.MUTED))
+        shell.addView(ui.space(this,9))
+        if(online.isEmpty())shell.addView(ui.text(this,
+            if(ServerService.running)"No join messages captured yet." else "Start Minecraft to manage online players.",
+            12f,ui.MUTED))
+        lateinit var dialog:AlertDialog
+        fun confirmCommand(label:String,command:String,description:String) {
+            AlertDialog.Builder(this)
+                .setTitle(label).setMessage(description)
+                .setNegativeButton("CANCEL",null)
+                .setPositiveButton("CONFIRM") { _,_ ->
+                    if(issueConsoleCommand(command))toast("Requested "+command.substringBefore(" "))
+                }.show()
+        }
+        online.forEach { name ->
+            val card=ui.card(this)
+            card.addView(ui.text(this,name,15f,ui.WHITE,true))
+            card.addView(ui.space(this,9))
+            val actions=ui.row(this)
+            actions.addView(ui.action(this,"KICK",false,ServerService.running) {
+                dialog.dismiss()
+                confirmCommand("Kick "+name+"?","kick "+name,"Disconnect this player from the current server?")
+            },ui.weight(this))
+            actions.addView(ui.action(this,"PERMISSIONS",false,ServerService.running) {
+                dialog.dismiss()
+                val controls=ui.column(this).apply {
+                    setPadding(ui.dp(this@MainActivity,17),ui.dp(this@MainActivity,12),
+                        ui.dp(this@MainActivity,17),ui.dp(this@MainActivity,14))
+                }
+                listOf(
+                    Triple("ADD TO WHITELIST","whitelist add "+name,"Allow "+name+" to join when the whitelist is enabled?"),
+                    Triple("REMOVE FROM WHITELIST","whitelist remove "+name,"Remove "+name+" from the whitelist?"),
+                    Triple("GRANT OPERATOR","op "+name,"Operator permissions allow full server administration, including changing the world. Only grant to trusted players."),
+                    Triple("REMOVE OPERATOR","deop "+name,"Remove operator access from "+name+"?")
+                ).forEach { item ->
+                    controls.addView(ui.action(this,item.first) {
+                        confirmCommand(item.first+"?",item.second,item.third)
+                    })
+                    controls.addView(ui.space(this,7))
+                }
+                AlertDialog.Builder(this).setTitle(name+" • permissions")
+                    .setView(ScrollView(this).apply {addView(controls)})
+                    .setNegativeButton("CLOSE",null).show()
+            },LinearLayout.LayoutParams(0,-2,1f))
+            card.addView(actions)
+            shell.addView(card)
+            shell.addView(ui.space(this,8))
+        }
+        shell.addView(ui.space(this,8))
+        shell.addView(ui.action(this,"↻ REFRESH PLAYER LIST",false,ServerService.running) {
+            dialog.dismiss()
+            if(issueConsoleCommand("list"))toast("Player list requested. Check Console.")
+        })
+        shell.addView(ui.space(this,8))
+        shell.addView(ui.action(this,"VIEW WHITELIST",false,ServerService.running) {
+            dialog.dismiss()
+            if(issueConsoleCommand("whitelist list"))toast("Whitelist requested. Check Console.")
+        })
+        dialog=AlertDialog.Builder(this).setTitle("Players & access")
+            .setView(ScrollView(this).apply{addView(shell)})
+            .setNegativeButton("CLOSE",null).create()
+        dialog.show()
+        dialog.window?.setLayout((resources.displayMetrics.widthPixels*.94).toInt(),
+            (resources.displayMetrics.heightPixels*.78).toInt())
     }
 
     /** Datapacks belong to the active world, never to Fabric's /mods folder. */
@@ -2185,7 +2491,11 @@ class MainActivity : Activity() {
         body.addView(h("Server console","Live output • Minecraft and Fabric mod commands"))
         body.addView(ui.space(this,14))
         val actions = ui.row(this)
-        actions.addView(ui.action(this,"↻  Refresh",true) { render() },ui.weight(this))
+        actions.addView(ui.action(this,"↻  Refresh",true) {
+            lastConsoleSize = -1L
+            lastConsoleModified = -1L
+            requestConsoleLogRefresh()
+        },ui.weight(this))
         actions.addView(ui.action(this,"Copy log"){
             AlertDialog.Builder(this).setTitle("Copy server log?")
                 .setMessage("Raw logs may include players, addresses or private configuration. Review before sharing.")
@@ -2193,7 +2503,7 @@ class MainActivity : Activity() {
                 .setNeutralButton("SERVER HEALTH") {_,_->showHealthCenter()}
                 .setPositiveButton("COPY RAW LOG") {_,_->
                     val manager=getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                    manager.setPrimaryClip(ClipData.newPlainText("PocketCraft raw logs",getLog()))
+                    manager.setPrimaryClip(ClipData.newPlainText("PocketCraft raw logs",consoleCachedTail))
                     toast("Raw log copied. Review it before sharing.")
                 }.show()
         },LinearLayout.LayoutParams(0,-2,1f))
@@ -2208,6 +2518,36 @@ class MainActivity : Activity() {
                 toast("Requesting server and Fabric mod commands…")
         },LinearLayout.LayoutParams(0,-2,1f))
         body.addView(tools)
+        body.addView(ui.space(this,8))
+        val filters=ui.row(this)
+        listOf("ALL","ERRORS","PLAYERS").forEach { choice ->
+            filters.addView(ui.action(this,choice,consoleLogFilter==choice) {
+                consoleLogFilter=choice
+                consoleOutput?.text=filterConsoleLog(consoleCachedTail)
+            },ui.weight(this))
+        }
+        body.addView(filters)
+        body.addView(ui.space(this,7))
+        val searchLog=android.widget.EditText(this).apply {
+            hint="Search recent log lines"
+            setSingleLine(true)
+            textSize=13f
+            setTextColor(ui.WHITE)
+            setHintTextColor(ui.MUTED)
+            background=ui.shape(this@MainActivity,ui.SURFACE,12,ui.BORDER)
+            setPadding(ui.dp(this@MainActivity,13),ui.dp(this@MainActivity,11),
+                ui.dp(this@MainActivity,13),ui.dp(this@MainActivity,11))
+            setText(consoleLogSearch)
+        }
+        searchLog.addTextChangedListener(object:android.text.TextWatcher {
+            override fun beforeTextChanged(s:CharSequence?,start:Int,count:Int,after:Int){}
+            override fun onTextChanged(s:CharSequence?,start:Int,before:Int,count:Int){
+                consoleLogSearch=s?.toString().orEmpty().take(60)
+                consoleOutput?.text=filterConsoleLog(consoleCachedTail)
+            }
+            override fun afterTextChanged(s:android.text.Editable?){}
+        })
+        body.addView(searchLog)
         body.addView(ui.space(this,12))
         val log=ui.column(this).apply {
             background=ui.shape(this@MainActivity,if(ui.homestead()) 0xFF211A16.toInt() else 0xFF0F1728.toInt(),18,if(ui.homestead()) 0xFF745035.toInt() else 0xFF26354D.toInt())
@@ -2215,7 +2555,7 @@ class MainActivity : Activity() {
         }
         log.addView(ui.pill(this,"●  LOCAL LOG",ui.CYAN))
         log.addView(ui.space(this,12))
-        val logText = ui.text(this,consoleCachedTail,12f,0xFFC0D7D7.toInt()).apply {
+        val logText = ui.text(this,filterConsoleLog(consoleCachedTail),12f,0xFFC0D7D7.toInt()).apply {
             typeface = android.graphics.Typeface.MONOSPACE
             // Selectable TextView inside nested ScrollViews may steal focus and
             // stall layout on some Android skins. "Copy log" remains available.
