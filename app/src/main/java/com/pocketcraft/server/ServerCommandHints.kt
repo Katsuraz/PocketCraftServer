@@ -13,11 +13,14 @@ object ServerCommandHints {
     private val lock = Any()
     private val discoveredRoots = linkedSetOf<String>()
     private val discoveredUsage = linkedSetOf<String>()
+    @Volatile var helpPageCount: Int = 1
+        private set
     @Volatile var revision: Int = 0
         private set
 
     private val colorCodes = Regex("\u00a7[0-9a-fk-or]", RegexOption.IGNORE_CASE)
     private val ansiCodes = Regex("\u001b\\[[0-9;]*m")
+    private val helpPagination = Regex("""(?i)(?:showing\s+)?help\s+page\s+(\d+)\s*(?:of|/)\s*(\d+)""")
     private val commandUsage = Regex(
         """(?:^|[\s(:])\/([A-Za-z0-9_:.+-]{1,80})((?:\s+[A-Za-z0-9_:.+-]{1,70}){0,4})"""
     )
@@ -35,15 +38,22 @@ object ServerCommandHints {
         synchronized(lock) {
             discoveredRoots.clear()
             discoveredUsage.clear()
+            helpPageCount = 1
             revision++
         }
     }
 
     /** Capture command names only from command-shaped Minecraft help lines. */
     fun observe(rawLine: String) {
-        if ('/' !in rawLine) return
         val clean = rawLine.replace(ansiCodes, "").replace(colorCodes, "")
         val body = clean.substringAfter("]: ", clean).trim()
+        helpPagination.find(body)?.let { match ->
+            val pages = match.groupValues[2].toIntOrNull()?.coerceIn(1, 32) ?: 1
+            synchronized(lock) {
+                if (pages > helpPageCount) { helpPageCount = pages; revision++ }
+            }
+        }
+        if ('/' !in body) return
         val isHelpOutput =
             body.startsWith("/") || body.startsWith("- /") ||
             body.startsWith("Usage: /", true) ||
