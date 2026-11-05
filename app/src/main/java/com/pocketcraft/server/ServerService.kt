@@ -25,6 +25,7 @@ class ServerService : Service() {
         const val ACTION_START = "com.pocketcraft.server.START"
         const val ACTION_STOP = "com.pocketcraft.server.STOP"
         const val ACTION_COMMAND = "com.pocketcraft.server.COMMAND"
+        const val ACTION_CONFIRM_BEDROCK = "com.pocketcraft.server.CONFIRM_BEDROCK_JOIN"
         const val ACTION_TUNNEL_START = "com.pocketcraft.server.TUNNEL_START"
         const val ACTION_TUNNEL_STOP = "com.pocketcraft.server.TUNNEL_STOP"
         const val EXTRA_COMMAND = "command"
@@ -41,6 +42,10 @@ class ServerService : Service() {
         @Volatile var bedrockReady = false
             private set
         @Volatile var nethernetReady = false
+            private set
+        @Volatile var nethernetMode = "NONE"
+            private set
+        @Volatile var bedrockEvidence = "No Geyser readiness message captured"
             private set
         @Volatile var nethernetNativeFailure = false
             private set
@@ -82,8 +87,24 @@ class ServerService : Service() {
                 if (!running) { stopForeground(STOP_FOREGROUND_REMOVE); stopSelf() }
                 else notice("Minecraft server running on LAN")
             }
-            ACTION_START -> if (!running) begin()
+            ACTION_START -> if (!running && status != "STARTING") begin()
             ACTION_STOP -> end()
+            ACTION_CONFIRM_BEDROCK -> {
+                val geyserInstalled = File(root, "mods").listFiles()?.any {
+                    it.isFile && it.name.startsWith("Geyser", ignoreCase = true) &&
+                        it.name.endsWith(".jar", ignoreCase = true)
+                } == true
+                if (running && javaReady && geyserInstalled) {
+                    readiness.confirmBedrockJoin()
+                    bedrockReady = true
+                    bedrockEvidence = readiness.bedrockEvidence
+                    status = readiness.state()
+                    append("Bedrock connection manually confirmed by the phone's owner for this server session")
+                    notice("Minecraft Java + owner-confirmed Bedrock connection")
+                } else {
+                    append("Cannot confirm Bedrock connection: server, Java readiness or Geyser mod missing")
+                }
+            }
             ACTION_COMMAND -> {
                 val line = intent.getStringExtra(EXTRA_COMMAND)?.trim().orEmpty()
                 if (line.isNotEmpty() && line.length <= 240 && !line.contains("\n") && !line.contains("\r")) {
@@ -144,6 +165,8 @@ class ServerService : Service() {
         javaReady = false
         bedrockReady = false
         nethernetReady = false
+        nethernetMode = "NONE"
+        bedrockEvidence = readiness.bedrockEvidence
         nethernetNativeFailure = false
         Thread {
             try {
@@ -223,7 +246,9 @@ class ServerService : Service() {
                         readiness.observe(line)
                         javaReady = readiness.javaReady
                         bedrockReady = readiness.bedrockListener
-                        nethernetReady = readiness.nethernetRegistered
+                        nethernetReady = readiness.nethernetSignalingReady
+                        nethernetMode = readiness.nethernetSignalDescription
+                        bedrockEvidence = readiness.bedrockEvidence
                         nethernetNativeFailure = readiness.nethernetNativeFailure
                         if (javaReady) {
                             if (!wasJavaReady) {
@@ -288,8 +313,10 @@ class ServerService : Service() {
         javaReady = false
         bedrockReady = false
         nethernetReady = false
+        nethernetMode = "NONE"
         nethernetNativeFailure = false
         readiness.reset()
+        bedrockEvidence = readiness.bedrockEvidence
         status = if (failure.isBlank()) "OFFLINE" else "ERROR"
         try { wakeLock?.takeIf { it.isHeld }?.release() } catch (_: Exception) {}
         wakeLock = null

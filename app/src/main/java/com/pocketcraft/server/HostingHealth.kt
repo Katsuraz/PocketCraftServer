@@ -18,12 +18,13 @@ internal object HostingHealth {
         val processRunning: Boolean,
         val javaReady: Boolean,
         val bedrockListening: Boolean,
-        val nethernetRegistered: Boolean,
+        val nethernetSignalingReady: Boolean,
         val playitActive: Boolean,
         val javaTunnelAddress: String?,
         val bedrockTunnelAddress: String?,
         val localIp: String?,
-        val lastError: String?
+        val lastError: String?,
+        val bedrockEvidence: String = ""
     )
 
     data class Check(
@@ -50,8 +51,10 @@ internal object HostingHealth {
         }, when { s.javaReady -> Level.GOOD; s.processRunning -> Level.INFO; else -> Level.INFO })
         checks += Check("Bedrock bridge", when {
             !s.geyserInstalled -> "Install Geyser-Fabric; Java players can still join without it"
-            s.bedrockListening -> "Geyser reported a listening Bedrock port"
-            else -> "Geyser JAR found; confirm it loaded in the Console"
+            s.bedrockListening -> if (s.bedrockEvidence.isNotBlank())
+                "Bedrock connection evidence: " + s.bedrockEvidence
+                else "Geyser startup or player join was reported"
+            else -> "Geyser JAR found; no startup evidence captured yet. This alone does not mean that Bedrock is offline."
         }, when { !s.geyserInstalled -> Level.ACTION; s.bedrockListening -> Level.GOOD; else -> Level.INFO })
         checks += Check("Floodgate", if(s.floodgateInstalled)
             "Floodgate mod found; this does not confirm Bedrock authentication"
@@ -68,13 +71,13 @@ internal object HostingHealth {
             else -> "Optional: Playit is offline. LAN hosting does not need it"
         }, if(!s.javaTunnelAddress.isNullOrBlank() && s.playitActive) Level.INFO else Level.INFO)
         checks += Check("Remote Bedrock / NetherNet", when {
-            !s.bedrockTunnelAddress.isNullOrBlank() && s.nethernetRegistered ->
-                "Tunnel assigned and external signaling registered; test a Bedrock login"
+            !s.bedrockTunnelAddress.isNullOrBlank() && s.nethernetSignalingReady ->
+                "Tunnel assigned and NetherNet signaling reported; test a Bedrock login"
             !s.bedrockTunnelAddress.isNullOrBlank() ->
-                "Tunnel exists, but NetherNet registration not confirmed"
-            s.nethernetRegistered ->
-                "External signaling registered; no public Bedrock tunnel found"
-            else -> "For remote Bedrock, configure Geyser and its NetherNet token"
+                "Tunnel exists; no NetherNet startup message captured (RakNet may not require it)"
+            s.nethernetSignalingReady ->
+                "NetherNet signaling reported; no public Bedrock tunnel found"
+            else -> "For remote Bedrock, verify the configured RakNet or NetherNet transport"
         }, Level.INFO)
         if (!s.lastError.isNullOrBlank()) checks += Check("Last server error",
             s.lastError.take(240), Level.ACTION)

@@ -1,5 +1,16 @@
 # PocketCraft changelog
 
+## v0.8.22 (versionCode 44) — Reliable Bedrock and Geyser phone-hosting status
+
+- Recognize Geyser's modern NetherNet built-in HTTP/HTTPS signaling startup messages, external signaling registration, both official RakNet startup formats, and Geyser-tagged successful Bedrock player joins. Never equate a Geyser mod JAR with a working listener.
+- Keep NetherNet built-in and external signaling distinct in visible diagnostics and correctly clear stale WebRTC failure flags when a working NetherNet startup is later reported.
+- Read the Bedrock and WebRTC ports, and RakNet/NetherNet transport type, from the installed Geyser-Fabric config instead of hard-coding 19132. Respect different ports in LAN copy buttons, hosting details, and direct port-forwarding instructions.
+- Let players copy a BEDROCK TEST ADDRESS even when a startup log is missed; do not falsely call the listener offline. Offer a manually acknowledged successful Bedrock join that applies only to the current server session.
+- Avoid blocking working RakNet LAN when a separate NetherNet native error exists. For internet hosting, only require NetherNet signaling if the configured transport explicitly uses NetherNet.
+- Add unit regression tests for real Geyser message variants, invalid messages, custom ports, local testing and native-error behavior.
+- Preserve the Homestead UI, Java/Fabric servers, Geyser settings, Playit agents, console, server worlds, datapacks, mod downloads, and app signing.
+
+
 ## v0.8.21 (versionCode 43) — Crash diagnostics and independent server startup
 
 - Start Server no longer automatically opens Console; the Java foreground-service startup can proceed independently of console UI rendering.

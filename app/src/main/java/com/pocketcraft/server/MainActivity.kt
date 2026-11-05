@@ -67,7 +67,10 @@ class MainActivity : Activity() {
             if (tab == 0) {
                 val signature = listOf(ServerService.running, ServerService.status,
                     ServerService.javaReady, ServerService.bedrockReady,
-                    ServerService.nethernetReady, ServerService.nethernetNativeFailure, NetworkInfo.lanAddress().orEmpty()
+                    ServerService.nethernetReady, ServerService.nethernetMode,
+                    ServerService.bedrockEvidence, ServerService.nethernetNativeFailure,
+                    NetworkInfo.lanAddress().orEmpty(),
+                    File(base,"config/Geyser-Fabric/config.yml").lastModified()
                 ).joinToString("|")
                 if (signature != lastPhoneSignature) {
                     lastPhoneSignature = signature
@@ -92,7 +95,9 @@ class MainActivity : Activity() {
             if (tab == 0) {
                 val signature = listOf(
                     ServerService.running, ServerService.javaReady,
-                    ServerService.bedrockReady, ServerService.nethernetNativeFailure
+                    ServerService.bedrockReady, ServerService.nethernetNativeFailure,
+                    ServerService.bedrockEvidence, ServerService.nethernetMode,
+                    File(base,"config/Geyser-Fabric/config.yml").lastModified()
                 ).joinToString("|")
                 if (signature != lastConnectionSignature) {
                     lastConnectionSignature = signature
@@ -382,12 +387,13 @@ class MainActivity : Activity() {
         processRunning = ServerService.running,
         javaReady = ServerService.javaReady,
         bedrockListening = ServerService.bedrockReady,
-        nethernetRegistered = ServerService.nethernetReady,
+        nethernetSignalingReady = ServerService.nethernetReady,
         playitActive = PlayitManager.isActive(),
         javaTunnelAddress = PlayitManager.javaAddress,
         bedrockTunnelAddress = PlayitManager.bedrockAddress,
         localIp = NetworkInfo.lanAddress(),
-        lastError = ServerService.failure.takeIf { it.isNotBlank() }
+        lastError = ServerService.failure.takeIf { it.isNotBlank() },
+        bedrockEvidence = ServerService.bedrockEvidence
     )
 
     /** All diagnostics are local, with no remote probes or secret disclosure. */
@@ -663,14 +669,16 @@ class MainActivity : Activity() {
             },
             bedrockListener = ServerService.bedrockReady,
             nethernetNativeFailure = ServerService.nethernetNativeFailure,
-            nethernetRegistered = ServerService.nethernetReady,
+            nethernetSignalingReady = ServerService.nethernetReady,
             lanIp = NetworkInfo.lanAddress(),
             javaPort = serverProperty("server-port", "25565"),
             playitRunning = PlayitManager.isActive(),
             playitAccountConnected = PlayitManager.accountConnected,
             playitClaimAvailable = !PlayitManager.claimUrl.isNullOrBlank(),
             javaPublicAddress = PlayitManager.javaAddress,
-            bedrockPublicAddress = PlayitManager.bedrockAddress
+            bedrockPublicAddress = PlayitManager.bedrockAddress,
+            bedrockPort = geyserNetworkSettings().bedrockPort.toString(),
+            bedrockTransport = geyserNetworkSettings().transport
         )
         val result = ConnectionJourney.assess(target, state)
         val content = ui.column(this).apply {
@@ -819,6 +827,9 @@ class MainActivity : Activity() {
 
 
     /** Live local process controls. A JVM process is not proof that the game server is ready. */
+    private fun geyserNetworkSettings(): GeyserNetworkSettings.Settings =
+        GeyserNetworkSettings.read(File(base,"config/Geyser-Fabric/config.yml"))
+
     private fun serverProperty(key:String,default:String):String {
         val properties=java.util.Properties()
         try {
@@ -861,7 +872,8 @@ class MainActivity : Activity() {
         },LinearLayout.LayoutParams(0,-2,1f))
         box.addView(buttons)
         box.addView(ui.space(this,12))
-        box.addView(ui.text(this,"Java port: $port   •   Bedrock usually: 19132 (Geyser required)",11f,ui.MUTED))
+        box.addView(ui.text(this,"Java port: $port   •   Bedrock port: " +
+            geyserNetworkSettings().bedrockPort + " (from Geyser config; default 19132)",11f,ui.MUTED))
         return box
     }
 
@@ -873,6 +885,9 @@ class MainActivity : Activity() {
         val card = ui.card(this)
         val local = NetworkInfo.lanAddress()
         val port = serverProperty("server-port","25565")
+        val geyserSettings = geyserNetworkSettings()
+        val bedrockPort = geyserSettings.bedrockPort
+        val geyserInstalled = modFiles().any { it.name.startsWith("Geyser",true) && it.name.endsWith(".jar") }
         card.addView(ui.text(this,"PHONE-ONLY HOSTING",11f,ui.GREEN,true))
         card.addView(ui.space(this,8))
         card.addView(ui.text(this,"Host straight from this phone",18f,ui.WHITE,true))
@@ -906,18 +921,38 @@ class MainActivity : Activity() {
             13f,ui.WHITE,true))
         card.addView(ui.space(this,5))
         card.addView(ui.text(this,
-            "BEDROCK: " + (local?.let { "$it:19132" } ?: "Local network required") +
-                if (geyser) " • Geyser listener detected" else " • Geyser listener not confirmed",
-            12f,ui.MUTED))
+            "BEDROCK: " + (local?.let { "$it:$bedrockPort" } ?: "Local network required") +
+                if (geyser) " • Geyser connection detected" else " • Startup message not captured",
+            12f,if(geyser)ui.GREEN else ui.MUTED))
+        if (geyser) {
+            card.addView(ui.space(this,5))
+            card.addView(ui.text(this,"Evidence: " + ServerService.bedrockEvidence,11f,ui.GREEN))
+        } else if (geyserInstalled && ServerService.javaReady) {
+            card.addView(ui.space(this,7))
+            card.addView(ui.text(this,
+                "No listener log captured does not mean Bedrock is offline. If you can already join from Bedrock, confirm it below.",
+                11f,ui.MUTED))
+            card.addView(ui.space(this,8))
+            card.addView(ui.action(this,"✓  I JOINED SUCCESSFULLY FROM BEDROCK",false) {
+                AlertDialog.Builder(this).setTitle("Confirm Bedrock connection?")
+                    .setMessage("Only confirm after you have joined this running server from Minecraft Bedrock. The status applies only to this server session, and is not proof of external tunnel reachability.")
+                    .setNegativeButton("CANCEL",null)
+                    .setPositiveButton("YES, I JOINED") {_,_->
+                        startService(Intent(this, ServerService::class.java)
+                            .setAction(ServerService.ACTION_CONFIRM_BEDROCK))
+                        toast("Your Bedrock join confirmation was sent to the server")
+                    }.show()
+            })
+        }
         if (ServerService.nethernetNativeFailure) {
             card.addView(ui.space(this,8))
             card.addView(ui.text(this,
-                "NetherNet failed to load Android WebRTC JNI. This is a native-library issue, not a Playit token or port problem. See Console.",
+                "NetherNet WebRTC reported an error. RakNet may still work; check which Bedrock transport is configured.",
                 12f,ui.RED))
         }
         if (ServerService.nethernetReady) {
             card.addView(ui.space(this,5))
-            card.addView(ui.text(this,"✓ External NetherNet signaling registered",12f,ui.GREEN))
+            card.addView(ui.text(this,"✓ " + ServerService.nethernetMode,12f,ui.GREEN))
         }
         card.addView(ui.space(this,14))
         card.addView(ui.action(this,
@@ -932,12 +967,14 @@ class MainActivity : Activity() {
                     .setPrimaryClip(ClipData.newPlainText("Java LAN","$local:$port"))
                 toast("Copied local Java address")
             })
-            if (geyser) {
+            if (geyserInstalled && ServerService.javaReady) {
                 card.addView(ui.space(this,9))
-                card.addView(ui.action(this,"COPY BEDROCK LAN ADDRESS") {
+                card.addView(ui.action(this,
+                    if(geyser)"COPY BEDROCK LAN ADDRESS" else "COPY BEDROCK TEST ADDRESS") {
                     (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
-                        .setPrimaryClip(ClipData.newPlainText("Bedrock LAN","$local:19132"))
-                    toast("Copied local Bedrock address")
+                        .setPrimaryClip(ClipData.newPlainText("Bedrock LAN","$local:$bedrockPort"))
+                    toast(if(geyser)"Copied local Bedrock address"
+                        else "Copied test address. Try joining from Minecraft Bedrock.")
                 })
             }
         }
@@ -964,7 +1001,8 @@ class MainActivity : Activity() {
                     "Your phone can host on its own. For remote friends without a tunnel, " +
                     "your home internet/router must allow incoming connections.\n\n" +
                     "1. Connect the phone to your home Wi-Fi and keep PocketCraft running.\n" +
-                    "2. Forward TCP $port (Java) and UDP 19132 (Bedrock/Geyser) on your router to $localIp.\n" +
+                    "2. Forward TCP $port (Java) and " + geyserSettings.directRouterAdvice() +
+                     " (Bedrock/Geyser) on your router to $localIp.\n" +
                     "3. Share your router's reachable public IP or hostname, NOT the private LAN IP shown here.\n\n" +
                     "Mobile data and many ISPs use CGNAT, which prevents inbound port forwarding. " +
                     "A tunnel, VPN mesh, or publicly reachable connection is then needed. " +
@@ -1046,14 +1084,16 @@ class MainActivity : Activity() {
         val active = PlayitManager.isActive()
         val javaAddress = PlayitManager.javaAddress
         val bedrockAddress = PlayitManager.bedrockAddress
+        val bedrockPort = geyserNetworkSettings().bedrockPort
+        val javaPort = serverProperty("server-port","25565")
         val approval = PlayitManager.claimUrl
         card.addView(ui.text(this,"OPTIONAL INTERNET TUNNEL",11f,ui.CYAN,true))
         card.addView(ui.space(this,8))
         card.addView(ui.text(this,"Playit for remote connections",18f,ui.WHITE,true))
         card.addView(ui.space(this,8))
         card.addView(ui.text(this,
-            if(ServerService.nethernetReady) "✓ Geyser registered with external NetherNet signaling"
-            else "NetherNet signaling not confirmed yet. Check Geyser's configuration and Console.",
+            if(ServerService.nethernetReady) "✓ " + ServerService.nethernetMode
+            else "NetherNet startup message not captured. RakNet may still be working.",
             12f,if(ServerService.nethernetReady)ui.GREEN else ui.MUTED))
         card.addView(ui.space(this,8))
         val blocked = PlayitManager.status == "ACCOUNT LIMIT" || PlayitManager.status == "ACCOUNT ACTION"
@@ -1124,7 +1164,7 @@ class MainActivity : Activity() {
                 if(javaAddress==null || bedrockAddress==null) {
                     card.addView(ui.space(this,9))
                     card.addView(ui.text(this,
-                        "Use the Playit dashboard to assign tunnels to THIS phone's running agent. Java: 127.0.0.1:25565. Bedrock: 127.0.0.1:19132 where supported.",
+                        "Use the Playit dashboard to assign tunnels to THIS phone's running agent. Java: 127.0.0.1:$javaPort. Bedrock: 127.0.0.1:$bedrockPort where supported.",
                         11f,ui.MUTED))
                     card.addView(ui.space(this,8))
                     card.addView(ui.action(this,"OPEN PLAYIT TUNNELS",true) {
@@ -2406,8 +2446,8 @@ class MainActivity : Activity() {
             "Minecraft EULA: " + (if(ServerDownloads.eulaAccepted(this))"Accepted" else "Needs acceptance"),
             "Java multiplayer: " + (if(ServerService.javaReady)"Ready (reported by Minecraft)" else "Not verified"),
             "Bedrock bridge mods: " + (if(crossplay)"Files present" else "Not all installed"),
-            "Geyser listener: " + (if(ServerService.bedrockReady)"Listening reported" else "Not confirmed"),
-            "NetherNet signaling: " + (if(ServerService.nethernetReady)"Registration reported" else "Not confirmed"),
+            "Geyser connection: " + (if(ServerService.bedrockReady)ServerService.bedrockEvidence else "No startup evidence captured"),
+            "NetherNet signaling: " + ServerService.nethernetMode,
             "Playit agent: " + PlayitManager.status
         )
         AlertDialog.Builder(this).setTitle("Setup & connection diagnostics")

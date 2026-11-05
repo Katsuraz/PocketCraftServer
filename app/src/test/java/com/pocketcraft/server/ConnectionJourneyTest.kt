@@ -13,14 +13,15 @@ class ConnectionJourneyTest {
         geyserInstalled = true,
         bedrockListener = true,
         nethernetNativeFailure = false,
-        nethernetRegistered = true,
+        nethernetSignalingReady = true,
         lanIp = "192.168.1.50",
         javaPort = "25565",
         playitRunning = true,
         playitAccountConnected = true,
         playitClaimAvailable = true,
         javaPublicAddress = "example.playit.gg:12345",
-        bedrockPublicAddress = "example.playit.gg:19132"
+        bedrockPublicAddress = "example.playit.gg:19132",
+        bedrockTransport = "nethernet"
     )
 
     @Test fun javaLanNeedsServerFirst() {
@@ -52,17 +53,39 @@ class ConnectionJourneyTest {
 
     @Test fun nativeFailureNeverSharesBedrockAddress() {
         val result = ConnectionJourney.assess(
-            ConnectionJourney.Target.BEDROCK_ONLINE, ready().copy(nethernetNativeFailure=true))
+            ConnectionJourney.Target.BEDROCK_ONLINE, ready().copy(nethernetNativeFailure=true, bedrockListener=false))
         assertEquals(ConnectionJourney.Action.OPEN_CONSOLE, result.action)
         assertNull(result.address)
         assertTrue(result.title.contains("WebRTC"))
     }
 
-    @Test fun unconfirmedBedrockListenerNeverSharesAddress() {
+    @Test fun unconfirmedBedrockListenerStillAllowsHonestLanTest() {
         val result = ConnectionJourney.assess(
             ConnectionJourney.Target.BEDROCK_LAN, ready().copy(bedrockListener=false))
-        assertEquals(ConnectionJourney.Action.OPEN_CONSOLE, result.action)
-        assertNull(result.address)
+        assertEquals(ConnectionJourney.Action.COPY_ADDRESS, result.action)
+        assertEquals("192.168.1.50:19132",result.address)
+        assertTrue(result.title.contains("not confirmed"))
+    }
+
+    @Test fun workingRaknetNotBlockedByAnUnrelatedWebRtcError() {
+        val result = ConnectionJourney.assess(
+            ConnectionJourney.Target.BEDROCK_LAN,
+            ready().copy(nethernetNativeFailure=true, bedrockTransport="raknet"))
+        assertEquals(ConnectionJourney.Action.COPY_ADDRESS,result.action)
+        assertEquals("192.168.1.50:19132",result.address)
+    }
+
+    @Test fun bedrockLanUsesConfiguredPort() {
+        val result = ConnectionJourney.assess(
+            ConnectionJourney.Target.BEDROCK_LAN, ready().copy(bedrockPort="25432"))
+        assertEquals("192.168.1.50:25432", result.address)
+    }
+
+    @Test fun raknetDoesNotRequireNethernetSignaling() {
+        val result = ConnectionJourney.assess(
+            ConnectionJourney.Target.BEDROCK_ONLINE,
+            ready().copy(bedrockTransport="raknet", nethernetSignalingReady=false))
+        assertEquals(ConnectionJourney.Action.COPY_ADDRESS,result.action)
     }
 
     @Test fun publicConnectionRequiresTunnelAndApproval() {
@@ -76,7 +99,7 @@ class ConnectionJourneyTest {
 
     @Test fun bedrockInternetNeedsNethernetSignaling() {
         val result = ConnectionJourney.assess(
-            ConnectionJourney.Target.BEDROCK_ONLINE, ready().copy(nethernetRegistered=false))
+            ConnectionJourney.Target.BEDROCK_ONLINE, ready().copy(nethernetSignalingReady=false))
         assertEquals(ConnectionJourney.Action.OPEN_CONSOLE, result.action)
         assertNull(result.address)
     }

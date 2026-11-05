@@ -25,14 +25,16 @@ internal object ConnectionJourney {
         val geyserInstalled: Boolean,
         val bedrockListener: Boolean,
         val nethernetNativeFailure: Boolean,
-        val nethernetRegistered: Boolean,
+        val nethernetSignalingReady: Boolean,
         val lanIp: String?,
         val javaPort: String,
         val playitRunning: Boolean,
         val playitAccountConnected: Boolean,
         val playitClaimAvailable: Boolean,
         val javaPublicAddress: String?,
-        val bedrockPublicAddress: String?
+        val bedrockPublicAddress: String?,
+        val bedrockPort: String = "19132",
+        val bedrockTransport: String = "unknown"
     )
 
     data class Guidance(
@@ -61,16 +63,26 @@ internal object ConnectionJourney {
                 "This Fabric server needs Geyser and compatible Fabric API. Check the Mod Library.",
                 "OPEN MOD LIBRARY", Action.OPEN_MODS
             )
-            if (state.nethernetNativeFailure) return Guidance(
-                "Android WebRTC library failed",
-                "Geyser loaded, but NetherNet failed on Android. Changing Playit tokens or ports cannot repair this native library error. Check Console.",
-                "VIEW FAILURE IN CONSOLE", Action.OPEN_CONSOLE
-            )
-            if (!state.bedrockListener) return Guidance(
-                "Bedrock listener not confirmed",
-                "Geyser might still be loading or its NetherNet transport may have failed. Check Console before sharing this address.",
-                "OPEN CONSOLE", Action.OPEN_CONSOLE
-            )
+            if (!state.bedrockListener) {
+                // Lack of a startup log must never hide a perfectly usable LAN
+                // address. Allow the player to TEST it without claiming readiness.
+                if (!target.online && !state.lanIp.isNullOrBlank()) return Guidance(
+                    "Bedrock startup not confirmed — test your connection",
+                    "PocketCraft missed Geyser's listener message. Try connecting from Bedrock, then confirm your successful join in Phone-only hosting.",
+                    "COPY TEST ADDRESS", Action.COPY_ADDRESS,
+                    state.lanIp + ":" + state.bedrockPort
+                )
+                if (state.nethernetNativeFailure && state.bedrockTransport != "raknet") return Guidance(
+                    "Android WebRTC library error reported",
+                    "NetherNet reported a native-library error and no working listener or Bedrock join has been observed. Check Console.",
+                    "VIEW FAILURE IN CONSOLE", Action.OPEN_CONSOLE
+                )
+                return Guidance(
+                    "Bedrock listener not yet confirmed",
+                    "PocketCraft did not capture a Geyser startup message. This does NOT necessarily mean Bedrock cannot connect. Try a Bedrock join; the phone-hosting panel can record your successful test.",
+                    "OPEN CONSOLE", Action.OPEN_CONSOLE
+                )
+            }
         }
         if (!target.online) {
             val ip = state.lanIp?.takeIf { it.isNotBlank() } ?: return Guidance(
@@ -78,7 +90,7 @@ internal object ConnectionJourney {
                 "Local players must reach the same Wi-Fi or hotspot network.",
                 "OPEN WI-FI SETTINGS", Action.OPEN_NETWORK_SETTINGS
             )
-            val address = if (target.bedrock) ip + ":19132" else ip + ":" + state.javaPort
+            val address = if (target.bedrock) ip + ":" + state.bedrockPort else ip + ":" + state.javaPort
             return Guidance(
                 "LAN address ready to test",
                 "The local listener was reported ready. Join from another device on the same network to confirm.",
@@ -96,9 +108,10 @@ internal object ConnectionJourney {
             if (state.playitClaimAvailable) "APPROVE PLAYIT AGENT" else "OPEN PLAYIT SETUP",
             if (state.playitClaimAvailable) Action.CONNECT_PLAYIT else Action.VIEW_PLAYIT
         )
-        if (target.bedrock && !state.nethernetRegistered) return Guidance(
-            "NetherNet signaling not confirmed",
-            "Internet Bedrock requires NetherNet signaling. A Playit address alone does not prove that this works.",
+        if (target.bedrock && state.bedrockTransport == "nethernet" &&
+            !state.nethernetSignalingReady) return Guidance(
+            "NetherNet signaling not yet confirmed",
+            "Bedrock transport is set to NetherNet, but no built-in or external signaling startup message was captured. A tunnel address alone does not prove it works.",
             "CHECK CONSOLE", Action.OPEN_CONSOLE
         )
         val address = (if (target.bedrock) state.bedrockPublicAddress else state.javaPublicAddress)
