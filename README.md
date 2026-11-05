@@ -211,3 +211,18 @@ This guard cannot test the APK already installed on the user's phone or prove ma
 - Changes **Server files → Open server in Files** to launch Android Files (or attempt direct navigation to the PocketCraft document root), instead of opening a self-initiated `ACTION_OPEN_DOCUMENT_TREE` picker that can omit the app's own provider.
 - Keeps the original in-app file editor and full ZIP backups when the device's Files app does not support the provider. Support depends on the installed Files app and Android vendor implementation; verify on the real device.
 - Android version bumped to **0.8.5 (`versionCode 27`)**. The GitHub Actions downgrade guard continues to reject lower version codes. Successful GitHub Actions compilation is required before an APK can be downloaded; device-level file browsing and theme rendering have not been validated yet.
+
+
+## PocketCraft v0.8.6 — Homestead Woodland, pixel fonts, signed updates
+
+The existing Kotlin app includes original carved timber-panel styling and a forest/moss/parchment palette, enabled by default for new installations. Settings → Appearance switches between Woodland and Midnight. Settings → Font style switches between Minecraft Pixel and Classic Android. Pixel mode uses Pixelify Sans for regular UI and Press Start 2P for short headings, preserving monospace console output. These font files are licensed under the SIL Open Font License 1.1, sourced from Google's font repository and verified by Git blob hashes during the APK build. Fonts and license notices are bundled locally inside the finished APK. No Minecraft/Homestead copyrighted assets are used.
+
+**Settings → App updates** checks GitHub Releases, not temporary GitHub Actions artifacts. A normal server build has no release and will report that none is published. A trusted release must include an APK asset plus `pocketcraft-update.json` with `versionName`, `versionCode`, `apkName`, and `sha256`. The Android updater compares numeric version codes, checks byte count and SHA-256, package name and APK signing certificate, and only then invokes Android's own installer. Update checks are optional, happen at most daily, and **never install automatically**. No world/mod/Playit files are modified.
+
+**Publishing a real update**:
+1. Configure **both** GitHub Actions secrets `POCKETCRAFT_KEYSTORE_BASE64` and `POCKETCRAFT_SIGNING_PASSWORD` using a safely stored long-lived signing key with alias `pocketcraft`. Never share those values.
+2. Merge reviewed/tested changes onto `main`. Confirm the matching `versionCode` and `versionName` in `app/build.gradle.kts`; code must monotonically increase.
+3. Push tag `v0.8.6` on the commit containing `versionName = "0.8.6"`. The Android GitHub Actions workflow builds the APK, verifies integrity/signature, then publishes a GitHub Release with `PocketCraft-v0.8.6.apk` and matching `pocketcraft-update.json`. Tag builds **refuse release publishing** without persistent signing.
+4. A device that already has the matching certificate can check for and install the new release. Older, unrelated debug certificates cannot be upgraded in place: **back up all server files before a one-time reinstall**. Do not uninstall until backups have been exported and verified.
+
+**Known limitations:** A successful CI APK proves it compiled, not that in-app installation, Android permissions, Geyser crossplay, Playit tunneling or server runtime were exercised on a real device. Recheck these flows on the actual phone before treating them as verified.
