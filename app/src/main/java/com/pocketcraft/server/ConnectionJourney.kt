@@ -34,7 +34,8 @@ internal object ConnectionJourney {
         val javaPublicAddress: String?,
         val bedrockPublicAddress: String?,
         val bedrockPort: String = "19132",
-        val bedrockTransport: String = "unknown"
+        val bedrockTransport: String = "unknown",
+        val signalingMode: String = "unknown"
     )
 
     data class Guidance(
@@ -62,6 +63,20 @@ internal object ConnectionJourney {
                 "Install the Bedrock bridge",
                 "This Fabric server needs Geyser and compatible Fabric API. Check the Mod Library.",
                 "OPEN MOD LIBRARY", Action.OPEN_MODS
+            )
+            // NXS-only signaling is not a built-in LAN endpoint. Do not give
+            // users a misleading local address while it is disabled.
+            if (!target.online && state.bedrockTransport == "nethernet" &&
+                state.signalingMode == "nxs") return Guidance(
+                "Local Bedrock discovery is not enabled",
+                "Geyser uses external-only NXS signaling. Your Playit address uses that service, but a phone LAN IP needs built-in signaling. Review Geyser's hybrid mode to enable both; preserve your Playit token and restart before testing.",
+                "CHECK GEYSER LOGS", Action.OPEN_CONSOLE
+            )
+            if (target.online && state.bedrockTransport == "nethernet" &&
+                (state.signalingMode == "builtin" || state.signalingMode == "none")) return Guidance(
+                "Playit NetherNet needs external signaling",
+                "Your Geyser configuration uses built-in or disabled signaling. Check Playit's Geyser configuration help for NXS credentials and a compatible signaling mode.",
+                "CHECK GEYSER LOGS", Action.OPEN_CONSOLE
             )
             if (!state.bedrockListener) {
                 // Lack of a startup log must never hide a perfectly usable LAN
