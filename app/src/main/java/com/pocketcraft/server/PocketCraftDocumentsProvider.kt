@@ -93,7 +93,8 @@ class PocketCraftDocumentsProvider : DocumentsProvider() {
                     DocumentsContract.Root.COLUMN_TITLE -> "PocketCraft Server"
                     DocumentsContract.Root.COLUMN_SUMMARY -> "Live Minecraft files"
                     DocumentsContract.Root.COLUMN_FLAGS -> DocumentsContract.Root.FLAG_LOCAL_ONLY or
-                        DocumentsContract.Root.FLAG_SUPPORTS_CREATE
+                        DocumentsContract.Root.FLAG_SUPPORTS_CREATE or
+                        DocumentsContract.Root.FLAG_SUPPORTS_IS_CHILD
                     DocumentsContract.Root.COLUMN_ICON -> R.drawable.pocket_logo
                     DocumentsContract.Root.COLUMN_AVAILABLE_BYTES -> root().usableSpace
                     DocumentsContract.Root.COLUMN_MIME_TYPES -> "*/*"
