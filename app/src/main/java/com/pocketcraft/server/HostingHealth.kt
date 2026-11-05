@@ -26,7 +26,8 @@ internal object HostingHealth {
         val lastError: String?,
         val bedrockEvidence: String = "",
         val bedrockJoinVerified: Boolean = false,
-        val geyserWarnings: List<String> = emptyList()
+        val geyserWarnings: List<String> = emptyList(),
+        val compatibilityWarnings: List<String> = emptyList()
     )
 
     data class Check(
@@ -81,6 +82,9 @@ internal object HostingHealth {
                 "NetherNet signaling reported; no public Bedrock tunnel found"
             else -> "For remote Bedrock, verify the configured RakNet or NetherNet transport"
         }, Level.INFO)
+        for (warning in s.compatibilityWarnings.take(5)) checks += Check(
+            "Android compatibility", warning, Level.INFO
+        )
         for (warning in s.geyserWarnings.take(6)) checks += Check(
             "Geyser configuration", warning, Level.ACTION
         )
