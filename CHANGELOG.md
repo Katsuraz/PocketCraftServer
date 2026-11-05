@@ -1,5 +1,17 @@
 # PocketCraft changelog
 
+## v0.8.33 (versionCode 55) — Crossplay diagnostics and first-run guide
+
+- Add a first-run installation guide after a fresh app-data install and a permanent Home action to reopen it. Show the existing core setup checklist immediately when prerequisites are missing.
+- Separate NetherNet signaling registration from a **verified Bedrock player login**. A successful Playit registration alone no longer shows `BEDROCK JOIN VERIFIED`.
+- Read only public Geyser transport/signaling settings, flag duplicate YAML modes and unsuitable local-IP configurations without reading private NXS tokens.
+- Explain external-only NXS versus built-in/hybrid LAN signaling in the join wizard. Do not supply a misleading local Bedrock join address when `transport: nethernet` and `signaling.mode: nxs`.
+- Make the local hosting panel and health diagnostics report configuration problems; show distinct Java/Geyser readiness and player join evidence.
+- Classify Android-specific C2ME/JNA, LOD hard-link, native zstd and lag warnings as non-secret diagnostic hints.
+- Add regression tests for signaling configurations, connection guidance, and truthful join readiness.
+- No automatic Geyser config rewrites, no token exposure, no changes to saved worlds or existing Minecraft hosting features.
+
+
 ## v0.8.32 (versionCode 54) — Remove experimental game hosting
 
 - Fully revert the experimental Mindustry/Game Lab feature introduced in v0.8.30 and v0.8.31, restoring the Minecraft-only v0.8.29 application source and UI.
