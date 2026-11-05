@@ -196,3 +196,11 @@ proof of an operational Bedrock listener; test on a real phone.**
 - Android third-party file managers do not all expose Documents Provider roots. If yours does not, use the Android system Files/Document picker or PocketCraft's built-in Server Files screen and full ZIP export.
 - **Playit settings:** use **Paste Playit Settings** in Mods. Copy the complete Geyser YAML snippet from the Playit NetherNet tunnel configuration help, not an agent secret. Stop and restart the Minecraft server when editing settings.
 - **Validation:** the GitHub code changes require GitHub Actions APK compilation and on-device verification before they can be considered a tested release. APK upgrades still require a matching Android signing certificate. Back up the world before changing builds.
+
+## Release version tracking — safeguard against APK downgrade
+
+The current verified baseline is **PocketCraft 0.8.4 (Android `versionCode = 26`)** in `app/build.gradle.kts`. Earlier uploaded APKs were build (17) with code 25 and build (18) with code 21; attempting to install the latter over the former triggers Android's downgrade protection.
+
+The Android build workflow now fetches the project's Git history and **fails** if the Gradle versionCode is lower than the largest historical value (minimum floor: 26). This guards against repeat downgrades even if filenames or GitHub artifact numbers are confusing. Each subsequent release should increase versionCode by at least 1. `versionName` is user-facing only, while Android uses `versionCode` for update ordering.
+
+This guard cannot test the APK already installed on the user's phone or prove matching signing certificates. Before any major install, export a server backup and verify the APK is signed with the existing signing certificate.
