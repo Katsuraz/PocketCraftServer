@@ -118,6 +118,7 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        ui.loadTheme(this)
         window.statusBarColor = ui.BG
         window.navigationBarColor = ui.BG
         window.decorView.systemUiVisibility = 0
@@ -131,7 +132,7 @@ class MainActivity : Activity() {
         outState.putIntArray("tabScroll", scrollOffsets)
         super.onSaveInstanceState(outState)
     }
-    override fun onResume() { super.onResume(); render(); uiHandler.removeCallbacks(updateStatus); uiHandler.post(updateStatus) }
+    override fun onResume() { super.onResume(); ui.loadTheme(this); render(); uiHandler.removeCallbacks(updateStatus); uiHandler.post(updateStatus) }
     override fun onPause() { uiHandler.removeCallbacks(updateStatus); super.onPause() }
 
     private fun h(label: String, sub: String? = null): LinearLayout {
