@@ -140,7 +140,7 @@ object PocketUpdates {
     fun download(context: Context, release: Release, progress: (Long,Long)->Unit): Download {
         require(validDownloadUrl(release.apkUrl)) { "Unexpected download URL" }
         val folder = File(context.cacheDir,"pocketcraft-updates").apply { mkdirs() }
-        val temp = File(folder,"download.part")
+        val temp = File(folder,"pocketcraft-download.apk")
         val destination = File(folder,"pocketcraft-verified.apk")
         temp.delete()
         destination.delete()
