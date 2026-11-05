@@ -39,19 +39,27 @@ object WorldStore {
             throw IOException("Not a managed Minecraft world")
         return checked
     }
-    private fun assignName(c: Context, name: String) {
+    private fun assignName(c: Context, name: String, renameOnly: Boolean = false) {
         val f=File(root(c),"server.properties")
         val props=Properties()
         if(f.isFile) f.inputStream().use { props.load(it) }
+        val previous=props.getProperty("level-name","world")
+        if(previous!=name && !renameOnly) {
+            WorldHostingProfiles.saveCurrentFromServer(c,previous,props)
+            WorldHostingProfiles.applyProfile(c,name,props)
+        }
         props.setProperty("level-name",name)
         if(!props.containsKey("online-mode")) props.setProperty("online-mode","true")
-        val temp=File(root(c),".server.properties.world-switching")
+        // Keep a complete previous copy if an interrupted save occurs.
+        val atomic = android.util.AtomicFile(f)
+        val stream = atomic.startWrite()
         try {
-            temp.outputStream().use { props.store(it,"PocketCraft Server") }
-            if (!temp.renameTo(f)) {
-                if (!temp.copyTo(f,overwrite=true).isFile) throw IOException("Could not update active world")
-            }
-        } finally { temp.delete() }
+            props.store(stream,"PocketCraft Server")
+            atomic.finishWrite(stream)
+        } catch (e: Exception) {
+            atomic.failWrite(stream)
+            throw e
+        }
     }
 
     /** Reserve an empty world folder; Minecraft generates level.dat on first launch. */
@@ -92,8 +100,20 @@ object WorldStore {
                 dest.parentFile?.mkdirs()
                 file.copyTo(dest,overwrite=false)
             }
+            // A duplicate starts with an independent copy of this world's settings.
+            if (source.name==active(c)) {
+                val props=Properties()
+                File(root(c),"server.properties").takeIf { it.isFile }
+                    ?.inputStream()?.use { props.load(it) }
+                WorldHostingProfiles.saveCurrentFromServer(c,source.name,props)
+            }
+            WorldHostingProfiles.onDuplicate(c,source.name,name)
             return target
-        }catch(e:Exception){target.deleteRecursively();throw e}
+        }catch(e:Exception){
+            target.deleteRecursively()
+            WorldHostingProfiles.onDelete(c,name)
+            throw e
+        }
     }
 
     fun delete(c: Context, world: File) {
@@ -101,6 +121,7 @@ object WorldStore {
         val selected=requireWorld(c,world)
         if(selected.name==active(c)) throw IOException("Select another world before deleting the active one")
         if(!selected.deleteRecursively())throw IOException("Could not delete the world")
+        WorldHostingProfiles.onDelete(c,selected.name)
     }
 
     fun rename(c: Context, world: File, name: String): File {
@@ -110,10 +131,21 @@ object WorldStore {
         val target=File(root(c),name)
         if(target.exists())throw IOException("A folder with that name already exists")
         val wasActive=selected.name==active(c)
+        if(wasActive) {
+            val props=Properties()
+            File(root(c),"server.properties").takeIf { it.isFile }
+                ?.inputStream()?.use { props.load(it) }
+            WorldHostingProfiles.saveCurrentFromServer(c,selected.name,props)
+        }
         if(!selected.renameTo(target))throw IOException("Could not rename world")
         try {
-            if(wasActive)assignName(c,name)
-        }catch(e:Exception){target.renameTo(selected);throw e}
+            WorldHostingProfiles.onRename(c,selected.name,name)
+            if(wasActive)assignName(c,name,renameOnly=true)
+        }catch(e:Exception){
+            target.renameTo(selected)
+            runCatching { WorldHostingProfiles.onRename(c,name,selected.name) }
+            throw e
+        }
         return target
     }
 
