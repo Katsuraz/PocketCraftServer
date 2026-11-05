@@ -1592,9 +1592,7 @@ class MainActivity : Activity() {
                                         ModrinthDiscovery.Verdict.UNCERTAIN)
                                         "INSTALL ANYWAY" else "INSTALL"
                                 ) { _, _ ->
-                                    downloadAsync("Installing "+item.title) {
-                                        WebsiteModInstaller.installWithDependencies(this,item.slug)
-                                    }
+                                    chooseModDependencies(item.title, item.slug)
                                 }
                             }
                             confirmation.show()
@@ -2029,6 +2027,64 @@ class MainActivity : Activity() {
             }
         }
         dialog.show()
+    }
+
+    /** Let players select optional dependencies before downloading mods. */
+    private fun chooseModDependencies(title: String, slug: String) {
+        val waiting = AlertDialog.Builder(this).setTitle("Checking dependencies")
+            .setMessage("Reading required and optional mods…")
+            .setCancelable(false).create()
+        waiting.show()
+        Thread {
+            val result = runCatching { WebsiteModInstaller.previewDependencies(this, slug) }
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                waiting.dismiss()
+                result.onFailure {
+                    AlertDialog.Builder(this).setTitle("Dependency lookup failed")
+                        .setMessage((it.message ?: "Network error") +
+                            "\n\nYou can still try the standard installer.")
+                        .setNegativeButton("CANCEL", null)
+                        .setPositiveButton("INSTALL") { _, _ ->
+                            downloadAsync("Installing " + title) {
+                                WebsiteModInstaller.installWithDependencies(this, slug)
+                            }
+                        }.show()
+                }
+                result.onSuccess { choices ->
+                    val selected = BooleanArray(choices.size) { i ->
+                        choices[i].required || choices[i].installed
+                    }
+                    val labels = choices.map {
+                        (if (it.installed) "✓ INSTALLED · " else if (it.required)
+                            "REQUIRED · " else "OPTIONAL · ") + it.title
+                    }.toTypedArray()
+                    val builder = AlertDialog.Builder(this)
+                        .setTitle("Dependencies · " + title)
+                        .setMessage(if (choices.isEmpty()) "No dependencies listed for this release."
+                            else "Required mods stay selected. Already installed mods are skipped. " +
+                                "Tap optional mods to include them.")
+                        .setNegativeButton("CANCEL", null)
+                    if (choices.isNotEmpty()) builder.setMultiChoiceItems(
+                        labels, selected
+                    ) { dialog, index, checked ->
+                        if (choices[index].required || choices[index].installed) {
+                            selected[index] = true
+                            (dialog as AlertDialog).listView.setItemChecked(index, true)
+                        } else selected[index] = checked
+                    }
+                    builder.setPositiveButton("INSTALL") { _, _ ->
+                        val optional = choices.indices.filter {
+                            !choices[it].required && !choices[it].installed && selected[it]
+                        }.map { choices[it].projectId }.toSet()
+                        downloadAsync("Installing " + title) {
+                            WebsiteModInstaller.installWithDependencies(
+                                this, slug, selectedOptional = optional)
+                        }
+                    }.show()
+                }
+            }
+        }.start()
     }
 
     private fun browseModrinth() {
