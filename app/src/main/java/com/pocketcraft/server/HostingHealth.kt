@@ -74,7 +74,7 @@ internal object HostingHealth {
             !s.bedrockTunnelAddress.isNullOrBlank() && s.nethernetSignalingReady ->
                 "Tunnel assigned and NetherNet signaling reported; test a Bedrock login"
             !s.bedrockTunnelAddress.isNullOrBlank() ->
-                "Tunnel exists; no NetherNet startup message captured (RakNet may not require it)"
+                "Tunnel exists; NetherNet signaling not confirmed (RakNet may not require it)"
             s.nethernetSignalingReady ->
                 "NetherNet signaling reported; no public Bedrock tunnel found"
             else -> "For remote Bedrock, verify the configured RakNet or NetherNet transport"
