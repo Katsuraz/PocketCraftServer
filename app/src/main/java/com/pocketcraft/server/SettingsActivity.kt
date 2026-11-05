@@ -310,8 +310,9 @@ class SettingsActivity : Activity() {
             body.addView(notice)
         }
 
-        section(body,"Multiplayer identity","Name and share your Minecraft world") { card ->
-            input(card,"motd","Server message (MOTD)","PocketCraft Server","Shown to Minecraft Java players in their server list")
+        section(body,"Server connections","Share address and Java capacity") { card ->
+            card.addView(ui.text(this,"World-specific MOTD and gameplay options now live inside Worlds → your world → World settings.",12f,ui.MUTED))
+            card.addView(ui.space(this,13))
             card.addView(ui.text(this,"SHARE ADDRESS",14f,ui.WHITE,true))
             card.addView(ui.space(this,5))
             card.addView(ui.text(this,"Optional domain, tunnel hostname or public address. For sharing only — this cannot create or change your public IP or DNS.",11f,ui.MUTED))
@@ -362,21 +363,7 @@ class SettingsActivity : Activity() {
             card.addView(ui.text(this,"No external remote console is exposed by PocketCraft.",11f,ui.MUTED))
         }
 
-        section(body,"Gameplay","Tune difficulty and player behavior") { card ->
-            select(card,"gamemode","Default game mode","survival",listOf("survival","creative","adventure","spectator"))
-            select(card,"difficulty","Difficulty","normal",listOf("peaceful","easy","normal","hard"))
-            toggle(card,"pvp","Player versus player","Allow players to damage each other",true)
-            toggle(card,"hardcore","Hardcore survival","Hardcore deaths and difficulty rules",false)
-            toggle(card,"allow-flight","Allow flight","Useful for server mods that support flight",false)
-            toggle(card,"generate-structures","Generate structures","Villages and other world structures",true)
-        }
-
-        section(body,"World & performance","Keep your device responsive") { card ->
-            input(card,"level-name","Active world folder","world","Switch worlds from the World vault instead")
-            input(card,"level-seed","Seed for new worlds","","Does not regenerate existing chunks")
-            input(card,"view-distance","View distance (chunks)","5","Lower values save RAM and CPU",true)
-            input(card,"simulation-distance","Simulation distance (chunks)","4","Lower values improve performance",true)
-            input(card,"spawn-protection","Spawn protection radius","0","0 disables protection",true)
+        section(body,"Server resources","Java memory; gameplay and world generation settings are inside each world folder") { card ->
             // JNI launcher uses the saved heapMB setting; no Android device RAM is
             // reserved until the server is started. 21 safe steps from 512–3072 MB.
             selectedHeapMB = getSharedPreferences("pocketcraft",0)
@@ -436,10 +423,7 @@ class SettingsActivity : Activity() {
         if(ServerService.running) {toast("Stop the server before editing its settings");return}
         val ranges=mapOf(
             "server-port" to 1..65535,
-            "max-players" to 1..100,
-            "view-distance" to 2..32,
-            "simulation-distance" to 2..32,
-            "spawn-protection" to 0..256
+            "max-players" to 1..100
         )
         for((key,range) in ranges) {
             val n=value(key).toIntOrNull()
@@ -455,17 +439,9 @@ class SettingsActivity : Activity() {
             toast("Java memory must be between 512 and 3072 MB")
             return
         }
-        val world=value("level-name")
-        if(!Regex("[A-Za-z0-9._-]{1,64}").matches(world) || world=="." || world=="..") {
-            toast("World name must be a simple folder name");return
-        }
         val share=advertised.text.toString().trim()
         if(share.length>253 || share.contains(Regex("[\\s/\\\\]")) || share.contains("@")) {
             toast("Enter a hostname or address, without spaces or URLs");return
-        }
-        val motd=value("motd")
-        if(motd.length>120 || motd.contains("\n") || motd.contains("\r")) {
-            toast("MOTD is too long");return
         }
         val online=toggles.getValue("online-mode").isChecked
         val whitelist=toggles.getValue("white-list").isChecked
