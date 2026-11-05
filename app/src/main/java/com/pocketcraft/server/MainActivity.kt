@@ -78,7 +78,7 @@ class MainActivity : Activity() {
                     val scroller = consoleLogScroll
                     val nearBottom = scroller?.let {
                         it.scrollY + it.height >=
-                            (it.getChildAt(0)?.height ?: 0) - ui.dp(this, 52)
+                            (it.getChildAt(0)?.height ?: 0) - ui.dp(this@MainActivity, 52)
                     } ?: true
                     consoleOutput?.text = getLog()
                     if (nearBottom && scroller != null) {
