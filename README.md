@@ -204,3 +204,10 @@ The current verified baseline is **PocketCraft 0.8.4 (Android `versionCode = 26`
 The Android build workflow now fetches the project's Git history and **fails** if the Gradle versionCode is lower than the largest historical value (minimum floor: 26). This guards against repeat downgrades even if filenames or GitHub artifact numbers are confusing. Each subsequent release should increase versionCode by at least 1. `versionName` is user-facing only, while Android uses `versionCode` for update ordering.
 
 This guard cannot test the APK already installed on the user's phone or prove matching signing certificates. Before any major install, export a server backup and verify the APK is signed with the existing signing certificate.
+
+## PocketCraft 0.8.5 — Homestead-inspired UI + Files navigation
+
+- Adds an **optional original Homestead-inspired woodland theme**: oak/stone-toned panels, parchment text, moss-green and amber actions, serif headings, and a procedural cabin scene. No Homestead modpack textures or copyrighted assets are redistributed. Choose **Server settings → Appearance → Homestead**; switch back to Midnight at any time. The preference is local to the app and does not modify Minecraft server files.
+- Changes **Server files → Open server in Files** to launch Android Files (or attempt direct navigation to the PocketCraft document root), instead of opening a self-initiated `ACTION_OPEN_DOCUMENT_TREE` picker that can omit the app's own provider.
+- Keeps the original in-app file editor and full ZIP backups when the device's Files app does not support the provider. Support depends on the installed Files app and Android vendor implementation; verify on the real device.
+- Android version bumped to **0.8.5 (`versionCode 27`)**. The GitHub Actions downgrade guard continues to reject lower version codes. Successful GitHub Actions compilation is required before an APK can be downloaded; device-level file browsing and theme rendering have not been validated yet.
