@@ -35,7 +35,9 @@ internal object WorldHostingProfiles {
     private fun file(context: Context, world: String): File {
         if (!validWorld.matches(world) || world == "." || world == "..")
             throw IOException("Invalid world name")
-        return File(File(context.filesDir, "world-profiles"), "$world.properties")
+        // Store the profile in the world itself so ZIP exports, duplication and
+        // renames naturally preserve the associated hosting preferences.
+        return File(File(WorldStore.root(context), world), ".pocketcraft-hosting.properties")
     }
 
     fun defaults(): Properties = Properties().also { result ->
@@ -159,27 +161,4 @@ internal object WorldHostingProfiles {
         }
     }
 
-    fun onDuplicate(context: Context, source: String, dest: String) {
-        val original = file(context,source)
-        if (original.isFile) {
-            val target = file(context,dest)
-            if (target.exists()) throw IOException("Duplicated profile already exists")
-            target.parentFile?.mkdirs()
-            original.copyTo(target,overwrite=false)
-        }
-    }
-
-    fun onRename(context: Context, source: String, dest: String) {
-        val original = file(context,source)
-        if (original.isFile) {
-            val target = file(context,dest)
-            if (target.exists()) throw IOException("Renamed world profile already exists")
-            target.parentFile?.mkdirs()
-            if (!original.renameTo(target)) throw IOException("Could not rename world profile")
-        }
-    }
-
-    fun onDelete(context: Context, world: String) {
-        file(context,world).delete()
-    }
 }
