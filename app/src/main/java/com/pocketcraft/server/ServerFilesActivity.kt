@@ -134,6 +134,7 @@ class ServerFilesActivity : Activity() {
                 "GEYSER CONFIG" to "config/Geyser-Fabric/config.yml",
                 "SERVER PROPERTIES" to "server.properties",
                 "MODS" to "mods",
+                "DATAPACKS" to (WorldStore.active(this@ServerFilesActivity) + "/datapacks"),
                 "CONSOLE LOG" to "console.log"
             )) {
                 shortcuts.addView(ui.action(this,label){openPath(File(serverRoot,path))})

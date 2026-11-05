@@ -1419,6 +1419,8 @@ class MainActivity : Activity() {
         hero.addView(ui.action(this,"⌕  BROWSE MODS",true) { browseMods() })
         hero.addView(ui.space(this,8))
         hero.addView(ui.action(this,"▦  BROWSE MODPACKS") { browseModrinth() })
+        hero.addView(ui.space(this,8))
+        hero.addView(ui.action(this,"▣  WORLD DATAPACKS") { showDatapacks() })
         body.addView(hero)
         body.addView(ui.space(this,15))
 
@@ -1634,6 +1636,8 @@ class MainActivity : Activity() {
         body.addView(ui.action(this,"▤  SERVER FILES & FULL BACKUP",true) {openServerFiles()})
         body.addView(ui.space(this,10))
         body.addView(ui.action(this,"+  IMPORT WORLD ZIP",true) {picker(3)})
+        body.addView(ui.space(this,9))
+        body.addView(ui.action(this,"▣  MANAGE DATAPACKS",true) {showDatapacks()})
         body.addView(ui.space(this,16))
         val list=WorldStore.worlds(this)
         val current=WorldStore.active(this)
@@ -1674,6 +1678,164 @@ class MainActivity : Activity() {
         note.addView(ui.space(this,8))
         note.addView(ui.text(this,"Exports are saved to a location you choose. Imports use path checks and a 1 GB extracted-size limit. Always back up a world before replacing it.",12f,ui.MUTED))
         body.addView(note)
+    }
+
+    /** Datapacks belong to the active world, never to Fabric's /mods folder. */
+    private fun showDatapacks() {
+        val active = runCatching { DatapackInstaller.activeDirectory(this) }
+        if (active.isFailure) {
+            AlertDialog.Builder(this).setTitle("World required")
+                .setMessage(active.exceptionOrNull()?.message ?:
+                    "Start Minecraft once or select a world before adding datapacks.")
+                .setPositiveButton("OK",null).show()
+            return
+        }
+        val world = WorldStore.active(this)
+        val panel = ui.column(this).apply {
+            setPadding(ui.dp(this@MainActivity,16),ui.dp(this@MainActivity,10),
+                ui.dp(this@MainActivity,16),ui.dp(this@MainActivity,14))
+        }
+        panel.addView(ui.pill(this,"WORLD  •  " + world,ui.GREEN))
+        panel.addView(ui.space(this,9))
+        panel.addView(ui.text(this,"Datapacks change this world for Java and Geyser players.",
+            12f,ui.MUTED))
+        panel.addView(ui.space(this,12))
+        lateinit var dialog: AlertDialog
+        panel.addView(ui.action(this,"＋  IMPORT DATAPACK ZIP",true,!ServerService.running) {
+            dialog.dismiss()
+            picker(6)
+        })
+        panel.addView(ui.space(this,8))
+        panel.addView(ui.action(this,"⌕  FIND ON MODRINTH",false,!ServerService.running) {
+            dialog.dismiss()
+            searchDatapacks()
+        })
+        panel.addView(ui.space(this,8))
+        panel.addView(ui.action(this,"▤  VIEW DATAPACKS FOLDER") {
+            dialog.dismiss()
+            openServerFiles(world + "/datapacks")
+        })
+        panel.addView(ui.space(this,16))
+        panel.addView(ui.text(this,"Installed ZIPs",17f,ui.WHITE,true))
+        panel.addView(ui.space(this,8))
+        val installed = DatapackInstaller.installed(this)
+        if (installed.isEmpty()) {
+            panel.addView(ui.text(this,"No ZIP datapacks installed in this world.",
+                12f,ui.MUTED))
+        } else {
+            installed.forEach { file ->
+                val row = ui.row(this)
+                row.addView(ui.text(this,file.name,12f,ui.WHITE),ui.weight(this))
+                row.addView(ui.action(this,"REMOVE",false,!ServerService.running) {
+                    dialog.dismiss()
+                    AlertDialog.Builder(this).setTitle("Remove " + file.name + "?")
+                        .setMessage("Only this datapack ZIP will be deleted. Back up your world first; removing datapacks can affect world features.")
+                        .setNegativeButton("CANCEL") {_,_->showDatapacks()}
+                        .setPositiveButton("REMOVE") {_,_->
+                            val result=runCatching {
+                                DatapackInstaller.remove(this,file.name)
+                            }
+                            result.onFailure {toast("Could not remove datapack: "+it.message)}
+                            result.onSuccess {toast("Removed "+file.name+". Restart the server.");}
+                            showDatapacks()
+                        }.show()
+                },LinearLayout.LayoutParams(ui.dp(this,96),-2))
+                panel.addView(row)
+                panel.addView(ui.space(this,8))
+            }
+        }
+        val scroll=ScrollView(this).apply {addView(panel)}
+        dialog=AlertDialog.Builder(this).setTitle("Datapacks")
+            .setView(scroll).setNegativeButton("CLOSE",null).create()
+        dialog.show()
+        dialog.window?.setLayout((resources.displayMetrics.widthPixels*.94).toInt(),
+            (resources.displayMetrics.heightPixels*.78).toInt())
+    }
+
+    private fun searchDatapacks() {
+        if (ServerService.running) {toast("Stop Minecraft first");return}
+        val version = getSharedPreferences("pocketcraft",0)
+            .getString("gameVersion",null)
+        if (version.isNullOrBlank()) {
+            AlertDialog.Builder(this).setTitle("Select a Minecraft version")
+                .setMessage("Install your Fabric server to browse matching datapacks.")
+                .setPositiveButton("OK",null).show()
+            return
+        }
+        val query=android.widget.EditText(this).apply {
+            setSingleLine(true)
+            hint="Search datapacks (e.g. Vanilla Refresh)"
+            setTextColor(ui.WHITE)
+            setHintTextColor(ui.MUTED)
+            background=ui.shape(this@MainActivity,ui.SURFACE,12,ui.BORDER)
+            setPadding(ui.dp(this@MainActivity,14),ui.dp(this@MainActivity,14),
+                ui.dp(this@MainActivity,14),ui.dp(this@MainActivity,14))
+        }
+        val content=ui.column(this).apply {
+            setPadding(ui.dp(this@MainActivity,20),ui.dp(this@MainActivity,12),
+                ui.dp(this@MainActivity,20),ui.dp(this@MainActivity,12))
+            addView(ui.pill(this@MainActivity,"MINECRAFT  •  "+version,ui.CYAN))
+            addView(ui.space(this@MainActivity,12))
+            addView(query)
+        }
+        AlertDialog.Builder(this).setTitle("Find datapacks")
+            .setView(content).setNegativeButton("CANCEL",null)
+            .setPositiveButton("SEARCH") {_,_->
+                val wait=AlertDialog.Builder(this)
+                    .setTitle("Searching Modrinth")
+                    .setMessage("Finding datapacks for Minecraft "+version+"…")
+                    .setCancelable(false).create()
+                wait.show()
+                Thread {
+                    val matches=runCatching {
+                        DatapackInstaller.search(query.text.toString().trim(),version)
+                    }
+                    runOnUiThread {
+                        if(isFinishing || isDestroyed)return@runOnUiThread
+                        wait.dismiss()
+                        matches.onSuccess {showDatapackResults(it,version)}
+                            .onFailure {toast("Datapack search failed: "+it.message)}
+                    }
+                }.start()
+            }.show()
+    }
+
+    private fun showDatapackResults(list:List<DatapackInstaller.Project>,version:String) {
+        if(list.isEmpty()){toast("No datapacks found for Minecraft "+version);return}
+        val body=ui.column(this).apply {
+            setPadding(ui.dp(this@MainActivity,14),ui.dp(this@MainActivity,8),
+                ui.dp(this@MainActivity,14),ui.dp(this@MainActivity,16))
+        }
+        lateinit var dialog:AlertDialog
+        list.forEach { project ->
+            val card=ui.card(this)
+            card.addView(ui.text(this,project.title,15f,ui.WHITE,true))
+            if(project.description.isNotBlank()) {
+                card.addView(ui.space(this,6))
+                card.addView(ui.text(this,project.description,11f,ui.MUTED))
+            }
+            card.addView(ui.space(this,8))
+            card.addView(ui.action(this,"INSTALL DATAPACK",true,!ServerService.running) {
+                dialog.dismiss()
+                AlertDialog.Builder(this).setTitle("Install "+project.title+"?")
+                    .setMessage("Install a Modrinth datapack ZIP for Minecraft "+version+
+                        " into the active world. Existing datapacks will not be overwritten. Java and Bedrock visuals may differ; back up your world first.")
+                    .setNegativeButton("CANCEL",null)
+                    .setPositiveButton("INSTALL"){_,_->
+                        downloadAsync("Datapack: "+project.title) {
+                            DatapackInstaller.installModrinth(this,project,version)
+                        }
+                    }.show()
+            })
+            body.addView(card)
+            body.addView(ui.space(this,10))
+        }
+        dialog=AlertDialog.Builder(this).setTitle("Datapacks • "+version)
+            .setView(ScrollView(this).apply{addView(body)})
+            .setNegativeButton("CLOSE",null).create()
+        dialog.show()
+        dialog.window?.setLayout((resources.displayMetrics.widthPixels*.94).toInt(),
+            (resources.displayMetrics.heightPixels*.8).toInt())
     }
 
     /** Only the real Minecraft stdin process receives a submitted command. */
@@ -2379,12 +2541,12 @@ class MainActivity : Activity() {
         }
         startActivityForResult(intent,4)
     }
-    private fun displayName(uri:android.net.Uri):String {
+    private fun displayName(uri:android.net.Uri, fallbackExtension:String=".jar"):String {
         var value:String?=null
         contentResolver.query(uri,arrayOf(OpenableColumns.DISPLAY_NAME),null,null,null)?.use { cursor ->
             if(cursor.moveToFirst()) value=cursor.getString(0)
         }
-        return value ?: "imported-"+System.currentTimeMillis()+".jar"
+        return value ?: ("imported-" + System.currentTimeMillis() + fallbackExtension)
     }
     private fun safeName(original:String):String=original.replace(Regex("[^A-Za-z0-9._-]"),"_")
         .take(120).trimStart('.')
@@ -2443,6 +2605,16 @@ class MainActivity : Activity() {
                         runOnUiThread {toast("World imported: "+imported.name);tab=2;render()}
                     } catch(e:Exception) {runOnUiThread {toast("World import failed: "+e.message)}}
                 }.start()
+            }
+            6 -> {
+                val name=displayName(uri,".zip")
+                if(!name.endsWith(".zip",true)) {
+                    toast("Choose a .zip datapack with pack.mcmeta at its root.")
+                    return
+                }
+                downloadAsync("Import datapack ZIP") {
+                    DatapackInstaller.importZip(this,uri,name)
+                }
             }
             5 -> {
                 val name=displayName(uri).lowercase(Locale.ROOT)

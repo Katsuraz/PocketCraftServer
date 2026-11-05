@@ -1,5 +1,14 @@
 # PocketCraft changelog
 
+## v0.8.19 (versionCode 41) — Datapack installer
+
+- Added a Datapacks manager accessible from Worlds and Mods. It shows installed ZIPs for the active world, supports safe removal, and opens the datapack folder in the file browser.
+- Import a datapack ZIP using Android's file picker; PocketCraft validates `pack.mcmeta` at the ZIP root, checks entry paths and size limits, and atomically copies the ZIP into `<active world>/datapacks/` without overwriting existing packs.
+- Search Modrinth for datapacks matching the selected Minecraft version and install the appropriate ZIP automatically with SHA-512 verification, safe HTTPS redirects, and 404/410 fallback across compatible versions.
+- Installs require a generated active world and a stopped Minecraft server. No Java/Fabric mods, Geyser settings, worlds, or server core files are modified.
+- Preserves the original Homestead GUI, PS monogram icon, RAM slider, and built-in update signing.
+
+
 ## v0.8.12 (versionCode 34) — Mod compatibility checks & broken download fallback
 
 - Mod browser shows the published Fabric version plus an initial server-support hint. Tap "Check compatibility" for exact release metadata, server-only/client-only support, and declared required dependencies or incompatibilities before installing.
