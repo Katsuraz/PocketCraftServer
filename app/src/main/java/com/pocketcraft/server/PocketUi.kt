@@ -37,14 +37,58 @@ object PocketUi {
     private var pixelFonts = true
     private var normalTypeface: Typeface? = null
     private var headingTypeface: Typeface? = null
+    private var loadedFontPath: String? = null
 
+    /** The user may import their own licensed Mojangles .ttf/.otf. */
     private fun initFonts(c: Context) {
+        val custom = java.io.File(c.filesDir, "ui-fonts/mojangles.ttf")
+        val path = if (custom.isFile) custom.absolutePath else "bundled-monocraft"
+        if (normalTypeface != null && loadedFontPath == path) return
+        normalTypeface = if (custom.isFile) runCatching {
+            Typeface.createFromFile(custom)
+        }.getOrNull() else null
         if (normalTypeface == null) normalTypeface = runCatching {
-            Typeface.createFromAsset(c.assets,"fonts/PixelifySans.ttf")
+            Typeface.createFromAsset(c.assets,"fonts/Monocraft.ttf")
         }.getOrElse { Typeface.MONOSPACE }
-        if (headingTypeface == null) headingTypeface = runCatching {
-            Typeface.createFromAsset(c.assets,"fonts/PressStart2P-Regular.ttf")
-        }.getOrElse { normalTypeface }
+        headingTypeface = normalTypeface
+        loadedFontPath = path
+    }
+    fun hasCustomMojangles(c: Context): Boolean =
+        java.io.File(c.filesDir,"ui-fonts/mojangles.ttf").isFile
+    /** Validation and import are performed from Settings on a worker thread. */
+    fun importMojangles(c: Context, uri: android.net.Uri) {
+        val folder = java.io.File(c.filesDir,"ui-fonts").apply { mkdirs() }
+        val temp = java.io.File(folder,"incoming-font.tmp")
+        try {
+            c.contentResolver.openInputStream(uri)?.use { input ->
+                temp.outputStream().use { output ->
+                    val buffer = ByteArray(16384)
+                    var count = 0L
+                    while (true) {
+                        val n = input.read(buffer)
+                        if (n < 0) break
+                        count += n
+                        require(count <= 2_000_000L) { "Font file is too large (2 MB maximum)" }
+                        output.write(buffer,0,n)
+                    }
+                }
+            } ?: error("Could not read selected font")
+            require(temp.length() in 1..2_000_000) { "Font is empty or too large" }
+            // Malformed fonts must be rejected before replacing a working font.
+            Typeface.createFromFile(temp)
+            val target = java.io.File(folder,"mojangles.ttf")
+            if (target.exists()) require(target.delete()) { "Cannot replace previous custom font" }
+            require(temp.renameTo(target)) { "Could not save custom font" }
+            loadedFontPath = null
+            normalTypeface = null
+            headingTypeface = null
+        } finally { temp.delete() }
+    }
+    fun removeCustomMojangles(c: Context) {
+        java.io.File(c.filesDir,"ui-fonts/mojangles.ttf").delete()
+        loadedFontPath = null
+        normalTypeface = null
+        headingTypeface = null
     }
     fun pixelFont(): Boolean = pixelFonts
     fun setFontStyle(c: Context, pixel: Boolean) {
@@ -77,17 +121,17 @@ object PocketUi {
     }
     fun homestead(): Boolean = currentTheme=="homestead"
 
-    val BG: Int get() = if(homestead()) 0xFF171D19.toInt() else 0xFF080E18.toInt()
+    val BG: Int get() = if(homestead()) 0xFF1C1814.toInt() else 0xFF080E18.toInt()
     val PANEL: Int get() = if(homestead()) 0xFF30251E.toInt() else 0xFF141E2C.toInt()
     val SURFACE: Int get() = if(homestead()) 0xFF654A34.toInt() else 0xFF223245.toInt()
     val MUTED: Int get() = if(homestead()) 0xFFC9BA9E.toInt() else 0xFFACBED1.toInt()
     val WHITE: Int get() = if(homestead()) 0xFFF1E5CA.toInt() else 0xFFF6F9FD.toInt()
-    val GREEN: Int get() = if(homestead()) 0xFF93B184.toInt() else 0xFF70E9B4.toInt()
-    val CYAN: Int get() = if(homestead()) 0xFFDBAC64.toInt() else 0xFF80D7FA.toInt()
-    val PURPLE: Int get() = if(homestead()) 0xFFB89B81.toInt() else 0xFFB5A5FF.toInt()
+    val GREEN: Int get() = if(homestead()) 0xFFD6B47D.toInt() else 0xFF70E9B4.toInt()
+    val CYAN: Int get() = if(homestead()) 0xFFE1B977.toInt() else 0xFF80D7FA.toInt()
+    val PURPLE: Int get() = if(homestead()) 0xFFC29A70.toInt() else 0xFFB5A5FF.toInt()
     val RED: Int get() = if(homestead()) 0xFFF5AA93.toInt() else 0xFFFFA0AB.toInt()
     val BORDER: Int get() = if(homestead()) 0xFF97704D.toInt() else 0xFF324459.toInt()
-    val SUBTLE: Int get() = if(homestead()) 0xFF211F1A.toInt() else 0xFF182737.toInt()
+    val SUBTLE: Int get() = if(homestead()) 0xFF261D18.toInt() else 0xFF182737.toInt()
 
     fun dp(c: Context, v: Int): Int = (v * c.resources.displayMetrics.density + .5f).toInt()
 
@@ -123,12 +167,8 @@ object PocketUi {
             setTextColor(color)
             if (pixelFonts) {
                 initFonts(c)
-                // Press Start 2P is wide: reserve it for short, decorative titles.
-                val compactHeading = bold && size >= 19f && value.length <= 16
-                typeface = if (compactHeading) headingTypeface else
-                    Typeface.create(normalTypeface, if (bold) Typeface.BOLD else Typeface.NORMAL)
-                if (compactHeading) textSize = (size * 0.83f).coerceAtLeast(15f)
-                letterSpacing = if (compactHeading) 0.01f else 0f
+                typeface = Typeface.create(normalTypeface, if (bold) Typeface.BOLD else Typeface.NORMAL)
+                letterSpacing = if (bold) 0.012f else 0f
             } else if (bold) {
                 typeface = Typeface.create("sans-serif-medium",Typeface.BOLD)
             }
@@ -177,7 +217,10 @@ object PocketUi {
             alpha = if (enabledAction) 1f else .48f
             isClickable = enabledAction
             isFocusable = enabledAction
-            if (enabledAction) setOnClickListener { click() }
+            if (enabledAction) setOnClickListener {
+                PocketSounds.play(c, PocketSounds.Event.CLICK)
+                click()
+            }
             accessibilityDelegate = object : View.AccessibilityDelegate() {
                 override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfo) {
                     super.onInitializeAccessibilityNodeInfo(host, info)
