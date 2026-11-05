@@ -1,0 +1,43 @@
+package com.pocketcraft.server
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class ServerCommandHintsTest {
+    @Test fun discoveredVanillaAndFabricCommandsAreSearchable() {
+        ServerCommandHints.reset()
+        ServerCommandHints.observe("[13:14:15] [Server thread/INFO]: /help")
+        ServerCommandHints.observe("[13:14:15] [Server thread/INFO]: /list")
+        ServerCommandHints.observe("[13:14:15] [Server thread/INFO]: /chunky start")
+        ServerCommandHints.observe("[13:14:15] [Server thread/INFO]: /chunky radius <radius>")
+        assertTrue(ServerCommandHints.registered().contains("chunky"))
+        assertTrue(ServerCommandHints.suggestions("chun").contains("chunky"))
+        assertTrue(ServerCommandHints.suggestions("/chunky s").contains("chunky start"))
+        assertEquals(3, ServerCommandHints.registeredCount())
+    }
+
+    @Test fun unrelatedLogAndAddressesDoNotCreateCommands() {
+        ServerCommandHints.reset()
+        ServerCommandHints.observe("[Server thread/INFO]: Connecting https://example.com/path")
+        ServerCommandHints.observe("[Server thread/INFO]: java.io.FileNotFoundException /tmp/no-file")
+        ServerCommandHints.observe("[Server thread/INFO]: Join at host.example/secret")
+        assertEquals(0, ServerCommandHints.registeredCount())
+        assertFalse(ServerCommandHints.suggestions("secret").isNotEmpty())
+    }
+
+    @Test fun resetClearsPreviousWorldModCommands() {
+        ServerCommandHints.reset()
+        ServerCommandHints.observe("[Server thread/INFO]: Usage: /some_mod:teleport home")
+        assertTrue(ServerCommandHints.registered().contains("some_mod:teleport"))
+        ServerCommandHints.reset()
+        assertTrue(ServerCommandHints.registered().isEmpty())
+    }
+
+    @Test fun suggestionDoesNotSubmitCommandsAndHasUsefulOfflineFallbacks() {
+        ServerCommandHints.reset()
+        assertTrue(ServerCommandHints.suggestions("").contains("help"))
+        assertTrue(ServerCommandHints.suggestions("ti").contains("time set day"))
+    }
+}
