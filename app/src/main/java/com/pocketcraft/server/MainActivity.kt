@@ -2215,16 +2215,6 @@ class MainActivity : Activity() {
             })
             panel.addView(ui.space(this,8))
         }
-        if(file.name!=WorldStore.active(this))item("✓ ASSIGN THIS WORLD",offline) {
-            downloadAsync("Switch world"){WorldStore.activate(this,file)
-                "Assigned "+file.name+". Start the server to play it."}
-        }
-        if(!WorldStore.isPending(file))item("CREATE LOCAL SNAPSHOT",offline) {
-            downloadAsync("Backup world") {
-                val snapshot=WorldSnapshots.create(this,file)
-                "Snapshot saved on this device: "+snapshot.name
-            }
-        }
         item("DUPLICATE WORLD",offline) {
             askWorldName("Duplicate "+file.name,"New copy name",file.name.take(32)+"-copy") { name ->
                 downloadAsync("Duplicate world") {
@@ -2245,7 +2235,6 @@ class MainActivity : Activity() {
             pendingBackup=file
             createBackupDocument(file)
         }
-        item("VIEW WORLD FILES") {openServerFiles(file.name)}
         item("DELETE WORLD",offline) {
             AlertDialog.Builder(this).setTitle("Permanently delete "+file.name+"?")
                 .setMessage("This permanently deletes this world. Make an off-device backup first. Active worlds cannot be deleted; assign another world instead.")
