@@ -93,8 +93,8 @@ object ServerDownloads {
 
     fun installFabric(context: Context, version: String): String {
         if (ServerService.running) throw IOException("Stop the Minecraft server before changing its version")
-        if(version !in listOf("26.3","1.21.11","1.20.1"))
-            throw IOException("Unsupported version selection")
+        if(!version.matches(Regex("[0-9][A-Za-z0-9._+\\-]{0,35}")))
+            throw IOException("Invalid Minecraft version")
         InstallProgress.emit("Checking Fabric versions…")
         val loader=latestStable(readJsonArray(FABRIC_META+"/loader"))
         val installer=latestStable(readJsonArray(FABRIC_META+"/installer"))
