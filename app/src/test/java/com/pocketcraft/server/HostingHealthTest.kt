@@ -56,6 +56,23 @@ class HostingHealthTest {
             .explanation.contains("not confirmed"))
     }
 
+    @Test fun startupIsInformationalButVerifiedJoinIsGood() {
+        val base = snapshot(geyser=true,bedrock=true)
+        val startup=HostingHealth.evaluate(base).first { it.title=="Bedrock bridge" }
+        assertEquals(HostingHealth.Level.INFO,startup.level)
+        val verified=HostingHealth.evaluate(base.copy(bedrockJoinVerified=true))
+            .first { it.title=="Bedrock bridge" }
+        assertEquals(HostingHealth.Level.GOOD,verified.level)
+    }
+
+    @Test fun configWarningsAppearAsActions() {
+        val checks=HostingHealth.evaluate(snapshot().copy(
+            geyserWarnings=listOf("Duplicate signaling.mode keys")
+        ))
+        assertTrue(checks.any { it.title=="Geyser configuration" &&
+            it.level==HostingHealth.Level.ACTION })
+    }
+
     @Test fun lastServerErrorIsActionableNotHidden() {
         val checks=HostingHealth.evaluate(snapshot(lastError="JVM failed"))
         assertEquals(HostingHealth.Level.ACTION,checks.last().level)
