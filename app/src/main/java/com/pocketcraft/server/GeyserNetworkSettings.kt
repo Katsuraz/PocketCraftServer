@@ -77,7 +77,7 @@ internal object GeyserNetworkSettings {
                         else warnings += "Unsupported Bedrock transport; check config.yml."
                     }
                 }
-            } else if (indent == 6 && inSignaling && body.startsWith("mode:")) {
+            } else if (indent == 4 && inSignaling && body.startsWith("mode:")) {
                 modes++
                 mode = body.substringAfter(':').trim().trim('"', '\'').lowercase()
             }
