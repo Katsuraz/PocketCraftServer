@@ -3,6 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
 jobs:
   build:
@@ -253,6 +254,27 @@ jobs:
           cp target/aarch64-linux-android/release/playit-cli "$GITHUB_WORKSPACE/app/src/main/jniLibs/arm64-v8a/libpocketplayitcli.so"
           cp target/aarch64-linux-android/release/playitd "$GITHUB_WORKSPACE/app/src/main/jniLibs/arm64-v8a/libpocketplayitd.so"
           file "$GITHUB_WORKSPACE/app/src/main/jniLibs/arm64-v8a/"libpocketplayit*.so
+      - name: Bundle licensed Minecraft-inspired pixel fonts
+        run: |
+          set -euo pipefail
+          mkdir -p app/src/main/assets/fonts
+          curl --fail --location --retry 3 --connect-timeout 15 --max-time 90 \
+            'https://raw.githubusercontent.com/google/fonts/main/ofl/pixelifysans/PixelifySans%5Bwght%5D.ttf' \
+            -o app/src/main/assets/fonts/PixelifySans.ttf
+          curl --fail --location --retry 3 --connect-timeout 15 --max-time 90 \
+            'https://raw.githubusercontent.com/google/fonts/main/ofl/pressstart2p/PressStart2P-Regular.ttf' \
+            -o app/src/main/assets/fonts/PressStart2P-Regular.ttf
+          actual="$(git hash-object app/src/main/assets/fonts/PixelifySans.ttf)"
+          test "$actual" = '2d7eb388ee499fbcf3e992723ec409c095640104' || {
+            echo "::error::Pixelify Sans font hash differs from vetted source"; exit 1;
+          }
+          actual="$(git hash-object app/src/main/assets/fonts/PressStart2P-Regular.ttf)"
+          test "$actual" = '39adf42efa597906e53be689474ac82214112124' || {
+            echo "::error::Press Start 2P font hash differs from vetted source"; exit 1;
+          }
+          test -s app/src/main/assets/licenses/PixelifySans-OFL.txt
+          test -s app/src/main/assets/licenses/PressStart2P-OFL.txt
+          echo 'Licensed, verified pixel fonts ready for offline APK packaging'
       - name: Build debug APK
         run: gradle :app:testDebugUnitTest :app:assembleDebug --no-daemon --stacktrace
       - name: Verify ARM64 native runtime exists inside APK
@@ -267,6 +289,14 @@ jobs:
           else
             echo "::warning::APK has no Android WebRTC JNI. It cannot fix NetherNet on bionic."
           fi
+      - name: Verify bundled pixel fonts and third-party license notices
+        run: |
+          set -euo pipefail
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          unzip -l "$APK" | grep -F 'assets/fonts/PixelifySans.ttf'
+          unzip -l "$APK" | grep -F 'assets/fonts/PressStart2P-Regular.ttf'
+          unzip -l "$APK" | grep -F 'assets/licenses/PixelifySans-OFL.txt'
+          unzip -l "$APK" | grep -F 'assets/licenses/PressStart2P-OFL.txt'
       - name: Verify bundled tunnel binaries
         run: |
           unzip -l app/build/outputs/apk/debug/app-debug.apk | grep -F 'lib/arm64-v8a/libpocketplayitcli.so'
@@ -311,3 +341,65 @@ jobs:
         with:
           name: pocketcraft-debug-apk
           path: app/build/outputs/apk/debug/*.apk
+
+  release:
+    name: Publish verified PocketCraft GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require persistent signing for update releases
+        env:
+          KEYSTORE: ${{ secrets.POCKETCRAFT_KEYSTORE_BASE64 }}
+          PASSWORD: ${{ secrets.POCKETCRAFT_SIGNING_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "$KEYSTORE" ] || [ -z "$PASSWORD" ]; then
+            echo "::error::Stable signing secrets are required for releases. Never publish ephemeral debug-signed APKs as updates."
+            exit 1
+          fi
+      - uses: actions/download-artifact@v4
+        with:
+          name: pocketcraft-debug-apk
+          path: release-dist
+      - name: Prepare APK and update metadata
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import json, re, hashlib, os
+          content = Path("app/build.gradle.kts").read_text()
+          name = re.search(r'versionName\s*=\s*"([^"]+)"', content).group(1)
+          code = int(re.search(r"versionCode\s*=\s*(\d+)", content).group(1))
+          tag = os.environ["GITHUB_REF_NAME"]
+          if tag != "v" + name:
+              raise SystemExit("Tag " + tag + " does not match build version v" + name)
+          source = Path("release-dist/app-debug.apk")
+          if not source.is_file():
+              raise SystemExit("Build artifact missing")
+          target = Path("release-dist/PocketCraft-v" + name + ".apk")
+          source.rename(target)
+          sha = hashlib.sha256(target.read_bytes()).hexdigest()
+          manifest = {
+              "versionName": name,
+              "versionCode": code,
+              "apkName": target.name,
+              "sha256": sha
+          }
+          Path("release-dist/pocketcraft-update.json").write_text(
+              json.dumps(manifest, indent=2) + "\n")
+          print("Release metadata validated for",tag,"APK sha256:",sha)
+          PY
+      - name: Publish official GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create "$GITHUB_REF_NAME" \
+            release-dist/PocketCraft-v*.apk release-dist/pocketcraft-update.json \
+            --title "PocketCraft $GITHUB_REF_NAME" \
+            --notes-file CHANGELOG.md \
+            --verify-tag

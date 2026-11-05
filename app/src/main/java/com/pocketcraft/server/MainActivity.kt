@@ -132,7 +132,7 @@ class MainActivity : Activity() {
         outState.putIntArray("tabScroll", scrollOffsets)
         super.onSaveInstanceState(outState)
     }
-    override fun onResume() { super.onResume(); ui.loadTheme(this); render(); uiHandler.removeCallbacks(updateStatus); uiHandler.post(updateStatus) }
+    override fun onResume() { super.onResume(); ui.loadTheme(this); PocketUpdates.maybeCheck(this); render(); uiHandler.removeCallbacks(updateStatus); uiHandler.post(updateStatus) }
     override fun onPause() { uiHandler.removeCallbacks(updateStatus); super.onPause() }
 
     private fun h(label: String, sub: String? = null): LinearLayout {
@@ -242,6 +242,7 @@ class MainActivity : Activity() {
             navbar.addView(item,LinearLayout.LayoutParams(0,ui.dp(this,62),1f))
         }
         screen.addView(navbar)
+        ui.styleFormInputs(screen)
         setContentView(screen)
         currentScroller = scroller
         renderedTab = tab

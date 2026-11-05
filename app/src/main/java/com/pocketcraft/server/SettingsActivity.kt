@@ -174,6 +174,42 @@ class SettingsActivity : Activity() {
             card.addView(ui.space(this,8))
             card.addView(ui.text(this,"Theme changes apply immediately and never modify Minecraft server files.",11f,ui.MUTED))
         }
+        section(body,"Font style","Pixelated and easy to read") { card ->
+            card.addView(ui.text(this,"Choose your lettering",16f,ui.WHITE,true))
+            card.addView(ui.space(this,8))
+            card.addView(ui.text(this,
+                "Pixelify Sans for controls, Press Start 2P for short headers; normal Android fonts remain available for accessibility.",
+                12f,ui.MUTED))
+            card.addView(ui.space(this,12))
+            card.addView(ui.action(this,
+                if (ui.pixelFont()) "✓ MINECRAFT PIXEL • ACTIVE" else "USE MINECRAFT PIXEL",true) {
+                if (!ui.pixelFont()) { ui.setFontStyle(this,true); recreate() }
+            })
+            card.addView(ui.space(this,8))
+            card.addView(ui.action(this,
+                if (!ui.pixelFont()) "✓ CLASSIC ANDROID • ACTIVE" else "USE CLASSIC ANDROID") {
+                if (ui.pixelFont()) { ui.setFontStyle(this,false); recreate() }
+            })
+        }
+        section(body,"App updates","Check GitHub Releases and install verified APKs") { card ->
+            val installed = PocketUpdates.installedName(this)
+            val available = getSharedPreferences("pocketcraft",0)
+                .getString("availableUpdate","") ?: ""
+            card.addView(ui.text(this,"Installed v" + installed,15f,ui.WHITE,true))
+            card.addView(ui.space(this,5))
+            card.addView(ui.text(this,
+                if (available.isNotBlank()) "New release found: v" + available
+                else "No verified new release recorded. Check online for details.",
+                12f,if (available.isNotBlank()) ui.GREEN else ui.MUTED))
+            card.addView(ui.space(this,12))
+            card.addView(ui.action(this,"CHECK FOR UPDATES",true) {
+                startActivity(android.content.Intent(this,UpdatesActivity::class.java))
+            })
+            card.addView(ui.space(this,8))
+            card.addView(ui.text(this,
+                "GitHub Actions artifacts are not update releases. A compatible signing certificate is required to preserve installed data.",
+                11f,ui.MUTED))
+        }
         if(ServerService.running) {
             body.addView(ui.space(this,12))
             val notice=ui.card(this)
@@ -267,6 +303,7 @@ class SettingsActivity : Activity() {
             if(ServerService.running)"STOP SERVER BEFORE SAVING" else "✓  SAVE SERVER SETTINGS",
             true,!ServerService.running) { save() })
         screen.addView(footer)
+        ui.styleFormInputs(screen)
         setContentView(screen)
     }
 
