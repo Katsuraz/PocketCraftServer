@@ -51,6 +51,19 @@ internal object WorldHostingProfiles {
         return result
     }
 
+    /** Active world may have freshly edited server.properties not yet captured on a switch. */
+    fun readForEditor(context: Context, world: String): Properties {
+        val profile = read(context,world)
+        if (world == WorldStore.active(context)) {
+            val global = File(WorldStore.root(context),"server.properties")
+            val server = Properties()
+            if (global.isFile) global.inputStream().use { server.load(it) }
+            for (key in keys) server.getProperty(key)?.let { profile.setProperty(key,it) }
+            validate(profile)?.let { throw IOException("Invalid active-world setting: $it") }
+        }
+        return profile
+    }
+
     fun validate(props: Properties): String? {
         val motd = props.getProperty("motd", "")
         if (motd.length > 120 || motd.any { it == '\r' || it == '\n' }) return "MOTD must be at most 120 characters"
