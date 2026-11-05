@@ -24,6 +24,8 @@ import java.util.Locale
 
 /** PocketCraft's offline-first dashboard. Does not pretend that a JVM is available on Android. */
 class MainActivity : Activity() {
+    // Folder-style Worlds navigation; the root list is kept distinct from the selected world.
+    private var openedWorldFolder: String? = null
     private val uiHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private var readyText: TextView? = null
     private var heroState: TextView? = null
@@ -210,6 +212,13 @@ class MainActivity : Activity() {
         super.onSaveInstanceState(outState)
     }
     override fun onResume() { super.onResume(); ui.loadTheme(this); PocketUpdates.maybeCheck(this); render(); uiHandler.removeCallbacks(updateStatus); uiHandler.post(updateStatus) }
+    @Deprecated("Back navigation")
+    override fun onBackPressed() {
+        if(tab == 2 && openedWorldFolder != null) {
+            openedWorldFolder = null
+            render()
+        } else super.onBackPressed()
+    }
     override fun onPause() { uiHandler.removeCallbacks(updateStatus); super.onPause() }
     override fun onDestroy() {
         uiHandler.removeCallbacks(updateStatus)
@@ -421,6 +430,7 @@ class MainActivity : Activity() {
                 setOnClickListener {
                     if(tab != i) {
                         PocketSounds.play(this@MainActivity,PocketSounds.Event.SELECT)
+                        if (i != 2) openedWorldFolder = null
                         tab = i
                         render()
                     }
@@ -626,18 +636,13 @@ class MainActivity : Activity() {
         val actions = ui.card(this)
         actions.addView(ui.text(this,"MANAGE SERVER",11f,ui.CYAN,true))
         actions.addView(ui.space(this,7))
-        actions.addView(actionRow("◎","First-time setup guide") { showFirstRunGuide() })
-        actions.addView(line())
-        actions.addView(actionRow("▧","Worlds & backups") { tab=2; render() })
-        actions.addView(line())
+        // One obvious location per task: Worlds tab for worlds and header gear for settings.
         actions.addView(actionRow("♟","Players & permissions") {showPlayerManager()})
         actions.addView(line())
         actions.addView(actionRow("▤","Server files") {openServerFiles()})
-        actions.addView(line())
-        actions.addView(actionRow("⚙","Settings") {
-            startActivity(Intent(this,SettingsActivity::class.java))
-        })
         val technical=ui.column(this)
+        technical.addView(line())
+        technical.addView(actionRow("◎","First-time setup guide") {showFirstRunGuide()})
         technical.addView(line())
         technical.addView(actionRow("✦","Install Fabric") {installFabricPrompt()})
         technical.addView(line())
@@ -2006,7 +2011,15 @@ class MainActivity : Activity() {
 
     /** All destructive world operations are stopped-server-only and guarded by WorldStore. */
     private fun worldsPage(body:LinearLayout) {
-        body.addView(h("World manager","Assign, create, duplicate, and protect Java + Bedrock worlds"))
+        val selected = openedWorldFolder?.let { name ->
+            WorldStore.worlds(this).firstOrNull { it.name == name }
+        }
+        if (selected != null) {
+            worldFolderPage(body,selected)
+            return
+        }
+        openedWorldFolder = null
+        body.addView(h("Worlds","Tap a world to manage its settings, files and backups"))
         body.addView(ui.space(this,13))
         val active=WorldStore.active(this)
         val activeCard=ui.card(this)
@@ -2028,12 +2041,6 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams(0,-2,1f))
         body.addView(actions)
         body.addView(ui.space(this,8))
-        val tools=ui.row(this)
-        tools.addView(ui.action(this,"BACKUPS") {showSnapshotManager()},
-            ui.weight(this))
-        tools.addView(ui.action(this,"DATAPACKS") {showDatapacks()},
-            LinearLayout.LayoutParams(0,-2,1f))
-        body.addView(tools)
         body.addView(ui.space(this,13))
         val worlds=WorldStore.worlds(this)
         if(worlds.isEmpty())body.addView(empty("▧","No generated worlds yet",
@@ -2051,14 +2058,74 @@ class MainActivity : Activity() {
             if(file.name==active)heading.addView(ui.pill(this,"ACTIVE",ui.GREEN))
             card.addView(heading)
             card.addView(ui.space(this,11))
-            card.addView(ui.action(this,if(file.name==active)"MANAGE ACTIVE WORLD" else
-                "SELECT / MANAGE WORLD",file.name!=active) {
-                showWorldActions(file)
+            card.addView(ui.action(this,"OPEN WORLD  ›",true) {
+                openedWorldFolder = file.name
+                render()
             })
             body.addView(card)
             body.addView(ui.space(this,10))
         }
         body.addView(ui.text(this,"Backups stay on this phone until exported. Always keep an off-device ZIP copy before uninstalling PocketCraft or resetting Android.",
+            11f,ui.MUTED))
+    }
+
+    /** Opens a single world like a folder; server-level and world-level controls stay separate. */
+    private fun worldFolderPage(body: LinearLayout, world: File) {
+        val active = WorldStore.active(this) == world.name
+        val offline = !ServerService.running &&
+            ServerService.status !in listOf("STARTING","STOPPING")
+        body.addView(ui.action(this,"‹  ALL WORLDS") {
+            openedWorldFolder = null
+            render()
+        })
+        body.addView(ui.space(this,13))
+        val heading = ui.card(this)
+        heading.addView(ui.text(this,"▧  " + world.name,22f,ui.WHITE,true))
+        heading.addView(ui.space(this,7))
+        heading.addView(ui.pill(this,if(active)"ACTIVE WORLD" else "SAVED WORLD",
+            if(active)ui.GREEN else ui.CYAN))
+        heading.addView(ui.space(this,9))
+        heading.addView(ui.text(this,
+            if(WorldStore.isPending(world)) "Minecraft will generate this world on the next start."
+            else "Choose what to manage inside this world.",
+            12f,ui.MUTED))
+        if(!active) {
+            heading.addView(ui.space(this,13))
+            heading.addView(ui.action(this,"✓  USE THIS WORLD",true,offline) {
+                downloadAsync("Switch world") {
+                    WorldStore.activate(this,world)
+                    "Assigned " + world.name + ". Its saved profile is active on the next server start."
+                }
+            })
+        }
+        body.addView(heading)
+        body.addView(ui.space(this,13))
+
+        val actions = ui.card(this)
+        actions.addView(ui.text(this,"WORLD FOLDER",11f,ui.CYAN,true))
+        actions.addView(ui.space(this,8))
+        actions.addView(actionRow("⚙","World settings") {
+            startActivity(Intent(this,WorldSettingsActivity::class.java).apply {
+                putExtra(WorldSettingsActivity.EXTRA_WORLD,world.name)
+            })
+        })
+        actions.addView(line())
+        actions.addView(actionRow("▤","World files") {openServerFiles(world.name)})
+        actions.addView(line())
+        if(!WorldStore.isPending(world)) {
+            actions.addView(actionRow("◈","Datapacks") {
+                if(active) showDatapacks()
+                else openServerFiles(world.name + "/datapacks")
+            })
+            actions.addView(line())
+        }
+        actions.addView(actionRow("▧","Backups & snapshots") {showSnapshotManager()})
+        actions.addView(line())
+        actions.addView(actionRow("⋯","More world actions") {showWorldActions(world)})
+        body.addView(actions)
+        body.addView(ui.space(this,12))
+        body.addView(ui.text(this,
+            "World settings are saved separately. Server-wide connections, accounts and Geyser are managed from the top-right Settings icon.",
             11f,ui.MUTED))
     }
 
