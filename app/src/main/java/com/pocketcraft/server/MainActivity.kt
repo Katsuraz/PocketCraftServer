@@ -609,10 +609,6 @@ class MainActivity : Activity() {
         actions.addView(ui.space(this,7))
         actions.addView(actionRow("▧","Worlds & backups") { tab=2; render() })
         actions.addView(line())
-        actions.addView(actionRow("◈","Experimental Game Lab • Mindustry") {
-            startActivity(Intent(this,MindustryHostingActivity::class.java))
-        })
-        actions.addView(line())
         actions.addView(actionRow("♟","Players & permissions") {showPlayerManager()})
         actions.addView(line())
         actions.addView(actionRow("▤","Server files") {openServerFiles()})
@@ -1343,10 +1339,6 @@ class MainActivity : Activity() {
 
     /** Centralized guarded start for the hero, local-host and control actions. */
     private fun startMinecraft() {
-        if (MindustryHostService.active()) {
-            toast("Stop Mindustry in the Experimental Game Lab before starting Minecraft")
-            return
-        }
         if (ServerService.running || ServerService.status == "STARTING") {
             toast("Minecraft is already starting or running")
             return

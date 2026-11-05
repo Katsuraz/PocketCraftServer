@@ -1,22 +1,11 @@
 # PocketCraft changelog
 
-## v0.8.31 (versionCode 53) — Experimental Game Lab lifecycle controls
+## v0.8.32 (versionCode 54) — Remove experimental game hosting
 
-- Keep both Start and Stop buttons interactive after the Mindustry service changes state, even without re-opening the Game Lab screen. Validate current state at the moment of each tap rather than permanently disabling the view on initial render.
-- Preserve all v0.8.30 isolated Mindustry Java-hosting functionality, experimental safety labeling, world separation, Android JRE/Java native bootstrap, and stable Minecraft features.
-
-
-## v0.8.30 (versionCode 52) — Experimental Multi-Game Hosting: Mindustry
-
-- Add **Experimental Game Lab** to the Homestead Home management tools; Minecraft remains the supported default, entirely separate from experimental game data.
-- Add an isolated **Mindustry** Java dedicated-server adapter using its official headless server entry point and default LAN TCP/UDP port 6567; label all launcher and network statuses as experimental until verified on a real Android phone.
-- Add one-tap download of official Mindustry v160.7 from Anuken's GitHub release with a fixed SHA-256 checksum; alternatively import a trusted Mindustry dedicated-server JAR through Android's file picker.
-- Validate the server JAR manifest and dedicated server class before allowing launch, enforce a 64-MB download/import limit, stage updates, and keep the previously installed JAR if a transfer fails.
-- Extend the Android-packaged JNI Java bootstrap with a backward-compatible `--game` mode that starts arbitrary supported Java game-main classes without Minecraft's `nogui` argument. Preserve the existing `--server` and `--probe` behavior.
-- Add a separate Mindustry foreground service, local output log, command input, quick host/maps/players/status commands, stop/exit and memory controls. Store all game files under `files/game-servers/mindustry`.
-- Prevent concurrent Minecraft and Mindustry launches to avoid severe memory pressure on Android phones. Do not change Minecraft worlds, mods, Geyser, Playit, Minecraft consoles, signing, or saved configurations.
-- A Mindustry process or LAN address is NOT proof that other players can join. No public tunnel, port forwarding or unsupported Linux game-server binary is installed or advertised.
-- Add JVM unit tests for Mindustry server JAR acceptance/rejection. Android compilation checks cannot replace device-side game launch and multiplayer tests.
+- Fully revert the experimental Mindustry/Game Lab feature introduced in v0.8.30 and v0.8.31, restoring the Minecraft-only v0.8.29 application source and UI.
+- Remove Mindustry hosting activity, foreground service, game installer, console, native game launcher changes, tests, and associated manifest entries.
+- Preserve the existing Minecraft, Fabric, Geyser, Playit, console, worlds, and update functionality from v0.8.29.
+- Increase the app version so devices on v0.8.30 or v0.8.31 can install this removal release as a normal update.
 
 
 ## v0.8.29 (versionCode 51) — Keep the latest commands visible

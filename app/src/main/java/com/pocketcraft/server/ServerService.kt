@@ -203,13 +203,6 @@ class ServerService : Service() {
     }
 
     private fun begin() {
-        if(MindustryHostService.active()) {
-            failure="Mindustry is active. Stop it before starting Minecraft."
-            status="ERROR"
-            append(failure)
-            if(!PlayitManager.isActive()) stopSelf()
-            return
-        }
         notice("Checking server prerequisites…")
         status = "STARTING"
         PocketSounds.play(this, PocketSounds.Event.SERVER_START)

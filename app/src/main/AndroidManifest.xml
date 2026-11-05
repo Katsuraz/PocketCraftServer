@@ -32,7 +32,6 @@
         <activity android:name=".UpdatesActivity" android:exported="false"/>
         <activity android:name=".SettingsActivity" android:exported="false"/>
         <activity android:name=".ServerFilesActivity" android:exported="false"/>
-        <activity android:name=".MindustryHostingActivity" android:exported="false"/>
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
@@ -40,6 +39,5 @@
             </intent-filter>
         </activity>
         <service android:name=".ServerService" android:exported="false" android:stopWithTask="false" android:foregroundServiceType="dataSync"/>
-        <service android:name=".MindustryHostService" android:exported="false" android:stopWithTask="false" android:foregroundServiceType="dataSync"/>
     </application>
 </manifest>
