@@ -1,5 +1,15 @@
 # PocketCraft changelog
 
+## v0.8.21 (versionCode 43) — Crash diagnostics and independent server startup
+
+- Start Server no longer automatically opens Console; the Java foreground-service startup can proceed independently of console UI rendering.
+- Added a local-only uncaught Java/Kotlin exception recorder, saving the most recent crash report to private app storage for user-initiated review and copying.
+- Added Home → Crash diagnostics, and an alert link when a previous crash report is available; no logs are uploaded by the app.
+- Added a fallback screen when Console initialization throws a managed exception, with a link to the saved report.
+- Simplified live Console log rendering to a bounded, nonselectable TextView within the main page's scroll area instead of nested ScrollViews; live command suggestions appear only when text is entered.
+- Preserved existing Homestead styling, server files, worlds, datapacks, Fabric mods, Geyser configuration, app signing, and sounds.
+
+
 ## v0.8.20 (versionCode 42) — Console freeze fix
 
 - Console now opens immediately with cached output and loads its logfile tail on a dedicated background worker rather than blocking the Android UI thread.

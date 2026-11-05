@@ -5,6 +5,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <application
+        android:name=".PocketCraftApplication"
         android:allowBackup="false"
         android:extractNativeLibs="true"
         android:label="PocketCraft"

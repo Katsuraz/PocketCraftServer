@@ -196,6 +196,38 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun showCrashReport() {
+        val report = PocketCraftCrashReports.read(this)
+        val panel = ui.column(this).apply {
+            setPadding(ui.dp(this@MainActivity, 16),ui.dp(this@MainActivity, 8),
+                ui.dp(this@MainActivity, 16),ui.dp(this@MainActivity, 12))
+        }
+        panel.addView(ui.text(this,
+            "Private report saved on this phone. Review before sharing: crash stack traces may include paths or other diagnostic details. Nothing is uploaded automatically.",
+            12f, ui.MUTED))
+        panel.addView(ui.space(this,10))
+        val text = ui.text(this,report,11f,ui.WHITE).apply {
+            typeface = android.graphics.Typeface.MONOSPACE
+            // Copy uses the explicit button; avoid focus-heavy text selection.
+            setTextIsSelectable(false)
+        }
+        val scroll = ScrollView(this).apply {addView(text)}
+        panel.addView(scroll, LinearLayout.LayoutParams(-1,ui.dp(this,300)))
+        AlertDialog.Builder(this)
+            .setTitle("PocketCraft crash diagnostics")
+            .setView(panel)
+            .setNegativeButton("CLOSE",null)
+            .setNeutralButton("CLEAR REPORT") {_,_->
+                PocketCraftCrashReports.clear(this)
+                toast("Saved crash report deleted")
+            }
+            .setPositiveButton("COPY REPORT") {_,_->
+                (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
+                    .setPrimaryClip(ClipData.newPlainText("PocketCraft crash report",report))
+                toast("Crash report copied. Review before sending.")
+            }.show()
+    }
+
     private fun h(label: String, sub: String? = null): LinearLayout {
         val item = ui.column(this)
         item.addView(ui.text(this, label, 21f, ui.WHITE, true))
@@ -268,7 +300,22 @@ class MainActivity : Activity() {
             0 -> dashboard(body)
             1 -> modsPage(body)
             2 -> worldsPage(body)
-            else -> consolePage(body)
+            else -> try {
+                consolePage(body)
+            } catch (e: Exception) {
+                // A broken Console layout must not take down the whole server manager.
+                PocketCraftCrashReports.record(this, "Console screen initialization", e)
+                consoleOutput = null
+                consoleLogScroll = null
+                consoleCommandEntry = null
+                consoleSuggestionHost = null
+                body.removeAllViews()
+                body.addView(h("Console error", "The console could not be displayed. Server hosting remains separate."))
+                body.addView(ui.space(this, 12))
+                body.addView(ui.action(this, "VIEW CRASH REPORT", true) { showCrashReport() })
+                body.addView(ui.space(this, 10))
+                body.addView(ui.action(this, "RETURN HOME") { tab = 0; render() })
+            }
         }
         scroller.addView(body)
         screen.addView(scroller,LinearLayout.LayoutParams(-1,0,1f))
@@ -470,6 +517,10 @@ class MainActivity : Activity() {
         body.addView(ui.space(this,16))
 
         val actions = ui.card(this)
+        if (PocketCraftCrashReports.hasReport(this)) {
+            actions.addView(actionRow("!","Crash report available") { showCrashReport() })
+            actions.addView(line())
+        }
         actions.addView(actionRow("⚙","Settings") {
             startActivity(Intent(this,SettingsActivity::class.java))
         })
@@ -483,6 +534,8 @@ class MainActivity : Activity() {
         actions.addView(actionRow("↓","Import server") { picker(1) })
         actions.addView(line())
         actions.addView(actionRow("✓","Health") { showHealthCenter() })
+        actions.addView(line())
+        actions.addView(actionRow("!","Crash diagnostics") { showCrashReport() })
         actions.addView(line())
         actions.addView(actionRow("ⓘ","About") { about() })
         body.addView(actions)
@@ -1140,8 +1193,8 @@ class MainActivity : Activity() {
         try {
             startForegroundService(Intent(this,ServerService::class.java)
                 .setAction(ServerService.ACTION_START))
-            toast("Starting Minecraft. Live output is in the Console.")
-            tab=3
+            toast("Starting Minecraft. Server status is on Home; Console can be opened separately.")
+            // Do not automatically open Console: it must not gate server startup.
             render()
         } catch (e: Exception) {
             AlertDialog.Builder(this).setTitle("Could not start Minecraft")
@@ -1916,7 +1969,7 @@ class MainActivity : Activity() {
         val host = consoleSuggestionHost ?: return
         val entry = consoleCommandEntry ?: return
         host.removeAllViews()
-        if (!ServerService.running) return
+        if (!ServerService.running || entry.text.isBlank()) return
         val proposed = ServerCommandHints.suggestions(entry.text.toString(), 6)
         if (proposed.isEmpty()) return
         host.addView(ui.text(this,
@@ -2060,13 +2113,13 @@ class MainActivity : Activity() {
             setTextIsSelectable(false)
             consoleOutput = this
         }
-        val logScroll = ScrollView(this).apply {
-            addView(logText)
-            isFillViewport = false
-        }
-        consoleLogScroll = logScroll
-        log.addView(logScroll, LinearLayout.LayoutParams(-1,ui.dp(this,320)))
-        // The async reader scrolls via scrollTo() without requesting text focus.
+        // Use the page's existing ScrollView, not another nested scrollable
+        // text container. Nested scrolling/selection caused crashes on some OEMs.
+        // The bounded log tail remains readable with the main page scrollbar.
+        logText.maxLines = 110
+        logText.isFocusable = false
+        consoleLogScroll = null
+        log.addView(logText, LinearLayout.LayoutParams(-1,-2))
         body.addView(log)
         body.addView(ui.space(this,15))
         val entry=android.widget.EditText(this).apply {
