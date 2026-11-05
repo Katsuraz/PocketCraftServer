@@ -205,16 +205,15 @@ object WebsiteModInstaller {
             if (type != "required" && type != "optional") continue
             val versionId = dep.optString("version_id").takeIf { it.isNotBlank() }
             val id = dep.optString("project_id").ifBlank {
-                if (versionId == null) return@for
-                json("https://api.modrinth.com/v2/version/" + encode(versionId))
-                    .optString("project_id")
+                if (versionId == null) "" else
+                    json("https://api.modrinth.com/v2/version/" + encode(versionId))
+                        .optString("project_id")
             }
             if (id.isBlank()) continue
             val project = json("https://api.modrinth.com/v2/project/" + encode(id))
             val modId = project.optString("slug")
-            val installed = installedModIds(context).contains(modId) ||
-                installedModIds(context).contains(id) ||
-                installedModIds(context).contains(project.optString("title").lowercase())
+            val presentIds = installedModIds(context)
+            val installed = modId in presentIds || id in presentIds
             found.add(DependencyChoice(id, project.optString("title", id),
                 type == "required", installed, versionId))
         }
