@@ -235,3 +235,12 @@ PocketCraft uses an original woodland-workshop app icon, warm dark-oak navigatio
 The new soundscape synthesizes short wooden menu clicks and startup, Java-ready, stop and error cues locally in PocketCraft. It does not copy original Minecraft audio assets. **Settings → Sound effects** offers an enable/disable switch, volume slider, and sound previews. The Java-ready sound only plays after the actual server readiness signal, not when a process is merely launched. These sounds use Android's sonification audio category; OS sound settings and focus rules still apply.
 
 The update remains subject to Android signing rules. An official GitHub Release must be published for the in-app update checker to find it; a passing GitHub Actions artifact alone does not create a release. Back up worlds and mods before any reinstall required by a signing mismatch.
+
+
+## v0.8.8: Sounds not audible?
+
+PocketCraft now bundles six original PCM audio clips and uses Android SoundPool on the **media** audio stream (not the silent system touch-effects stream). On app launch, sound effects preload. Open Settings → Sound effects and tap **TEST SOUND + CHECK MEDIA VOLUME**. The line underneath reports media volume and how many clips loaded (target: **Effects loaded 6/6**). If media volume is 0, increase your phone's media volume. Check Bluetooth audio routing if the phone is connected to speakers or headphones.
+
+This resolves a likely Android volume-routing problem from v0.8.7. CI can verify the APK contains assets and compiles but cannot prove real-speaker playback on your phone.
+
+The update is version **0.8.8 / code 30** and will appear in-app when its official GitHub Release has been published.
