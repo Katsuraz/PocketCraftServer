@@ -40,6 +40,7 @@ class ServerService : Service() {
         @Volatile var javaReady = false
             private set
         @Volatile var bedrockReady = false
+        @Volatile var bedrockJoinVerified = false
             private set
         @Volatile var nethernetReady = false
             private set
@@ -115,6 +116,7 @@ class ServerService : Service() {
                 if (running && javaReady && geyserInstalled) {
                     readiness.confirmBedrockJoin()
                     bedrockReady = true
+                    bedrockJoinVerified = true
                     bedrockEvidence = readiness.bedrockEvidence
                     status = readiness.state()
                     append("Bedrock connection manually confirmed by the phone's owner for this server session")
@@ -228,6 +230,7 @@ class ServerService : Service() {
         ConsoleCommandActivity.reset()
         javaReady = false
         bedrockReady = false
+        bedrockJoinVerified = false
         nethernetReady = false
         nethernetMode = "NONE"
         bedrockEvidence = readiness.bedrockEvidence
@@ -316,6 +319,7 @@ class ServerService : Service() {
                         readiness.observe(line)
                         javaReady = readiness.javaReady
                         bedrockReady = readiness.bedrockListener
+                        bedrockJoinVerified = readiness.bedrockJoinVerified
                         nethernetReady = readiness.nethernetSignalingReady
                         nethernetMode = readiness.nethernetSignalDescription
                         bedrockEvidence = readiness.bedrockEvidence
@@ -374,6 +378,7 @@ class ServerService : Service() {
         reportCommand("Server stopped. Start Minecraft to send commands.")
         javaReady = false
         bedrockReady = false
+        bedrockJoinVerified = false
         nethernetReady = false
         nethernetMode = "NONE"
         nethernetNativeFailure = false
