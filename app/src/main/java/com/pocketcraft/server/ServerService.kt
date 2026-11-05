@@ -41,6 +41,7 @@ class ServerService : Service() {
             private set
         @Volatile var bedrockReady = false
         @Volatile var bedrockJoinVerified = false
+        @Volatile var compatibilityWarnings: List<String> = emptyList()
             private set
         @Volatile var nethernetReady = false
             private set
@@ -58,6 +59,7 @@ class ServerService : Service() {
             private set
     }
     private val readiness = ReadinessSignals()
+    private val compatibility = CompatibilityWarnings()
     private var server: Process? = null
     private var writer: BufferedWriter? = null
     private var wakeLock: PowerManager.WakeLock? = null
@@ -210,6 +212,8 @@ class ServerService : Service() {
         PocketSounds.play(this, PocketSounds.Event.SERVER_START)
         failure = ""
         readiness.reset()
+        compatibility.reset()
+        compatibilityWarnings = emptyList()
         PlayerActivity.reset()
         startedElapsedMs = 0L
         reportCommand("Minecraft is starting. Commands will be available when its stdin opens.")
@@ -317,6 +321,8 @@ class ServerService : Service() {
                         val previous = status
                         val wasJavaReady = javaReady
                         readiness.observe(line)
+                        compatibility.observe(line)
+                        compatibilityWarnings = compatibility.messages()
                         javaReady = readiness.javaReady
                         bedrockReady = readiness.bedrockListener
                         bedrockJoinVerified = readiness.bedrockJoinVerified
