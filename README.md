@@ -1,4 +1,20 @@
-# PocketCraft Server — Android (v0.3 experimental)
+# PocketCraft Server — Android (v0.8.33 experimental)
+
+## First installation on a new phone or after clearing app data
+
+PocketCraft shows a **first-time installation guide** on a fresh install, and Home keeps the **First-time setup guide** action available afterward. The setup checklist stays visible until the three mandatory prerequisites are installed.
+
+1. Install the Minecraft Fabric server launcher for your chosen version.
+2. Review and accept Minecraft's EULA.
+3. Install the Android ARM64 Java runtime and run the Java engine check if needed.
+4. Start Minecraft and check the console for the server's `Done` message. Verify Java LAN access first.
+5. Optional: in Mods, install compatible Fabric API, Geyser-Fabric and Floodgate, then test Bedrock.
+6. Optional: start Playit, create the Java and Minecraft Bedrock (NetherNet) tunnels, and copy Playit's **Configuration help → Geyser** settings (including private token) into Geyser's config. Do not post the token. Check Geyser's external signaling registration, then test from another network.
+
+**LAN and Playit NetherNet are different:** Geyser `signaling.mode: nxs` uses external-only signaling and will not make the phone's local-IP NetherNet address available. Where supported, `signaling.mode: hybrid` enables built-in LAN and external signaling together. Keep the Playit NXS settings. Always test actual connections; a green startup badge does not prove an internet join.
+
+**Before clearing app data:** export important worlds, mods and configuration backups. Clearing app data removes the app-private Minecraft files, downloaded runtime, settings and Playit agent credentials; PocketCraft does not restore them automatically.
+
 
 PocketCraft Server is a native Kotlin Android app for managing a Minecraft Java Fabric server, with a custom midnight / block-world UI. It does **not** depend on Termux.
 

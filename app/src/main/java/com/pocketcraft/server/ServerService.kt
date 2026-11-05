@@ -41,6 +41,10 @@ class ServerService : Service() {
             private set
         @Volatile var bedrockReady = false
             private set
+        @Volatile var bedrockJoinVerified = false
+            private set
+        @Volatile var compatibilityWarnings: List<String> = emptyList()
+            private set
         @Volatile var nethernetReady = false
             private set
         @Volatile var nethernetMode = "NONE"
@@ -57,6 +61,7 @@ class ServerService : Service() {
             private set
     }
     private val readiness = ReadinessSignals()
+    private val compatibility = CompatibilityWarnings()
     private var server: Process? = null
     private var writer: BufferedWriter? = null
     private var wakeLock: PowerManager.WakeLock? = null
@@ -115,6 +120,7 @@ class ServerService : Service() {
                 if (running && javaReady && geyserInstalled) {
                     readiness.confirmBedrockJoin()
                     bedrockReady = true
+                    bedrockJoinVerified = true
                     bedrockEvidence = readiness.bedrockEvidence
                     status = readiness.state()
                     append("Bedrock connection manually confirmed by the phone's owner for this server session")
@@ -208,6 +214,8 @@ class ServerService : Service() {
         PocketSounds.play(this, PocketSounds.Event.SERVER_START)
         failure = ""
         readiness.reset()
+        compatibility.reset()
+        compatibilityWarnings = emptyList()
         PlayerActivity.reset()
         startedElapsedMs = 0L
         reportCommand("Minecraft is starting. Commands will be available when its stdin opens.")
@@ -228,6 +236,7 @@ class ServerService : Service() {
         ConsoleCommandActivity.reset()
         javaReady = false
         bedrockReady = false
+        bedrockJoinVerified = false
         nethernetReady = false
         nethernetMode = "NONE"
         bedrockEvidence = readiness.bedrockEvidence
@@ -314,8 +323,11 @@ class ServerService : Service() {
                         val previous = status
                         val wasJavaReady = javaReady
                         readiness.observe(line)
+                        compatibility.observe(line)
+                        compatibilityWarnings = compatibility.messages()
                         javaReady = readiness.javaReady
                         bedrockReady = readiness.bedrockListener
+                        bedrockJoinVerified = readiness.bedrockJoinVerified
                         nethernetReady = readiness.nethernetSignalingReady
                         nethernetMode = readiness.nethernetSignalDescription
                         bedrockEvidence = readiness.bedrockEvidence
@@ -374,6 +386,7 @@ class ServerService : Service() {
         reportCommand("Server stopped. Start Minecraft to send commands.")
         javaReady = false
         bedrockReady = false
+        bedrockJoinVerified = false
         nethernetReady = false
         nethernetMode = "NONE"
         nethernetNativeFailure = false

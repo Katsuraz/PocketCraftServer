@@ -55,6 +55,46 @@ class GeyserNetworkSettingsTest {
         assertEquals(19140,settings.webRtcPort)
     }
 
+    @Test fun nxsOnlyWarnsThatLocalIPCannotUseNethernet() {
+        val settings = GeyserNetworkSettings.parse("""
+            bedrock:
+              port: 19132
+              transport: nethernet
+              signaling:
+                mode: nxs
+                nxs:
+                  token: please-do-not-read-this
+        """.trimIndent())
+        assertEquals("nxs",settings.signalingMode)
+        assertFalse(settings.localJoinSupported())
+        assertTrue(settings.warnings.any { it.contains("local-IP") })
+        assertFalse(settings.warnings.joinToString().contains("please-do-not-read-this"))
+    }
+
+    @Test fun hybridEnablesBothLocalAndExternalSignaling() {
+        val settings = GeyserNetworkSettings.parse("""
+            bedrock:
+              transport: nethernet
+              signaling:
+                mode: hybrid
+        """.trimIndent())
+        assertEquals("hybrid",settings.signalingMode)
+        assertTrue(settings.localJoinSupported())
+        assertTrue(settings.warnings.isEmpty())
+    }
+
+    @Test fun duplicateModesAreFlaggedWithoutChangingTheFile() {
+        val settings = GeyserNetworkSettings.parse("""
+            bedrock:
+              transport: nethernet
+              signaling:
+                mode: nxs
+                mode: builtin
+        """.trimIndent())
+        assertTrue(settings.warnings.any { it.contains("Duplicate signaling.mode") })
+        assertEquals("builtin",settings.signalingMode)
+    }
+
     @Test fun raknetRouterAdviceMentionsOnlyUdp() {
         val settings=GeyserNetworkSettings.parse("bedrock:\n  port: 19132\n  transport: raknet")
         assertEquals("UDP 19132 (RakNet)",settings.directRouterAdvice())

@@ -28,6 +28,9 @@ internal class ReadinessSignals {
     // The prefix can be changed in Floodgate config and is set before startup.
     private var floodgateUsernamePrefix = "."
 
+    val bedrockJoinVerified: Boolean
+        get() = bedrockPlayerJoined || userConfirmedBedrock
+
     val nethernetSignalingReady: Boolean
         get() = nethernetRegistered || nethernetBuiltIn
 
@@ -151,7 +154,8 @@ internal class ReadinessSignals {
     }
 
     fun state(): String = when {
-        javaReady && bedrockListener -> "JAVA + BEDROCK READY"
+        javaReady && bedrockJoinVerified -> "JAVA + BEDROCK JOIN VERIFIED"
+        javaReady && bedrockListener -> "JAVA + GEYSER STARTED"
         javaReady -> "JAVA READY"
         else -> "STARTING"
     }

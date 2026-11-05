@@ -103,7 +103,7 @@ class ReadinessSignalsTest {
         r.observe("[15:11:10] [Server thread/INFO]: .Alex[/192.168.1.5:49800] logged in with entity id 44 at (1.0, 65.0, 1.0)")
         assertTrue(r.bedrockPlayerJoined)
         assertTrue(r.bedrockListener)
-        assertEquals("JAVA + BEDROCK READY", r.state())
+        assertEquals("JAVA + BEDROCK JOIN VERIFIED", r.state())
         assertFalse(r.nethernetSignalingReady)
     }
 
@@ -157,6 +157,17 @@ class ReadinessSignalsTest {
         r.observe("[Geyser-Fabric] Started Geyser on 0.0.0.0:19132")
         assertEquals("STARTING",r.state())
         r.observe("[Server thread/INFO]: Done (11.8s)! For help, type \"help\"")
-        assertEquals("JAVA + BEDROCK READY",r.state())
+        assertEquals("JAVA + GEYSER STARTED",r.state())
+    }
+
+    @Test fun registrationIsNotAPlayerJoin() {
+        val r=ReadinessSignals()
+        r.observe("[Server thread/INFO]: Done (1.3s)! For help, type help")
+        r.observe("[nethernet-provider/INFO]: Registered with the external signaling service.")
+        assertEquals("JAVA + GEYSER STARTED",r.state())
+        assertFalse(r.bedrockJoinVerified)
+        r.confirmBedrockJoin()
+        assertTrue(r.bedrockJoinVerified)
+        assertEquals("JAVA + BEDROCK JOIN VERIFIED",r.state())
     }
 }
