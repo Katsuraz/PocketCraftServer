@@ -470,7 +470,8 @@ class MainActivity : Activity() {
         lastError = ServerService.failure.takeIf { it.isNotBlank() },
         bedrockEvidence = ServerService.bedrockEvidence,
         bedrockJoinVerified = ServerService.bedrockJoinVerified,
-        geyserWarnings = geyserNetworkSettings().warnings
+        geyserWarnings = geyserNetworkSettings().warnings,
+        compatibilityWarnings = ServerService.compatibilityWarnings
     )
 
     /** All diagnostics are local, with no remote probes or secret disclosure. */
@@ -546,6 +547,7 @@ class MainActivity : Activity() {
                     "Bedrock bridge started: " + state.bedrockListening,
                     "Bedrock join verified: " + state.bedrockJoinVerified,
                     "Geyser config warnings: " + state.geyserWarnings.size,
+                    "Android compatibility warnings: " + state.compatibilityWarnings.size,
                     "NetherNet signaling reported: " + state.nethernetSignalingReady,
                     "Playit running: " + state.playitActive,
                     "Java public address assigned: " + !state.javaTunnelAddress.isNullOrBlank(),
