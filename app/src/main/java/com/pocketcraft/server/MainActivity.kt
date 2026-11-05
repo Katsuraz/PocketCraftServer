@@ -81,8 +81,8 @@ class MainActivity : Activity() {
                             (it.getChildAt(0)?.height ?: 0) - ui.dp(this, 52)
                     } ?: true
                     consoleOutput?.text = getLog()
-                    if (nearBottom) scroller?.post {
-                        scroller.fullScroll(View.FOCUS_DOWN)
+                    if (nearBottom && scroller != null) {
+                        scroller.post { scroller.fullScroll(View.FOCUS_DOWN) }
                     }
                 }
                 if (lastConsoleCommandRevision != ServerCommandHints.revision) {
