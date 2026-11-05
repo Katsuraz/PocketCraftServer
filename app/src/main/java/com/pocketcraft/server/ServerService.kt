@@ -53,6 +53,8 @@ class ServerService : Service() {
     private val readiness = ReadinessSignals()
     private var server: Process? = null
     private var writer: BufferedWriter? = null
+    // Per-server-session upper bound for extra /help pages (not game commands).
+    private var requestedHelpPages = 1
     private var wakeLock: PowerManager.WakeLock? = null
     private val root by lazy { WorldStore.root(this) }
     private val log by lazy { File(root, "console.log") }
@@ -108,6 +110,7 @@ class ServerService : Service() {
             ACTION_COMMAND -> {
                 val line = intent.getStringExtra(EXTRA_COMMAND)?.trim().orEmpty()
                 if (line.isNotEmpty() && line.length <= 240 && !line.contains("\n") && !line.contains("\r")) {
+                    if (line == "help" || line == "/help" || line == "help 1" || line == "/help 1") requestedHelpPages = 1
                     Thread {
                         try {
                             synchronized(lock) {
@@ -162,6 +165,7 @@ class ServerService : Service() {
         failure = ""
         readiness.reset()
         ServerCommandHints.reset()
+        requestedHelpPages = 1
         javaReady = false
         bedrockReady = false
         nethernetReady = false
@@ -241,6 +245,25 @@ class ServerService : Service() {
                     lines.forEach { line ->
                         append(line)
                         ServerCommandHints.observe(line)
+                        // Vanilla's /help is paginated. Read every reported page
+                        // once to capture mod commands without guessing their names.
+                        // Limit to 24 pages to prevent command floods on huge packs.
+                        if (javaReady && requestedHelpPages < ServerCommandHints.helpPageCount) {
+                            val pages = ServerCommandHints.helpPageCount
+                            val start = requestedHelpPages + 1
+                            synchronized(lock) {
+                                writer?.let { input ->
+                                    for (page in start..pages) {
+                                        input.write("help " + page)
+                                        input.newLine()
+                                    }
+                                    input.flush()
+                                    requestedHelpPages = pages
+                                }
+                            }
+                            append("Collecting /help pages " + start + "–" + pages +
+                                " for console command suggestions")
+                        }
                         val previous = status
                         val wasJavaReady = javaReady
                         readiness.observe(line)
