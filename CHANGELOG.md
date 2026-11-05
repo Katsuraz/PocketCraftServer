@@ -1,5 +1,16 @@
 # PocketCraft changelog
 
+## v0.8.27 (versionCode 49) — Reliable Console command delivery
+
+- Fix the command field and Send button becoming permanently disabled when Console is opened while Minecraft is starting. Command entry remains editable; submission checks the live server state.
+- Route Android keyboard Send and hardware Enter through the same validated command path. Accept in-game commands with a leading slash and display errors for empty, multiline, or overlong input.
+- Add a persistent Console delivery status independent of log filters, distinguishing queued, delivered-to-stdin, and failed commands without falsely claiming the Minecraft server executed them.
+- Send Minecraft stdin commands through a dedicated serial queue so rapid commands preserve order; report process/stdin failures rather than silently clearing the field.
+- Separate the log file's synchronization from command stdin to avoid log floods and large file rotation delaying commands.
+- Keep all Homestead styling, saved worlds, snapshots, Geyser/Bedrock, Playit, mod handling, server configuration, and existing button layouts.
+- Android unit tests check command normalization and invalid input. Live JNI Minecraft stdin handling still requires on-device confirmation.
+
+
 ## v0.8.26 (versionCode 48) — Homestead professional server management
 
 - Keep the existing Homestead wood-and-parchment UI, simplify the Home page to one main start/stop button and a small management menu; move repetitive setup buttons into collapsible Advanced & Setup.

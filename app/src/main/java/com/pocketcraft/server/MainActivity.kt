@@ -40,6 +40,9 @@ class MainActivity : Activity() {
     private var consoleOutput: TextView? = null
     private var consoleLogScroll: ScrollView? = null
     private var consoleCommandEntry: android.widget.EditText? = null
+    private var consoleCommandFeedbackView: TextView? = null
+    private var consoleAvailabilityView: TextView? = null
+    private var lastCommandFeedbackRevision = -1
     private var consoleSuggestionHost: LinearLayout? = null
     private var lastConsoleCommandRevision = -1
     private var lastConsoleSize = -1L
@@ -104,6 +107,16 @@ class MainActivity : Activity() {
                     }
                 }
             } else if (tab == 3) {
+                // The Console can be opened *before* Minecraft starts. Never
+                // leave controls permanently disabled from the initial render.
+                val availability = if (ServerService.running)
+                    "Minecraft process active • type a command and tap SEND or keyboard Send."
+                else "Minecraft is offline • start the server before sending."
+                consoleAvailabilityView?.let { if(it.text.toString()!=availability)it.text=availability }
+                if (lastCommandFeedbackRevision != ServerService.commandRevision) {
+                    lastCommandFeedbackRevision=ServerService.commandRevision
+                    consoleCommandFeedbackView?.text=ServerService.commandFeedback
+                }
                 val file = File(base, "console.log")
                 if (file.length() != lastConsoleSize ||
                     file.lastModified() != lastConsoleModified) {
@@ -286,6 +299,8 @@ class MainActivity : Activity() {
             consoleOutput = null
             consoleLogScroll = null
             consoleCommandEntry = null
+            consoleCommandFeedbackView = null
+            consoleAvailabilityView = null
             consoleSuggestionHost = null
         }
         if (renderedTab in 0..3) {
@@ -2355,20 +2370,30 @@ class MainActivity : Activity() {
 
     /** Only the real Minecraft stdin process receives a submitted command. */
     private fun issueConsoleCommand(raw: String): Boolean {
+        val command = runCatching { ConsoleCommands.normalize(raw) }.getOrElse { error ->
+            val reason = error.message ?: "Invalid command"
+            consoleCommandFeedbackView?.text = "Not sent: " + reason
+            toast(reason)
+            return false
+        }
         if (!ServerService.running) {
+            consoleCommandFeedbackView?.text="Not sent: Minecraft isn't running. Start it from Home."
             toast("Start Minecraft before sending commands")
             return false
         }
-        val command = raw.trim().removePrefix("/")
-        if (command.isBlank()) { toast("Enter a command"); return false }
-        if (command.length > 240 || '\n' in command || '\r' in command) {
-            toast("Command too long or contains a newline")
-            return false
+        return try {
+            // The service reports whether its serial command worker actually
+            // delivered this to the running JVM's stdin or failed to write it.
+            startService(Intent(this, ServerService::class.java)
+                .setAction(ServerService.ACTION_COMMAND)
+                .putExtra(ServerService.EXTRA_COMMAND, command))
+            consoleCommandFeedbackView?.text="Command queued. Checking server stdin…"
+            true
+        } catch (e:Exception) {
+            consoleCommandFeedbackView?.text="Not sent: " + (e.message ?: "Android service error")
+            toast("Could not send command: " + (e.message ?: "service unavailable"))
+            false
         }
-        startService(Intent(this, ServerService::class.java)
-            .setAction(ServerService.ACTION_COMMAND)
-            .putExtra(ServerService.EXTRA_COMMAND, command))
-        return true
     }
 
     private fun updateConsoleSuggestions() {
@@ -2549,6 +2574,66 @@ class MainActivity : Activity() {
         })
         body.addView(searchLog)
         body.addView(ui.space(this,12))
+        body.addView(ui.text(this,"SERVER COMMAND",11f,ui.CYAN,true))
+        body.addView(ui.space(this,8))
+        val entry=android.widget.EditText(this).apply {
+            hint = "Command • try /help or /chunky"
+            setSingleLine(true)
+            textSize = 14f
+            setTextColor(ui.WHITE)
+            setHintTextColor(ui.MUTED)
+            background = ui.shape(this@MainActivity,ui.SURFACE,12,0xFF31415D.toInt())
+            setPadding(ui.dp(this@MainActivity,14),ui.dp(this@MainActivity,13),
+                ui.dp(this@MainActivity,14),ui.dp(this@MainActivity,13))
+            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEND
+            // Never permanently disable the field just because Console was
+            // opened during the JVM's STARTING state. The send path validates
+            // live service readiness at the moment of submission.
+            isEnabled = true
+        }
+        consoleCommandEntry = entry
+        body.addView(entry)
+        body.addView(ui.space(this,8))
+        val suggestions = ui.column(this)
+        consoleSuggestionHost = suggestions
+        body.addView(suggestions)
+        updateConsoleSuggestions()
+        entry.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                updateConsoleSuggestions()
+            }
+            override fun afterTextChanged(s: android.text.Editable?) {}
+        })
+        entry.setOnEditorActionListener { _, actionId, event ->
+            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEND ||
+                (event?.keyCode == android.view.KeyEvent.KEYCODE_ENTER &&
+                    event.action == android.view.KeyEvent.ACTION_DOWN)) {
+                if (issueConsoleCommand(entry.text.toString())) entry.text.clear()
+                true
+            } else false
+        }
+        body.addView(ui.action(this,"SEND COMMAND →",true) {
+            if (issueConsoleCommand(entry.text.toString())) {
+                entry.text.clear()
+            }
+        })
+        body.addView(ui.space(this,8))
+        body.addView(ui.text(this,ServerService.commandFeedback,12f,ui.CYAN).also {
+            consoleCommandFeedbackView=it
+            lastCommandFeedbackRevision=ServerService.commandRevision
+        })
+        body.addView(ui.space(this,6))
+        body.addView(ui.text(this,
+            if(ServerService.running)
+                "Minecraft process active • type a command and tap SEND or keyboard Send."
+            else "Minecraft is offline • start the server before sending.",
+            12f,ui.MUTED).also {consoleAvailabilityView=it})
+        body.addView(ui.space(this,7))
+        body.addView(ui.text(this,
+            "Console commands run without a leading slash. Delivery means input reached Minecraft's stdin; the game may still reject the command. Set log filter to ALL to see replies.",
+            11f,ui.MUTED))
+        body.addView(ui.space(this,12))
         val log=ui.column(this).apply {
             background=ui.shape(this@MainActivity,if(ui.homestead()) 0xFF211A16.toInt() else 0xFF0F1728.toInt(),18,if(ui.homestead()) 0xFF745035.toInt() else 0xFF26354D.toInt())
             ui.run {padding(this@MainActivity,16,16,16,16)}
@@ -2571,48 +2656,6 @@ class MainActivity : Activity() {
         log.addView(logText, LinearLayout.LayoutParams(-1,-2))
         body.addView(log)
         body.addView(ui.space(this,15))
-        val entry=android.widget.EditText(this).apply {
-            hint = "Command • try /help or /chunky"
-            setSingleLine(true)
-            textSize = 14f
-            setTextColor(ui.WHITE)
-            setHintTextColor(ui.MUTED)
-            background = ui.shape(this@MainActivity,ui.SURFACE,12,0xFF31415D.toInt())
-            setPadding(ui.dp(this@MainActivity,14),ui.dp(this@MainActivity,13),
-                ui.dp(this@MainActivity,14),ui.dp(this@MainActivity,13))
-            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEND
-            isEnabled = ServerService.running
-        }
-        consoleCommandEntry = entry
-        body.addView(entry)
-        body.addView(ui.space(this,8))
-        val suggestions = ui.column(this)
-        consoleSuggestionHost = suggestions
-        body.addView(suggestions)
-        updateConsoleSuggestions()
-        entry.addTextChangedListener(object : android.text.TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                updateConsoleSuggestions()
-            }
-            override fun afterTextChanged(s: android.text.Editable?) {}
-        })
-        entry.setOnEditorActionListener { _, actionId, _ ->
-            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEND) {
-                if (issueConsoleCommand(entry.text.toString())) entry.text.clear()
-                true
-            } else false
-        }
-        body.addView(ui.action(this,"SEND COMMAND →",true,ServerService.running) {
-            if (issueConsoleCommand(entry.text.toString())) {
-                entry.text.clear()
-                toast("Command sent. Check the live output for results.")
-            }
-        })
-        body.addView(ui.space(this,8))
-        body.addView(ui.text(this,if(ServerService.running)
-            "Suggestions insert text only. Review before sending. The list reflects /help from the running server."
-            else "Start the Java server to enable commands and live autocomplete.",12f,ui.MUTED))
     }
     private fun getLog():String {
         val file = File(base,"console.log")

@@ -51,6 +51,10 @@ class ServerService : Service() {
             private set
         @Volatile var startedElapsedMs = 0L
             private set
+        @Volatile var commandFeedback = "No command sent yet"
+            private set
+        @Volatile var commandRevision = 0
+            private set
     }
     private val readiness = ReadinessSignals()
     private var server: Process? = null
@@ -61,6 +65,18 @@ class ServerService : Service() {
     private val root by lazy { WorldStore.root(this) }
     private val log by lazy { File(root, "console.log") }
     private val lock = Any()
+    // Keep potentially slow log rotation out of stdin's lock.
+    private val logLock = Any()
+    // Serial command executor preserves ordering and keeps stdin writes off UI.
+    private val commandQueue = java.util.concurrent.Executors.newSingleThreadExecutor {
+        task -> Thread(task,"PocketCraft-server-commands").apply { isDaemon = true }
+    }
+
+    private val commandStatusLock = Any()
+    private fun reportCommand(message: String) = synchronized(commandStatusLock) {
+        commandFeedback = message
+        commandRevision++
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -110,21 +126,44 @@ class ServerService : Service() {
                 }
             }
             ACTION_COMMAND -> {
-                val line = intent.getStringExtra(EXTRA_COMMAND)?.trim().orEmpty()
-                if (line.isNotEmpty() && line.length <= 240 && !line.contains("\n") && !line.contains("\r")) {
-                    if (line == "help" || line == "/help" || line == "help 1" || line == "/help 1") requestedHelpPages = 1
-                    Thread {
+                val request = runCatching {
+                    ConsoleCommands.normalize(intent.getStringExtra(EXTRA_COMMAND).orEmpty())
+                }
+                request.onFailure { error ->
+                    reportCommand("Not sent: " + (error.message ?: "invalid command"))
+                    append("Console command rejected: " + (error.message ?: "invalid command"))
+                }
+                request.onSuccess { line ->
+                    if (line == "help" || line == "help 1") requestedHelpPages = 1
+                    if (!running) {
+                        reportCommand("Not sent: Minecraft is offline")
+                        append("Console command rejected: Minecraft is not running")
+                    } else {
+                        reportCommand("Command queued for server stdin…")
                         try {
-                            synchronized(lock) {
-                                val input = writer ?: throw IllegalStateException(
-                                    "Server command input is not available")
-                                input.write(line)
-                                input.newLine()
-                                input.flush()
+                            commandQueue.execute {
+                                try {
+                                    synchronized(lock) {
+                                        val process = server
+                                        val input = writer
+                                        if (!running || process?.isAlive != true || input == null)
+                                            throw IllegalStateException("Minecraft stdin is not available")
+                                        input.write(line)
+                                        input.newLine()
+                                        input.flush()
+                                    }
+                                    reportCommand("Delivered to Minecraft stdin. Check the ALL log for the server's response.")
+                                    append("> " + line)
+                                } catch (e: Exception) {
+                                    reportCommand("Command failed: " + (e.message ?: "stdin write error"))
+                                    append("Command failed: " + (e.message ?: "stdin write error"))
+                                }
                             }
-                            append("> " + line)
-                        } catch(e:Exception) { append("Command failed: " + e.message) }
-                    }.start()
+                        } catch(e: java.util.concurrent.RejectedExecutionException) {
+                            reportCommand("Command failed: command worker unavailable")
+                            append("Command failed: command worker unavailable")
+                        }
+                    }
                 }
             }
         }
@@ -149,7 +188,7 @@ class ServerService : Service() {
     }
 
     private fun append(line: String) {
-        synchronized(lock) {
+        synchronized(logLock) {
             try {
                 if (log.length() > 2_000_000L) {
                     val tail = log.readText().takeLast(800_000)
@@ -168,6 +207,7 @@ class ServerService : Service() {
         readiness.reset()
         PlayerActivity.reset()
         startedElapsedMs = 0L
+        reportCommand("Minecraft is starting. Commands will be available when its stdin opens.")
         // Floodgate's username prefix is public config, not an authentication
         // secret. Read it to identify real Bedrock logins in Java server output.
         runCatching {
@@ -354,6 +394,7 @@ class ServerService : Service() {
         running = false
         startedElapsedMs = 0L
         PlayerActivity.reset()
+        reportCommand("Server stopped. Start Minecraft to send commands.")
         javaReady = false
         bedrockReady = false
         nethernetReady = false
@@ -369,6 +410,7 @@ class ServerService : Service() {
     }
 
     override fun onDestroy() {
+        commandQueue.shutdownNow()
         PlayitManager.stop()
         server?.takeIf { it.isAlive }?.destroy()
         release()
