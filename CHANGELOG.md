@@ -1,5 +1,13 @@
 # PocketCraft changelog
 
+## v0.8.11 (versionCode 33) — Original Homestead and RAM control
+
+- Restored the exact original v0.8.8 Homestead GUI design system, including timber buttons/cards, woodland colors, gradients and woodland artwork. The compact v0.8.10 Home screen remains.
+- Replaced the Java maximum heap textbox with a 512–3072 MB slider (128 MB steps), saving to the existing heapMB preference when users tap Save. The real server launcher still reads that same value on its next launch.
+- Replaced the launcher and header cube with a clean pixel-style PS monogram (PocketCraft Server), including adaptive color, round and monochrome icon layers without baked white.
+- Preserved six existing audio effects, Mojangles import, Android package/signing, worlds, mods, settings, and update workflow.
+
+
 ## v0.8.10 (versionCode 32) — Homestead, simplified
 
 - Restored the warm oak-and-parchment Homestead palette while preserving clean, subtle cards.

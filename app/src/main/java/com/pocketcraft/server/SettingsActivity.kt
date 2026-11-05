@@ -36,7 +36,7 @@ class SettingsActivity : Activity() {
     private val selectors = linkedMapOf<String, TextView>()
     private val selected = linkedMapOf<String, String>()
     private lateinit var advertised: EditText
-    private lateinit var heap: EditText
+    private var selectedHeapMB: Int = 2048
 
     private fun heading(label: String, description: String): LinearLayout =
         ui.column(this).apply {
@@ -367,19 +367,45 @@ class SettingsActivity : Activity() {
             input(card,"view-distance","View distance (chunks)","5","Lower values save RAM and CPU",true)
             input(card,"simulation-distance","Simulation distance (chunks)","4","Lower values improve performance",true)
             input(card,"spawn-protection","Spawn protection radius","0","0 disables protection",true)
-            card.addView(ui.text(this,"Maximum Java heap (MB)",14f,ui.WHITE,true))
-            card.addView(ui.space(this,7))
-            heap=EditText(this).apply {
-                setSingleLine(true);inputType=InputType.TYPE_CLASS_NUMBER
-                setTextColor(ui.WHITE);textSize=15f
-                setText(getSharedPreferences("pocketcraft",0).getInt("heapMB",2048).toString())
-                background=ui.shape(this@SettingsActivity,ui.SURFACE,12,ui.BORDER)
-                setPadding(ui.dp(this@SettingsActivity,14),ui.dp(this@SettingsActivity,13),
-                    ui.dp(this@SettingsActivity,14),ui.dp(this@SettingsActivity,13))
+            // JNI launcher uses the saved heapMB setting; no Android device RAM is
+            // reserved until the server is started. 21 safe steps from 512–3072 MB.
+            selectedHeapMB = getSharedPreferences("pocketcraft",0)
+                .getInt("heapMB",2048).coerceIn(512,3072)
+                .let { 512 + (((it - 512 + 64) / 128).coerceIn(0,20) * 128) }
+            val ramLabel = ui.text(this,"Java RAM  •  ${selectedHeapMB} MB",15f,ui.WHITE,true)
+            card.addView(ramLabel)
+            card.addView(ui.space(this,9))
+            val slider = SeekBar(this).apply {
+                max = 20   // 0=512 MB, 20=3072 MB, each step=128 MB
+                progress = (selectedHeapMB - 512) / 128
+                progressTintList = android.content.res.ColorStateList.valueOf(ui.GREEN)
+                thumbTintList = android.content.res.ColorStateList.valueOf(ui.GREEN)
+                progressBackgroundTintList = android.content.res.ColorStateList.valueOf(ui.BORDER)
+                isEnabled = !ServerService.running
+                contentDescription = "Minecraft server Java RAM"
+                setOnSeekBarChangeListener(object: SeekBar.OnSeekBarChangeListener {
+                    override fun onProgressChanged(bar: SeekBar?, value: Int, fromUser: Boolean) {
+                        if (fromUser) {
+                            selectedHeapMB = 512 + value.coerceIn(0,20) * 128
+                            ramLabel.text = "Java RAM  •  ${selectedHeapMB} MB"
+                        }
+                    }
+                    override fun onStartTrackingTouch(bar: SeekBar?) {}
+                    override fun onStopTrackingTouch(bar: SeekBar?) {
+                        PocketSounds.play(this@SettingsActivity,PocketSounds.Event.SELECT)
+                    }
+                })
             }
-            card.addView(heap)
-            card.addView(ui.space(this,8))
-            card.addView(ui.text(this,"512–3072 MB. Minecraft Java 26.3 still requires a compatible JVM, and Android may reclaim memory.",11f,ui.MUTED))
+            card.addView(slider)
+            val limits = ui.row(this)
+            limits.addView(ui.text(this,"512 MB",11f,ui.MUTED),
+                LinearLayout.LayoutParams(0,-2,1f))
+            limits.addView(ui.text(this,"3 GB",11f,ui.MUTED).apply {
+                gravity=Gravity.END
+            })
+            card.addView(limits)
+            card.addView(ui.space(this,6))
+            card.addView(ui.text(this,"Tap Save to apply on the next server start.",11f,ui.MUTED))
         }
 
         scroll.addView(body)
@@ -414,11 +440,9 @@ class SettingsActivity : Activity() {
                 return
             }
         }
-        val ram=heap.text.toString().toIntOrNull()
-        if(ram==null || ram !in 512..3072) {
-            heap.error="Java memory must be between 512 and 3072 MB"
-            heap.requestFocus()
-            toast("Please check Java memory")
+        val ram = selectedHeapMB
+        if (ram !in 512..3072) {
+            toast("Java memory must be between 512 and 3072 MB")
             return
         }
         val world=value("level-name")
