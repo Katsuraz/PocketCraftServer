@@ -34,6 +34,9 @@ class MainActivity : Activity() {
     private var connectionHost: FrameLayout? = null
     private var lastConnectionSignature = ""
     private var consoleOutput: TextView? = null
+    private var consoleCommandEntry: android.widget.EditText? = null
+    private var consoleSuggestionHost: LinearLayout? = null
+    private var lastConsoleCommandRevision = -1
     private var lastConsoleSize = -1L
     private var lastConsoleModified = -1L
     private val updateStatus = object: Runnable {
@@ -72,6 +75,10 @@ class MainActivity : Activity() {
                     lastConsoleSize = file.length()
                     lastConsoleModified = file.lastModified()
                     consoleOutput?.text = getLog()
+                }
+                if (lastConsoleCommandRevision != ServerCommandHints.revision) {
+                    lastConsoleCommandRevision = ServerCommandHints.revision
+                    updateConsoleSuggestions()
                 }
             }
             if (tab == 0) {
@@ -1659,24 +1666,159 @@ class MainActivity : Activity() {
         note.addView(ui.text(this,"Exports are saved to a location you choose. Imports use path checks and a 1 GB extracted-size limit. Always back up a world before replacing it.",12f,ui.MUTED))
         body.addView(note)
     }
+
+    /** Only the real Minecraft stdin process receives a submitted command. */
+    private fun issueConsoleCommand(raw: String): Boolean {
+        if (!ServerService.running) {
+            toast("Start Minecraft before sending commands")
+            return false
+        }
+        val command = raw.trim().removePrefix("/")
+        if (command.isBlank()) { toast("Enter a command"); return false }
+        if (command.length > 240 || '\n' in command || '\r' in command) {
+            toast("Command too long or contains a newline")
+            return false
+        }
+        startService(Intent(this, ServerService::class.java)
+            .setAction(ServerService.ACTION_COMMAND)
+            .putExtra(ServerService.EXTRA_COMMAND, command))
+        return true
+    }
+
+    private fun updateConsoleSuggestions() {
+        val host = consoleSuggestionHost ?: return
+        val entry = consoleCommandEntry ?: return
+        host.removeAllViews()
+        if (!ServerService.running) return
+        val proposed = ServerCommandHints.suggestions(entry.text.toString(), 6)
+        if (proposed.isEmpty()) return
+        host.addView(ui.text(this,
+            if (ServerCommandHints.registeredCount() > 0)
+                "From server help • tap to insert (includes available mod commands)"
+            else "Common examples • live command discovery starts when server is ready",
+            11f, ui.MUTED))
+        host.addView(ui.space(this, 5))
+        proposed.forEach { item ->
+            val suggestion = ui.text(this, "  /" + item, 13f, ui.WHITE)
+            suggestion.background = ui.shape(this, ui.SURFACE, 9)
+            suggestion.setPadding(ui.dp(this, 12), ui.dp(this, 10),
+                ui.dp(this, 12), ui.dp(this, 10))
+            suggestion.setOnClickListener {
+                entry.setText(item)
+                entry.setSelection(entry.text.length)
+                entry.requestFocus()
+            }
+            host.addView(suggestion)
+            host.addView(ui.space(this, 5))
+        }
+    }
+
+    /** Searchable directory populated from the Minecraft server's own /help output. */
+    private fun showConsoleCommands() {
+        val roots = ServerCommandHints.registered()
+        val usages = ServerCommandHints.usages()
+        val all = (roots + usages).distinct().sorted()
+        val panel = ui.column(this).apply {
+            setPadding(ui.dp(this@MainActivity, 16), ui.dp(this@MainActivity, 10),
+                ui.dp(this@MainActivity, 16), ui.dp(this@MainActivity, 12))
+        }
+        panel.addView(ui.text(this,
+            if (all.isEmpty())
+                "No commands captured yet. Start the server, then tap SYNC HELP. " +
+                "Commands hidden from the server's /help cannot be discovered."
+            else roots.size.toString() + " command roots discovered. " +
+                "Fabric mod commands appear when mods register them in /help. " +
+                "Some mods hide subcommands or require in-game permissions.",
+            12f, ui.MUTED))
+        panel.addView(ui.space(this, 9))
+        val search = android.widget.EditText(this).apply {
+            hint = "Search, e.g. chunky"
+            setSingleLine(true)
+            textSize = 14f
+            setTextColor(ui.WHITE)
+            setHintTextColor(ui.MUTED)
+            background = ui.shape(this@MainActivity, ui.SURFACE, 12)
+            setPadding(ui.dp(this@MainActivity, 12), ui.dp(this@MainActivity, 10),
+                ui.dp(this@MainActivity, 12), ui.dp(this@MainActivity, 10))
+        }
+        panel.addView(search)
+        panel.addView(ui.space(this, 10))
+        val list = ui.column(this)
+        val scroll = ScrollView(this).apply { addView(list) }
+        panel.addView(scroll, LinearLayout.LayoutParams(-1, ui.dp(this, 340)))
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Server commands")
+            .setView(panel)
+            .setNegativeButton("CLOSE", null)
+            .setNeutralButton("REFRESH HELP") { _, _ ->
+                if (issueConsoleCommand("help"))
+                    toast("Requesting current registered commands…")
+            }.create()
+        fun populate(term: String) {
+            list.removeAllViews()
+            val needle = term.trim().removePrefix("/")
+            val matches = all.filter { it.contains(needle, true) }
+            if (matches.isEmpty()) {
+                list.addView(ui.text(this, "No matching registered commands.", 12f, ui.MUTED))
+                return
+            }
+            matches.take(140).forEach { item ->
+                val line = ui.text(this, "/" + item, 13f, ui.WHITE)
+                line.typeface = android.graphics.Typeface.MONOSPACE
+                line.background = ui.shape(this, ui.SURFACE, 8)
+                line.setPadding(ui.dp(this, 10), ui.dp(this, 9),
+                    ui.dp(this, 10), ui.dp(this, 9))
+                line.setOnClickListener {
+                    consoleCommandEntry?.let { entry ->
+                        entry.setText(item)
+                        entry.setSelection(entry.text.length)
+                    }
+                    dialog.dismiss()
+                }
+                list.addView(line)
+                list.addView(ui.space(this, 5))
+            }
+        }
+        search.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                populate(s?.toString().orEmpty())
+            }
+            override fun afterTextChanged(s: android.text.Editable?) {}
+        })
+        populate("")
+        dialog.show()
+        dialog.window?.setLayout((resources.displayMetrics.widthPixels * .94).toInt(), -2)
+    }
+
     private fun consolePage(body:LinearLayout) {
-        body.addView(h("Server console","Live server output • refreshes automatically"))
-        body.addView(ui.space(this,16))
-        val actions=ui.row(this)
-        actions.addView(ui.action(this,"↻  Refresh",true){render()},ui.weight(this))
+        body.addView(h("Server console","Live output • Minecraft and Fabric mod commands"))
+        body.addView(ui.space(this,14))
+        val actions = ui.row(this)
+        actions.addView(ui.action(this,"↻  Refresh",true) { render() },ui.weight(this))
         actions.addView(ui.action(this,"Copy log"){
             AlertDialog.Builder(this).setTitle("Copy server log?")
-                .setMessage("Raw Minecraft logs may contain player information, public addresses or private configuration values. Review them before sharing. For a token-free status summary, use Server Health instead.")
+                .setMessage("Raw logs may include players, addresses or private configuration. Review before sharing.")
                 .setNegativeButton("CANCEL",null)
                 .setNeutralButton("SERVER HEALTH") {_,_->showHealthCenter()}
                 .setPositiveButton("COPY RAW LOG") {_,_->
                     val manager=getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                     manager.setPrimaryClip(ClipData.newPlainText("PocketCraft raw logs",getLog()))
-                    toast("Raw log copied. Check for private details before sharing.")
+                    toast("Raw log copied. Review it before sharing.")
                 }.show()
         },LinearLayout.LayoutParams(0,-2,1f))
         body.addView(actions)
-        body.addView(ui.space(this,13))
+        body.addView(ui.space(this,8))
+        val tools = ui.row(this)
+        tools.addView(ui.action(this,"≡  Commands") {
+            showConsoleCommands()
+        },ui.weight(this))
+        tools.addView(ui.action(this,"↻  Sync help",false,ServerService.running) {
+            if (issueConsoleCommand("help"))
+                toast("Requesting server and Fabric mod commands…")
+        },LinearLayout.LayoutParams(0,-2,1f))
+        body.addView(tools)
+        body.addView(ui.space(this,12))
         val log=ui.column(this).apply {
             background=ui.shape(this@MainActivity,if(ui.homestead()) 0xFF211A16.toInt() else 0xFF0F1728.toInt(),18,if(ui.homestead()) 0xFF745035.toInt() else 0xFF26354D.toInt())
             ui.run {padding(this@MainActivity,16,16,16,16)}
@@ -1691,7 +1833,7 @@ class MainActivity : Activity() {
         body.addView(log)
         body.addView(ui.space(this,15))
         val entry=android.widget.EditText(this).apply {
-            hint = "Type server command, e.g. list"
+            hint = "Command • try /help or /chunky"
             setSingleLine(true)
             textSize = 14f
             setTextColor(ui.WHITE)
@@ -1699,21 +1841,39 @@ class MainActivity : Activity() {
             background = ui.shape(this@MainActivity,ui.SURFACE,12,0xFF31415D.toInt())
             setPadding(ui.dp(this@MainActivity,14),ui.dp(this@MainActivity,13),
                 ui.dp(this@MainActivity,14),ui.dp(this@MainActivity,13))
+            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEND
             isEnabled = ServerService.running
         }
+        consoleCommandEntry = entry
         body.addView(entry)
         body.addView(ui.space(this,8))
+        val suggestions = ui.column(this)
+        consoleSuggestionHost = suggestions
+        body.addView(suggestions)
+        updateConsoleSuggestions()
+        entry.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                updateConsoleSuggestions()
+            }
+            override fun afterTextChanged(s: android.text.Editable?) {}
+        })
+        entry.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEND) {
+                if (issueConsoleCommand(entry.text.toString())) entry.text.clear()
+                true
+            } else false
+        }
         body.addView(ui.action(this,"SEND COMMAND →",true,ServerService.running) {
-            val command=entry.text.toString().trim().removePrefix("/")
-            if(command.isBlank()) {toast("Enter a command");return@action}
-            startService(Intent(this,ServerService::class.java)
-                .setAction(ServerService.ACTION_COMMAND)
-                .putExtra(ServerService.EXTRA_COMMAND,command))
-            entry.text.clear()
-            toast("Command submitted. Console output updates automatically.")
+            if (issueConsoleCommand(entry.text.toString())) {
+                entry.text.clear()
+                toast("Command sent. Check the live output for results.")
+            }
         })
         body.addView(ui.space(this,8))
-        body.addView(ui.text(this,if(ServerService.running)"Commands are sent to the running Java process." else "Start the Java server first to enable commands.",12f,ui.MUTED))
+        body.addView(ui.text(this,if(ServerService.running)
+            "Suggestions insert text only. Review before sending. The list reflects /help from the running server."
+            else "Start the Java server to enable commands and live autocomplete.",12f,ui.MUTED))
     }
     private fun getLog():String {
         val file = File(base,"console.log")
