@@ -2122,8 +2122,17 @@ class MainActivity : Activity() {
             })
             actions.addView(line())
         }
-        actions.addView(actionRow("▧","Backups & snapshots") {showSnapshotManager()})
+        actions.addView(actionRow("▧","Backups & snapshots") {showSnapshotManager(world)})
         actions.addView(line())
+        if(!WorldStore.isPending(world)) {
+            actions.addView(actionRow("+","Create local snapshot") {
+                if(offline) downloadAsync("Backup world") {
+                    val saved=WorldSnapshots.create(this,world)
+                    "Snapshot saved: " + saved.name
+                } else toast("Stop the server before creating a snapshot")
+            })
+            actions.addView(line())
+        }
         actions.addView(actionRow("⋯","More world actions") {showWorldActions(world)})
         body.addView(actions)
         body.addView(ui.space(this,12))
@@ -2254,7 +2263,7 @@ class MainActivity : Activity() {
         dialog.show()
     }
 
-    private fun showSnapshotManager() {
+    private fun showSnapshotManager(world: File? = null) {
         val panel=ui.column(this).apply {
             setPadding(ui.dp(this@MainActivity,16),ui.dp(this@MainActivity,10),
                 ui.dp(this@MainActivity,16),ui.dp(this@MainActivity,15))
@@ -2263,9 +2272,9 @@ class MainActivity : Activity() {
             "Local snapshots keep the five newest copies of each world. They require the server to be stopped and use phone storage. Export ZIPs off-device for disaster recovery.",
             12f,ui.MUTED))
         panel.addView(ui.space(this,13))
-        val all=WorldSnapshots.list(this)
+        val all=WorldSnapshots.list(this,world)
         val offline=!ServerService.running && ServerService.status !in listOf("STARTING","STOPPING")
-        if(all.isEmpty())panel.addView(ui.text(this,"No local snapshots yet. Use a world's Manage menu to create one.",12f,ui.MUTED))
+        if(all.isEmpty())panel.addView(ui.text(this,"No snapshots for this world yet. Use Create local snapshot in its folder.",12f,ui.MUTED))
         lateinit var dialog:AlertDialog
         all.take(60).forEach { snapshot ->
             val card=ui.card(this)
@@ -2301,7 +2310,7 @@ class MainActivity : Activity() {
             panel.addView(card)
             panel.addView(ui.space(this,8))
         }
-        dialog=AlertDialog.Builder(this).setTitle("World backups")
+        dialog=AlertDialog.Builder(this).setTitle(if(world==null) "World backups" else "Backups • " + world.name)
             .setView(ScrollView(this).apply{addView(panel)})
             .setNegativeButton("CLOSE",null).create()
         dialog.show()
