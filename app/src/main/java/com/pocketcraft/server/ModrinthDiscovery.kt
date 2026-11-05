@@ -38,6 +38,34 @@ object ModrinthDiscovery {
             Pack(item.getString("project_id"),item.optString("title"),item.optString("description").take(130))
         }
     }
+
+    data class Mod(val id:String,val slug:String,val title:String,val description:String)
+    /** Current game version + Fabric + server-compatible mod search. */
+    fun findMods(query:String, gameVersion:String, category:String = "all"):List<Mod> {
+        val facets = mutableListOf(
+            "[\"project_type:mod\"]",
+            "[\"categories:fabric\"]",
+            "[\"versions:" + gameVersion.replace(Regex("[^0-9A-Za-z.+_-]"),"") + "\"]"
+        )
+        val supported = mapOf(
+            "performance" to "optimization",
+            "worldgen" to "worldgen",
+            "utility" to "utility",
+            "adventure" to "adventure"
+        )
+        supported[category]?.let { facets.add("[\"categories:" + it + "\"]") }
+        val url="https://api.modrinth.com/v2/search?query="+
+            URLEncoder.encode(query.take(80),"UTF-8")+
+            "&facets="+URLEncoder.encode("["+facets.joinToString(",")+"]","UTF-8")+
+            "&limit=20"
+        val list=JSONObject(readJson(url)).getJSONArray("hits")
+        return (0 until list.length()).map { i ->
+            val item=list.getJSONObject(i)
+            Mod(item.optString("project_id"),item.optString("slug"),
+                item.optString("title"),item.optString("description").take(110))
+        }.filter { it.id.isNotBlank() && it.slug.isNotBlank() }
+    }
+
     fun downloadLatest(context:Context,pack:Pack,gameVersion:String):Uri {
         InstallProgress.emit("Finding compatible "+pack.title+" release…")
         val loaders=URLEncoder.encode("[\"fabric\"]","UTF-8")
