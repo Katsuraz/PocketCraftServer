@@ -49,21 +49,25 @@ object ServerCommandHints {
     fun observe(rawLine: String) {
         val clean = rawLine.replace(ansiCodes, "").replace(colorCodes, "")
         val body = clean.substringAfter("]: ", clean).trim()
-        helpPagination.find(body)?.let { match ->
+        // Modern Minecraft uses "System chat: /command ..." instead of a
+        // bare "/command ..." in /help output. Read names when the owner
+        // explicitly requests help, without generating more help requests.
+        val helpBody = body.removePrefix("System chat: ").trim()
+        helpPagination.find(helpBody)?.let { match ->
             val pages = (match.groupValues[2].ifBlank { match.groupValues[4] })
                 .toIntOrNull()?.coerceIn(1, 24) ?: 1
             synchronized(lock) {
                 if (pages > helpPageCount) { helpPageCount = pages; revision++ }
             }
         }
-        if ('/' !in body) return
+        if ('/' !in helpBody) return
         val isHelpOutput =
-            body.startsWith("/") || body.startsWith("- /") ||
-            body.startsWith("Usage: /", true) ||
-            body.startsWith("Syntax: /", true) ||
-            body.startsWith("Command: /", true)
+            helpBody.startsWith("/") || helpBody.startsWith("- /") ||
+            helpBody.startsWith("Usage: /", true) ||
+            helpBody.startsWith("Syntax: /", true) ||
+            helpBody.startsWith("Command: /", true)
         if (!isHelpOutput) return
-        val m = commandUsage.find(body) ?: return
+        val m = commandUsage.find(helpBody) ?: return
         val root = m.groupValues[1].lowercase(Locale.ROOT)
         val usage = (root + m.groupValues[2]).trim().replace(Regex("\\s+"), " ")
         synchronized(lock) {

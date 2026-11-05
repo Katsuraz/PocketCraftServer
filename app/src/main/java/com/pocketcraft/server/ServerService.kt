@@ -59,8 +59,6 @@ class ServerService : Service() {
     private val readiness = ReadinessSignals()
     private var server: Process? = null
     private var writer: BufferedWriter? = null
-    // Per-server-session upper bound for extra /help pages (not game commands).
-    private var requestedHelpPages = 1
     private var wakeLock: PowerManager.WakeLock? = null
     private val root by lazy { WorldStore.root(this) }
     private val log by lazy { File(root, "console.log") }
@@ -132,14 +130,16 @@ class ServerService : Service() {
                 request.onFailure { error ->
                     reportCommand("Not sent: " + (error.message ?: "invalid command"))
                     append("Console command rejected: " + (error.message ?: "invalid command"))
+                    ConsoleCommandActivity.failed("Rejected: " + (error.message ?: "invalid command"))
                 }
                 request.onSuccess { line ->
-                    if (line == "help" || line == "help 1") requestedHelpPages = 1
                     if (!running) {
                         reportCommand("Not sent: Minecraft is offline")
                         append("Console command rejected: Minecraft is not running")
+                        ConsoleCommandActivity.failed("Minecraft is not running")
                     } else {
                         reportCommand("Command queued for server stdin…")
+                        ConsoleCommandActivity.queued(line)
                         try {
                             commandQueue.execute {
                                 try {
@@ -152,15 +152,18 @@ class ServerService : Service() {
                                         input.newLine()
                                         input.flush()
                                     }
-                                    reportCommand("Delivered to Minecraft stdin. Check the ALL log for the server's response.")
+                                    reportCommand("Delivered to Minecraft stdin. See the command activity below.")
+                                    ConsoleCommandActivity.delivered()
                                     append("> " + line)
                                 } catch (e: Exception) {
                                     reportCommand("Command failed: " + (e.message ?: "stdin write error"))
+                                    ConsoleCommandActivity.failed("Command failed: " + (e.message ?: "stdin write error"))
                                     append("Command failed: " + (e.message ?: "stdin write error"))
                                 }
                             }
                         } catch(e: java.util.concurrent.RejectedExecutionException) {
                             reportCommand("Command failed: command worker unavailable")
+                            ConsoleCommandActivity.failed("Command worker unavailable")
                             append("Command failed: command worker unavailable")
                         }
                     }
@@ -222,7 +225,7 @@ class ServerService : Service() {
             }
         }
         ServerCommandHints.reset()
-        requestedHelpPages = 1
+        ConsoleCommandActivity.reset()
         javaReady = false
         bedrockReady = false
         nethernetReady = false
@@ -304,25 +307,10 @@ class ServerService : Service() {
                         append(line)
                         PlayerActivity.observe(line)
                         ServerCommandHints.observe(line)
-                        // Vanilla's /help is paginated. Read every reported page
-                        // once to capture mod commands without guessing their names.
-                        // Limit to 24 pages to prevent command floods on huge packs.
-                        if (javaReady && requestedHelpPages < ServerCommandHints.helpPageCount) {
-                            val pages = ServerCommandHints.helpPageCount
-                            val start = requestedHelpPages + 1
-                            synchronized(lock) {
-                                writer?.let { input ->
-                                    for (page in start..pages) {
-                                        input.write("help " + page)
-                                        input.newLine()
-                                    }
-                                    input.flush()
-                                    requestedHelpPages = pages
-                                }
-                            }
-                            append("Collecting /help pages " + start + "–" + pages +
-                                " for console command suggestions")
-                        }
+                        ConsoleCommandActivity.observe(line)
+                        // Command discovery is on-demand only. On modern Fabric
+                        // servers /help can generate thousands of system-chat
+                        // entries and drown out the operator's actual commands.
                         val previous = status
                         val wasJavaReady = javaReady
                         readiness.observe(line)
@@ -335,17 +323,6 @@ class ServerService : Service() {
                         if (javaReady) {
                             if (!wasJavaReady) {
                                 PocketSounds.play(this,PocketSounds.Event.SERVER_READY)
-                                // The server's /help output contains registered Fabric
-                                // command roots, including those provided by loaded mods.
-                                // Suggestion discovery never installs or runs external code.
-                                try {
-                                    synchronized(lock) {
-                                        writer?.apply { write("help"); newLine(); flush() }
-                                    }
-                                    append("Discovering server and Fabric mod commands via help")
-                                } catch(e:Exception) {
-                                    append("Could not load command help: " + e.message)
-                                }
                             }
                             status = readiness.state()
                             if (previous != status) {

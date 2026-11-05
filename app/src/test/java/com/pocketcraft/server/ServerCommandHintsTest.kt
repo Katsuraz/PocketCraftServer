@@ -18,6 +18,17 @@ class ServerCommandHintsTest {
         assertEquals(3, ServerCommandHints.registeredCount())
     }
 
+    @Test fun modernSystemChatHelpRegistersCommandsWithoutGeneratingMoreHelp() {
+        ServerCommandHints.reset()
+        ServerCommandHints.observe("[18:16:52] [Server thread/INFO]: System chat: /geyser [connectiontest|dump|help|list]")
+        ServerCommandHints.observe("[18:16:52] [Server thread/INFO]: System chat: /chunky [start|pause|cancel|progress]")
+        ServerCommandHints.observe("[18:16:52] [Server thread/INFO]: System chat: /gamerule (keep_inventory|pvp)")
+        assertTrue(ServerCommandHints.registered().contains("geyser"))
+        assertTrue(ServerCommandHints.registered().contains("chunky"))
+        assertTrue(ServerCommandHints.registered().contains("gamerule"))
+        assertTrue(ServerCommandHints.suggestions("gey").contains("geyser"))
+    }
+
     @Test fun unrelatedLogAndAddressesDoNotCreateCommands() {
         ServerCommandHints.reset()
         ServerCommandHints.observe("[Server thread/INFO]: Connecting https://example.com/path")

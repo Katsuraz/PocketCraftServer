@@ -1,5 +1,17 @@
 # PocketCraft changelog
 
+## v0.8.28 (versionCode 50) — Quiet command panel, no automatic help spam
+
+- Remove all automatic `help` and `help N` commands on server readiness or help-pagination detection. Modern Minecraft prints large command lists as System chat, which hid real commands in the live Console.
+- Add a clean, compact Homestead Console: input at the top, Send button, four quick command actions, and a dedicated recent command activity transcript. Transcript shows queued commands, stdin delivery/failure and nearby Minecraft system-chat responses without promising that an individual game command executed successfully.
+- Keep full logs, searchable command catalog, raw log copying, and optional `/help` discovery behind one expandable Full Logs & Tools panel.
+- Default full logs to CLEAN so verbose `System chat: /command` and Chunky help listings are hidden unless the operator selects ALL.
+- Recognize `System chat: /command` when explicitly scanning server /help, including Fabric/Geyser/Chunky commands, without automatically scanning additional pages.
+- Avoid decoding/relaying full log output while the compact command panel is displayed. Preserve async bounded log reading for optional Full Logs.
+- Add unit regression tests for command transcript, help suppression, capture time bounds, and modern command discovery.
+- Preserve worlds, modpacks, datapacks, world snapshots, Geyser, Playit, Homestead visuals, existing signing, and the console stdin command delivery fix.
+
+
 ## v0.8.27 (versionCode 49) — Reliable Console command delivery
 
 - Fix the command field and Send button becoming permanently disabled when Console is opened while Minecraft is starting. Command entry remains editable; submission checks the live server state.
