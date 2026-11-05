@@ -18,7 +18,7 @@ internal object GeyserNetworkSettings {
         /** A local-IP NetherNet join requires built-in signaling (or RakNet). */
         fun localJoinSupported(): Boolean = when (transport) {
             "raknet", "both" -> true
-            "nethernet" -> signalingMode == "builtin" || signalingMode == "hybrid"
+            "nethernet" -> signalingMode != "nxs" && signalingMode != "none" // Unknown/default: allow test without claiming readiness.
             else -> true // Missing config: offer a test, never claim it works.
         }
 
