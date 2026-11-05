@@ -343,7 +343,7 @@ object WebsiteModInstaller {
                                 missingAssetName = jar.optString("filename")
                                 // Modrinth's Fabric API CDN links can return 404
                                 // even while the exact artifact is published by Fabric.
-                                // Only use the official Fabric Maven artifact when the
+                                // Only use the official Fabric artifacts when the
                                 // Modrinth-provided SHA-512 can authenticate its bytes.
                                 if (id == "P7dR8mSH") {
                                     val number = version.optString("version_number")
@@ -354,22 +354,28 @@ object WebsiteModInstaller {
                                         number.endsWith("+" + current) &&
                                         jar.optString("filename").startsWith("fabric-api-")) {
                                         val officialJar = "fabric-api-" + number + ".jar"
-                                        val officialUrl = "https://maven.fabricmc.net/" +
-                                            "net/fabricmc/fabric-api/fabric-api/" +
-                                            number + "/" + officialJar
-                                        try {
-                                            InstallProgress.emit("Trying official Fabric Maven for " +
-                                                title + " (checksum verified)")
-                                            installFile(context, officialUrl, officialJar, hash, title)
-                                            installed.add(title + " (official Fabric Maven)")
-                                            completed.add(id)
-                                            return
-                                        } catch (fallbackError: IOException) {
-                                            if (fallbackError.message?.contains("checksum", true) == true)
-                                                throw IOException("Official Fabric Maven checksum " +
-                                                    "did not match Modrinth; download refused", fallbackError)
-                                            InstallProgress.emit("Official Fabric Maven was unavailable; " +
-                                                "trying other releases…")
+                                        val officialSources = listOf(
+                                            "https://github.com/FabricMC/fabric-api/releases/download/" +
+                                                encode(number) + "/" + encode(officialJar),
+                                            "https://maven.fabricmc.net/" +
+                                                "net/fabricmc/fabric-api/fabric-api/" +
+                                                number + "/" + officialJar
+                                        )
+                                        for (source in officialSources) {
+                                            try {
+                                                InstallProgress.emit(
+                                                    "Trying official Fabric API mirror (SHA-512 verified)")
+                                                installFile(context, source, officialJar, hash, title)
+                                                installed.add(title + " (verified official mirror)")
+                                                completed.add(id)
+                                                return
+                                            } catch (fallbackError: IOException) {
+                                                if (fallbackError.message?.contains("checksum", true) == true)
+                                                    throw IOException(
+                                                        "Official Fabric API JAR checksum differs from " +
+                                                        "Modrinth; refusing unverified files", fallbackError)
+                                                InstallProgress.emit("Mirror unavailable; trying next source…")
+                                            }
                                         }
                                     }
                                 }
