@@ -34,6 +34,7 @@ class ServerFilesActivity : Activity() {
 
     override fun onCreate(state:Bundle?) {
         super.onCreate(state)
+        ui.loadTheme(this)
         window.statusBarColor=ui.BG
         window.navigationBarColor=ui.BG
         directory=serverRoot
