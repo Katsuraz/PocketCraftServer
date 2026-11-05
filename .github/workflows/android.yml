@@ -11,6 +11,46 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Prevent Android APK version downgrades
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          import subprocess
+          import sys
+
+          filename = "app/build.gradle.kts"
+          pattern = re.compile(r"(?m)^\s*versionCode\s*=\s*(\d+)\s*$")
+          def version_code(text):
+              match = pattern.search(text)
+              if not match:
+                  raise ValueError("Missing versionCode in app/build.gradle.kts")
+              return int(match.group(1))
+
+          current = version_code(Path(filename).read_text())
+          # 0.8.4 / code 26 is the last verified baseline after the
+          # code 25 -> 21 downgrade incident. Git history catches later
+          # accidental decreases as releases advance.
+          highest_ever = 26
+          commits = subprocess.check_output(
+              ["git", "log", "--format=%H", "HEAD", "--", filename],
+              text=True,
+          ).splitlines()
+          for commit in commits:
+              prior = subprocess.check_output(
+                  ["git", "show", f"{commit}:{filename}"], text=True
+              )
+              highest_ever = max(highest_ever, version_code(prior))
+
+          print(f"Current versionCode: {current}; history floor: {highest_ever}")
+          if current < highest_ever:
+              print(f"::error::Android versionCode {current} is older than a previously committed code {highest_ever}. Increase it before publishing.")
+              sys.exit(1)
+          print("Android APK versionCode downgrade prevention passed")
+          PY
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
