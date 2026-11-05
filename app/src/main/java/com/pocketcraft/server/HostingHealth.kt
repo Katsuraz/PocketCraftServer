@@ -24,7 +24,9 @@ internal object HostingHealth {
         val bedrockTunnelAddress: String?,
         val localIp: String?,
         val lastError: String?,
-        val bedrockEvidence: String = ""
+        val bedrockEvidence: String = "",
+        val bedrockJoinVerified: Boolean = false,
+        val geyserWarnings: List<String> = emptyList()
     )
 
     data class Check(
@@ -51,11 +53,11 @@ internal object HostingHealth {
         }, when { s.javaReady -> Level.GOOD; s.processRunning -> Level.INFO; else -> Level.INFO })
         checks += Check("Bedrock bridge", when {
             !s.geyserInstalled -> "Install Geyser-Fabric; Java players can still join without it"
-            s.bedrockListening -> if (s.bedrockEvidence.isNotBlank())
-                "Bedrock connection evidence: " + s.bedrockEvidence
-                else "Geyser startup or player join was reported"
+             s.bedrockJoinVerified -> "Bedrock join verified for this server session: " + s.bedrockEvidence
+            s.bedrockListening -> "Geyser startup reported: " + s.bedrockEvidence +
+                ". This does not verify a successful Bedrock join."
             else -> "Geyser JAR found; no startup evidence captured yet. This alone does not mean that Bedrock is offline."
-        }, when { !s.geyserInstalled -> Level.ACTION; s.bedrockListening -> Level.GOOD; else -> Level.INFO })
+        }, when { !s.geyserInstalled -> Level.ACTION; s.bedrockJoinVerified -> Level.GOOD; else -> Level.INFO })
         checks += Check("Floodgate", if(s.floodgateInstalled)
             "Floodgate mod found; this does not confirm Bedrock authentication"
             else "Floodgate mod missing; Bedrock authentication may require a Java login",
@@ -79,6 +81,9 @@ internal object HostingHealth {
                 "NetherNet signaling reported; no public Bedrock tunnel found"
             else -> "For remote Bedrock, verify the configured RakNet or NetherNet transport"
         }, Level.INFO)
+        for (warning in s.geyserWarnings.take(6)) checks += Check(
+            "Geyser configuration", warning, Level.ACTION
+        )
         if (!s.lastError.isNullOrBlank()) checks += Check("Last server error",
             s.lastError.take(240), Level.ACTION)
         return checks
