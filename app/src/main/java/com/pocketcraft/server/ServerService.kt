@@ -89,7 +89,13 @@ class ServerService : Service() {
                 if (line.isNotEmpty() && line.length <= 240 && !line.contains("\n") && !line.contains("\r")) {
                     Thread {
                         try {
-                            synchronized(lock) { writer?.apply { write(line); newLine(); flush() } }
+                            synchronized(lock) {
+                                val input = writer ?: throw IllegalStateException(
+                                    "Server command input is not available")
+                                input.write(line)
+                                input.newLine()
+                                input.flush()
+                            }
                             append("> " + line)
                         } catch(e:Exception) { append("Command failed: " + e.message) }
                     }.start()
@@ -134,6 +140,7 @@ class ServerService : Service() {
         PocketSounds.play(this, PocketSounds.Event.SERVER_START)
         failure = ""
         readiness.reset()
+        ServerCommandHints.reset()
         javaReady = false
         bedrockReady = false
         nethernetReady = false
@@ -210,6 +217,7 @@ class ServerService : Service() {
                 proc.inputStream.bufferedReader().useLines { lines ->
                     lines.forEach { line ->
                         append(line)
+                        ServerCommandHints.observe(line)
                         val previous = status
                         val wasJavaReady = javaReady
                         readiness.observe(line)
@@ -218,7 +226,20 @@ class ServerService : Service() {
                         nethernetReady = readiness.nethernetRegistered
                         nethernetNativeFailure = readiness.nethernetNativeFailure
                         if (javaReady) {
-                            if (!wasJavaReady) PocketSounds.play(this,PocketSounds.Event.SERVER_READY)
+                            if (!wasJavaReady) {
+                                PocketSounds.play(this,PocketSounds.Event.SERVER_READY)
+                                // The server's /help output contains registered Fabric
+                                // command roots, including those provided by loaded mods.
+                                // Suggestion discovery never installs or runs external code.
+                                try {
+                                    synchronized(lock) {
+                                        writer?.apply { write("help"); newLine(); flush() }
+                                    }
+                                    append("Discovering server and Fabric mod commands via help")
+                                } catch(e:Exception) {
+                                    append("Could not load command help: " + e.message)
+                                }
+                            }
                             status = readiness.state()
                             if (previous != status) {
                                 append("Readiness changed: $status")
