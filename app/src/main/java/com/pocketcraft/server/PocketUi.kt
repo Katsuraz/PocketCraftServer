@@ -5,6 +5,13 @@ import android.content.res.ColorStateList
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.PixelFormat
+import android.graphics.ColorFilter
+import android.graphics.RectF
+import android.graphics.drawable.Drawable
+import android.view.ViewGroup
+import android.widget.EditText
+import android.widget.Switch
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
@@ -26,10 +33,42 @@ object PocketUi {
      * drawn in code; no third-party game resources or textures are bundled.
      * Save preference under UI-only settings, never Minecraft server.properties.
      */
-    private var currentTheme = "classic"
+    private var currentTheme = "homestead"
+    private var pixelFonts = true
+    private var normalTypeface: Typeface? = null
+    private var headingTypeface: Typeface? = null
+
+    private fun initFonts(c: Context) {
+        if (normalTypeface == null) normalTypeface = runCatching {
+            Typeface.createFromAsset(c.assets,"fonts/PixelifySans.ttf")
+        }.getOrElse { Typeface.MONOSPACE }
+        if (headingTypeface == null) headingTypeface = runCatching {
+            Typeface.createFromAsset(c.assets,"fonts/PressStart2P-Regular.ttf")
+        }.getOrElse { normalTypeface }
+    }
+    fun pixelFont(): Boolean = pixelFonts
+    fun setFontStyle(c: Context, pixel: Boolean) {
+        pixelFonts = pixel
+        c.getSharedPreferences("pocketcraft",0).edit().putBoolean("pixelFonts",pixel).apply()
+    }
+    fun styleInput(v: TextView) {
+        if (pixelFonts) {
+            initFonts(v.context)
+            v.typeface = normalTypeface
+        } else v.typeface = Typeface.DEFAULT
+    }
+    fun styleFormInputs(view: View) {
+        if (view is EditText || view is Switch) styleInput(view as TextView)
+        if (view is ViewGroup) for (index in 0 until view.childCount)
+            styleFormInputs(view.getChildAt(index))
+    }
+
     fun loadTheme(c: Context) {
-        currentTheme = c.getSharedPreferences("pocketcraft",0)
-            .getString("uiTheme","classic").let { if(it=="homestead") "homestead" else "classic" }
+        val prefs = c.getSharedPreferences("pocketcraft",0)
+        currentTheme = prefs.getString("uiTheme","homestead")
+            .let { if (it=="classic") "classic" else "homestead" }
+        pixelFonts = prefs.getBoolean("pixelFonts",true)
+        if (pixelFonts) initFonts(c)
     }
     fun setTheme(c: Context, theme: String) {
         require(theme=="homestead" || theme=="classic")
@@ -38,17 +77,17 @@ object PocketUi {
     }
     fun homestead(): Boolean = currentTheme=="homestead"
 
-    val BG: Int get() = if(homestead()) 0xFF161A13.toInt() else 0xFF080E18.toInt()
-    val PANEL: Int get() = if(homestead()) 0xFF2C3023.toInt() else 0xFF141E2C.toInt()
-    val SURFACE: Int get() = if(homestead()) 0xFF444634.toInt() else 0xFF223245.toInt()
-    val MUTED: Int get() = if(homestead()) 0xFFC6C1AA.toInt() else 0xFFACBED1.toInt()
-    val WHITE: Int get() = if(homestead()) 0xFFF6ECD7.toInt() else 0xFFF6F9FD.toInt()
-    val GREEN: Int get() = if(homestead()) 0xFFB4CE86.toInt() else 0xFF70E9B4.toInt()
-    val CYAN: Int get() = if(homestead()) 0xFFE1BC83.toInt() else 0xFF80D7FA.toInt()
-    val PURPLE: Int get() = if(homestead()) 0xFFD6B894.toInt() else 0xFFB5A5FF.toInt()
+    val BG: Int get() = if(homestead()) 0xFF171D19.toInt() else 0xFF080E18.toInt()
+    val PANEL: Int get() = if(homestead()) 0xFF30251E.toInt() else 0xFF141E2C.toInt()
+    val SURFACE: Int get() = if(homestead()) 0xFF654A34.toInt() else 0xFF223245.toInt()
+    val MUTED: Int get() = if(homestead()) 0xFFC9BA9E.toInt() else 0xFFACBED1.toInt()
+    val WHITE: Int get() = if(homestead()) 0xFFF1E5CA.toInt() else 0xFFF6F9FD.toInt()
+    val GREEN: Int get() = if(homestead()) 0xFF93B184.toInt() else 0xFF70E9B4.toInt()
+    val CYAN: Int get() = if(homestead()) 0xFFDBAC64.toInt() else 0xFF80D7FA.toInt()
+    val PURPLE: Int get() = if(homestead()) 0xFFB89B81.toInt() else 0xFFB5A5FF.toInt()
     val RED: Int get() = if(homestead()) 0xFFF5AA93.toInt() else 0xFFFFA0AB.toInt()
-    val BORDER: Int get() = if(homestead()) 0xFF67684C.toInt() else 0xFF324459.toInt()
-    val SUBTLE: Int get() = if(homestead()) 0xFF252D20.toInt() else 0xFF182737.toInt()
+    val BORDER: Int get() = if(homestead()) 0xFF97704D.toInt() else 0xFF324459.toInt()
+    val SUBTLE: Int get() = if(homestead()) 0xFF211F1A.toInt() else 0xFF182737.toInt()
 
     fun dp(c: Context, v: Int): Int = (v * c.resources.displayMetrics.density + .5f).toInt()
 
@@ -56,8 +95,8 @@ object PocketUi {
         GradientDrawable().apply {
             if (homestead() && (color==PANEL || color==SURFACE)) {
                 setColors(if (color==PANEL)
-                    intArrayOf(0xFF36382A.toInt(), 0xFF27291F.toInt())
-                else intArrayOf(0xFF514D38.toInt(), 0xFF3D402F.toInt()))
+                    intArrayOf(0xFF3D2D24.toInt(), 0xFF28211C.toInt())
+                else intArrayOf(0xFF75583D.toInt(), 0xFF553E2B.toInt()))
                 orientation = GradientDrawable.Orientation.TOP_BOTTOM
             } else setColor(color)
             cornerRadius = dp(c, if(homestead()) radius.coerceAtMost(15) else radius).toFloat()
@@ -66,10 +105,10 @@ object PocketUi {
 
     fun gradient(c: Context, vararg colors: Int): GradientDrawable =
         GradientDrawable(GradientDrawable.Orientation.TL_BR,
-            if (homestead()) intArrayOf(0xFFB3C886.toInt(),0xFFE0BB87.toInt())
+            if (homestead()) intArrayOf(0xFF846347.toInt(),0xFF4D3428.toInt())
             else colors).apply {
             cornerRadius = dp(c, if(homestead()) 14 else 24).toFloat()
-            if (homestead()) setStroke(dp(c,1),0xFFE4D5A3.toInt())
+            if (homestead()) setStroke(dp(c,2),0xFFA07D50.toInt())
         }
 
     fun column(c: Context, gap: Int = 0): LinearLayout = LinearLayout(c).apply {
@@ -82,7 +121,17 @@ object PocketUi {
             text = value
             textSize = size
             setTextColor(color)
-            if (bold) typeface = Typeface.create(if (homestead() && size >= 17f) "serif" else "sans-serif-medium", Typeface.BOLD)
+            if (pixelFonts) {
+                initFonts(c)
+                // Press Start 2P is wide: reserve it for short, decorative titles.
+                val compactHeading = bold && size >= 19f && value.length <= 16
+                typeface = if (compactHeading) headingTypeface else
+                    Typeface.create(normalTypeface, if (bold) Typeface.BOLD else Typeface.NORMAL)
+                if (compactHeading) textSize = (size * 0.83f).coerceAtLeast(15f)
+                letterSpacing = if (compactHeading) 0.01f else 0f
+            } else if (bold) {
+                typeface = Typeface.create("sans-serif-medium",Typeface.BOLD)
+            }
             includeFontPadding = false
             setLineSpacing(dp(c, 2).toFloat(), 1.03f)
         }
@@ -98,7 +147,8 @@ object PocketUi {
         View(c).apply { layoutParams = LinearLayout.LayoutParams(1, dp(c,h)) }
 
     fun card(c: Context): LinearLayout = column(c).apply {
-        background = shape(c, PANEL, if(homestead()) 14 else 22, BORDER)
+        background = if (homestead()) TimberDrawable(c, false, true)
+            else shape(c, PANEL, 22, BORDER)
         padding(c, 18, 18, 18, 18)
     }
 
@@ -118,8 +168,9 @@ object PocketUi {
     fun action(c: Context, label: String, primary: Boolean = false, enabledAction: Boolean = true, click: () -> Unit): TextView =
         text(c, label, 13f, if (primary) BG else WHITE, true).apply {
             gravity = Gravity.CENTER
-            background = pressable(c,if (primary) gradient(c, GREEN, CYAN)
-                else shape(c, SURFACE, if(homestead()) 9 else 14, BORDER))
+            background = pressable(c,if (homestead()) TimberDrawable(c, primary, false)
+                else if (primary) gradient(c, GREEN, CYAN)
+                else shape(c, SURFACE, 14, BORDER))
             padding(c, 16, 15, 16, 15)
             minHeight = dp(c, 52)
             isEnabled = enabledAction
@@ -224,4 +275,64 @@ class WorldArt(context: Context) : View(context) {
         paint.color = 0xFFDBE5FF.toInt()
         canvas.drawRect(unit*19.7f, ground-unit*5.6f, unit*20.1f, ground-unit*5.2f, paint)
     }
+}
+
+
+/**
+ * Original timber-panel styling: carved double rims, plank seams and subtle
+ * grain. Pure Android drawing; no Minecraft/Homestead copyrighted assets.
+ */
+class TimberDrawable(private val context: Context, private val primary: Boolean,
+                     private val panel: Boolean) : Drawable() {
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val rect = RectF()
+    override fun draw(canvas: Canvas) {
+        val b = bounds
+        val scale = context.resources.displayMetrics.density
+        val rim = 2f * scale
+        val radius = (if (panel) 13f else 8f) * scale
+        rect.set(b.left.toFloat(),b.top.toFloat(),b.right.toFloat(),b.bottom.toFloat())
+        paint.style = Paint.Style.FILL
+        paint.color = 0xFF211A16.toInt()
+        canvas.drawRoundRect(rect,radius,radius,paint)
+        rect.inset(rim,rim)
+        paint.color = if (panel) 0xFF3A2C24.toInt() else if (primary)
+            0xFF856446.toInt() else 0xFF634830.toInt()
+        canvas.drawRoundRect(rect,radius-rim,radius-rim,paint)
+        paint.color = 0x335B3722
+        val seamY = if (panel) 24f*scale else 16f*scale
+        var y = rect.top + seamY
+        while (y < rect.bottom-3*scale) {
+            canvas.drawRect(rect.left+4*scale,y,rect.right-4*scale,y+1f*scale,paint)
+            y += seamY
+        }
+        paint.color = 0x33DCC3A0
+        var grain = rect.top+7*scale
+        var i = 0
+        while (grain < rect.bottom-5*scale) {
+            val left = rect.left + (8 + ((i*13)%37))*scale
+            val right = (left + (22 + (i%5)*9)*scale).coerceAtMost(rect.right-8*scale)
+            canvas.drawRect(left,grain,right,grain+0.65f*scale,paint)
+            grain += 15f*scale
+            i++
+        }
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = rim
+        paint.color = if (primary) 0xFFB69467.toInt() else 0xFF92714F.toInt()
+        canvas.drawRoundRect(rect,radius-rim,radius-rim,paint)
+        rect.inset(rim*1.5f,rim*1.5f)
+        paint.strokeWidth = 0.75f*scale
+        paint.color = 0x88412C20.toInt()
+        canvas.drawRoundRect(rect,radius-2*rim,radius-2*rim,paint)
+        paint.style = Paint.Style.FILL
+        paint.color = 0xFFBD9569.toInt()
+        for (x in listOf(rect.left+6*scale,rect.right-6*scale)) {
+            canvas.drawRect(x,rect.top+6*scale,x+1.8f*scale,rect.top+7.8f*scale,paint)
+            canvas.drawRect(x,rect.bottom-7.8f*scale,x+1.8f*scale,rect.bottom-6*scale,paint)
+        }
+    }
+    override fun setAlpha(alpha: Int) { paint.alpha = alpha }
+    override fun setColorFilter(colorFilter: ColorFilter?) { paint.colorFilter = colorFilter }
+    @Deprecated("Android API")
+    override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
 }
