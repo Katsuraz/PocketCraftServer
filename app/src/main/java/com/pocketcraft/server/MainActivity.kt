@@ -119,6 +119,7 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         ui.loadTheme(this)
+        PocketSounds.prepare(this)
         window.statusBarColor = ui.BG
         window.navigationBarColor = ui.BG
         window.decorView.systemUiVisibility = 0

@@ -120,6 +120,7 @@ class SettingsActivity : Activity() {
     override fun onCreate(savedInstanceState:Bundle?) {
         super.onCreate(savedInstanceState)
         ui.loadTheme(this)
+        PocketSounds.prepare(this)
         window.statusBarColor=ui.BG
         window.navigationBarColor=ui.BG
         if (file.exists()) file.inputStream().use { props.load(it) }
@@ -258,8 +259,22 @@ class SettingsActivity : Activity() {
                 PocketSounds.play(this,PocketSounds.Event.SERVER_READY)
             })
             card.addView(ui.space(this,6))
+            val diagnostics = ui.text(this,PocketSounds.diagnostic(this),11f,ui.CYAN)
+            card.addView(diagnostics)
+            card.addView(ui.space(this,8))
+            card.addView(ui.action(this,"TEST SOUND + CHECK MEDIA VOLUME") {
+                PocketSounds.play(this,PocketSounds.Event.SERVER_READY)
+                diagnostics.postDelayed({
+                    diagnostics.text = PocketSounds.diagnostic(this)
+                }, 350L)
+            })
+            card.addView(ui.space(this,8))
+            card.addView(ui.action(this,"OPEN PHONE SOUND SETTINGS") {
+                startActivity(Intent(android.provider.Settings.ACTION_SOUND_SETTINGS))
+            })
+            card.addView(ui.space(this,8))
             card.addView(ui.text(this,
-                "Sound preferences are stored only in PocketCraft. Device silent-mode and system sound controls still apply.",
+                "Sounds use your phone's MEDIA volume. If nothing plays, turn up media volume, disable Bluetooth audio routing if necessary, and check 'Effects loaded 6/6' above. No Minecraft sound files are included.",
                 11f,ui.MUTED))
         }
         section(body,"App updates","Check GitHub Releases and install verified APKs") { card ->

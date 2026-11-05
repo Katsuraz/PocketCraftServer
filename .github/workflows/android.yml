@@ -307,6 +307,14 @@ jobs:
           unzip -l "$APK" | grep -F 'assets/licenses/Monocraft-OFL.txt'
           unzip -l "$APK" | grep -F 'assets/licenses/PixelifySans-OFL.txt'
           unzip -l "$APK" | grep -F 'assets/licenses/PressStart2P-OFL.txt'
+      - name: Verify bundled audible media sound effects
+        run: |
+          set -euo pipefail
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          for name in click select server_start server_ready server_stop error; do
+            unzip -l "$APK" | grep -F "res/raw/pc_${name}.wav"
+          done
+          echo "Six original PCM sound effects are packaged in the APK"
       - name: Verify bundled tunnel binaries
         run: |
           unzip -l app/build/outputs/apk/debug/app-debug.apk | grep -F 'lib/arm64-v8a/libpocketplayitcli.so'

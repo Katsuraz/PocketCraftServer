@@ -1,5 +1,16 @@
 # PocketCraft changelog
 
+## v0.8.8 (versionCode 30) — Audible sound fix
+
+- Replaced short-lived AudioTrack synthesis on Android's easily muted UI-effects stream with SoundPool playing through **media volume**.
+- Included six small, original mono PCM WAV sound files in the APK (menu click, tab select, server start, Java ready, stop, error).
+- Preloads sounds on launch, queues the first sound while Android loads it, and preserves previous sound settings.
+- Settings → Sound effects now displays media-volume and sample-load diagnostics, a test button, and a shortcut to Android sound settings.
+- Removed silent playback failures and background sleep-based sequencing. No copyrighted Minecraft audio files are used.
+- Kept the existing versionCode signing/update mechanism and all world/server data untouched.
+
+
+
 ## v0.8.7 (versionCode 29) — Mojangles-inspired UI and sounds
 
 - Added user-importable Mojangles `.ttf` / `.otf` font using Android's document picker; imported fonts stay in private app files and are never redistributed in APKs.
