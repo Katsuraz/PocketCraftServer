@@ -2074,6 +2074,7 @@ class MainActivity : Activity() {
                 if (issueConsoleCommand("help"))
                     toast("Requesting current registered commands…")
             }.create()
+        var commandDisplayLimit = 100
         fun populate(term: String) {
             list.removeAllViews()
             val needle = term.trim().removePrefix("/")
@@ -2082,7 +2083,7 @@ class MainActivity : Activity() {
                 list.addView(ui.text(this, "No matching registered commands.", 12f, ui.MUTED))
                 return
             }
-            matches.take(140).forEach { item ->
+            matches.take(commandDisplayLimit).forEach { item ->
                 val line = ui.text(this, "/" + item, 13f, ui.WHITE)
                 line.typeface = android.graphics.Typeface.MONOSPACE
                 line.background = ui.shape(this, ui.SURFACE, 8)
@@ -2098,10 +2099,18 @@ class MainActivity : Activity() {
                 list.addView(line)
                 list.addView(ui.space(this, 5))
             }
+            if (matches.size > commandDisplayLimit) {
+                list.addView(ui.action(this,
+                    "SHOW MORE (" + commandDisplayLimit + " / " + matches.size + ")") {
+                    commandDisplayLimit += 100
+                    populate(term)
+                })
+            }
         }
         search.addTextChangedListener(object : android.text.TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                commandDisplayLimit = 100
                 populate(s?.toString().orEmpty())
             }
             override fun afterTextChanged(s: android.text.Editable?) {}
