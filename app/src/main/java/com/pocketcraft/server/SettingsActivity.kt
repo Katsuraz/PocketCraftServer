@@ -339,6 +339,16 @@ class SettingsActivity : Activity() {
             input(card,"max-players","Maximum players","5","Start with 2–5 players on a phone",true)
         }
 
+        section(body,"Bedrock & Geyser","Simple local and Playit networking configuration") { card ->
+            card.addView(ui.text(this,"Configure Bedrock ports, signaling and NXS without editing YAML.",12f,ui.MUTED))
+            card.addView(ui.space(this,12))
+            card.addView(ui.action(this,"OPEN GEYSER SETTINGS",true) {
+                startActivity(Intent(this,GeyserSettingsActivity::class.java))
+            })
+            card.addView(ui.space(this,7))
+            card.addView(ui.text(this,"Includes config.yml import, private backup and restore. Stop the server before saving.",11f,ui.MUTED))
+        }
+
         section(body,"Who can join?","Accounts, whitelist and access safety") { card ->
             toggle(card,"online-mode","Verify Java accounts","ON = official Mojang/Microsoft authentication",true)
             card.addView(ui.pill(this,"OFFLINE MODE WARNING",ui.RED))
