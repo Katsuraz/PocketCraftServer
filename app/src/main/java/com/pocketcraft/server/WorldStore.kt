@@ -83,6 +83,13 @@ object WorldStore {
         requireValidName(name)
         val target=File(root(c),name)
         if(target.exists())throw IOException("A folder with that name already exists")
+        // Capture the latest settings before copying the source folder.
+        if (source.name == active(c)) {
+            val current=Properties()
+            File(root(c),"server.properties").takeIf { it.isFile }
+                ?.inputStream()?.use { current.load(it) }
+            WorldHostingProfiles.saveCurrentFromServer(c,source.name,current)
+        }
         if(!target.mkdir())throw IOException("Could not prepare duplicate")
         try {
             var bytes=0L
@@ -100,18 +107,9 @@ object WorldStore {
                 dest.parentFile?.mkdirs()
                 file.copyTo(dest,overwrite=false)
             }
-            // A duplicate starts with an independent copy of this world's settings.
-            if (source.name==active(c)) {
-                val props=Properties()
-                File(root(c),"server.properties").takeIf { it.isFile }
-                    ?.inputStream()?.use { props.load(it) }
-                WorldHostingProfiles.saveCurrentFromServer(c,source.name,props)
-            }
-            WorldHostingProfiles.onDuplicate(c,source.name,name)
             return target
         }catch(e:Exception){
             target.deleteRecursively()
-            WorldHostingProfiles.onDelete(c,name)
             throw e
         }
     }
@@ -121,7 +119,6 @@ object WorldStore {
         val selected=requireWorld(c,world)
         if(selected.name==active(c)) throw IOException("Select another world before deleting the active one")
         if(!selected.deleteRecursively())throw IOException("Could not delete the world")
-        WorldHostingProfiles.onDelete(c,selected.name)
     }
 
     fun rename(c: Context, world: File, name: String): File {
@@ -139,11 +136,9 @@ object WorldStore {
         }
         if(!selected.renameTo(target))throw IOException("Could not rename world")
         try {
-            WorldHostingProfiles.onRename(c,selected.name,name)
             if(wasActive)assignName(c,name,renameOnly=true)
         }catch(e:Exception){
             target.renameTo(selected)
-            runCatching { WorldHostingProfiles.onRename(c,name,selected.name) }
             throw e
         }
         return target
