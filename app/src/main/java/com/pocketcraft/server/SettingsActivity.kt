@@ -156,12 +156,12 @@ class SettingsActivity : Activity() {
         hero.addView(ui.space(this,13))
         hero.addView(ui.text(this,"Server preferences",23f,ui.WHITE,true))
         hero.addView(ui.space(this,7))
-        hero.addView(ui.text(this,"Game rules, hosting and privacy. Restart the server to apply gameplay changes.",12f,ui.WHITE))
+        hero.addView(ui.text(this,"Gameplay, connections and privacy.",12f,ui.WHITE))
         body.addView(hero)
-        section(body,"Appearance","Choose your PocketCraft theme") { card ->
+        section(body,"Appearance","Theme") { card ->
             card.addView(ui.text(this,"Homestead",16f,ui.WHITE,true))
             card.addView(ui.space(this,6))
-            card.addView(ui.text(this,"Minimal charcoal surfaces, subtle sandstone accents, and Minecraft-inspired typography.",12f,ui.MUTED))
+            card.addView(ui.text(this,"Warm oak, parchment accents, and clean Minecraft-style typography.",12f,ui.MUTED))
             card.addView(ui.space(this,13))
             card.addView(ui.action(this,
                 if(ui.homestead()) "✓ HOMESTEAD • ACTIVE" else "🌿  USE HOMESTEAD",true) {

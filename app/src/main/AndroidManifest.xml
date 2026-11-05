@@ -7,8 +7,9 @@
     <application
         android:allowBackup="false"
         android:extractNativeLibs="true"
-        android:label="PocketCraft Server"
-        android:icon="@drawable/pocket_logo"
+        android:label="PocketCraft"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:theme="@style/PocketCraftTheme"
         android:usesCleartextTraffic="false">
         <provider android:name=".PocketCraftDocumentsProvider"

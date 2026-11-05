@@ -115,18 +115,19 @@ object PocketUi {
     }
     fun homestead(): Boolean = currentTheme=="homestead"
 
-    // The legacy names GREEN/CYAN map to subtle sandstone accents in Homestead.
-    val BG: Int get() = if(homestead()) 0xFF121617.toInt() else 0xFF080E18.toInt()
-    val PANEL: Int get() = if(homestead()) 0xFF1C2223.toInt() else 0xFF141E2C.toInt()
-    val SURFACE: Int get() = if(homestead()) 0xFF292F30.toInt() else 0xFF223245.toInt()
-    val MUTED: Int get() = if(homestead()) 0xFFA8B2B0.toInt() else 0xFFACBED1.toInt()
-    val WHITE: Int get() = if(homestead()) 0xFFF4F0E6.toInt() else 0xFFF6F9FD.toInt()
-    val GREEN: Int get() = if(homestead()) 0xFFD5C39B.toInt() else 0xFF70E9B4.toInt()
-    val CYAN: Int get() = if(homestead()) 0xFFD5C39B.toInt() else 0xFF80D7FA.toInt()
-    val PURPLE: Int get() = if(homestead()) 0xFFBFB5A3.toInt() else 0xFFB5A5FF.toInt()
-    val RED: Int get() = if(homestead()) 0xFFF0AD9C.toInt() else 0xFFFFA0AB.toInt()
-    val BORDER: Int get() = if(homestead()) 0xFF364042.toInt() else 0xFF324459.toInt()
-    val SUBTLE: Int get() = if(homestead()) 0xFF181D1E.toInt() else 0xFF182737.toInt()
+    // Restrained oak and parchment colors keep the Homestead identity while
+    // avoiding oversized textures, gradients and neon accents.
+    val BG: Int get() = if(homestead()) 0xFF1B1714.toInt() else 0xFF080E18.toInt()
+    val PANEL: Int get() = if(homestead()) 0xFF2A211C.toInt() else 0xFF141E2C.toInt()
+    val SURFACE: Int get() = if(homestead()) 0xFF3B2E25.toInt() else 0xFF223245.toInt()
+    val MUTED: Int get() = if(homestead()) 0xFFC1B49F.toInt() else 0xFFACBED1.toInt()
+    val WHITE: Int get() = if(homestead()) 0xFFF4EADB.toInt() else 0xFFF6F9FD.toInt()
+    val GREEN: Int get() = if(homestead()) 0xFFD9B776.toInt() else 0xFF70E9B4.toInt()
+    val CYAN: Int get() = if(homestead()) 0xFFD9B776.toInt() else 0xFF80D7FA.toInt()
+    val PURPLE: Int get() = if(homestead()) 0xFFCBAA83.toInt() else 0xFFB5A5FF.toInt()
+    val RED: Int get() = if(homestead()) 0xFFF0AA8A.toInt() else 0xFFFFA0AB.toInt()
+    val BORDER: Int get() = if(homestead()) 0xFF594536.toInt() else 0xFF324459.toInt()
+    val SUBTLE: Int get() = if(homestead()) 0xFF241D18.toInt() else 0xFF182737.toInt()
 
     fun dp(c: Context, v: Int): Int = (v * c.resources.displayMetrics.density + .5f).toInt()
 
@@ -173,8 +174,8 @@ object PocketUi {
         View(c).apply { layoutParams = LinearLayout.LayoutParams(1, dp(c,h)) }
 
     fun card(c: Context): LinearLayout = column(c).apply {
-        background = shape(c, PANEL, 16, BORDER)
-        padding(c, 18, 18, 18, 18)
+        background = shape(c, PANEL, 14, BORDER)
+        padding(c, 16, 16, 16, 16)
     }
 
     fun pill(c: Context, label: String, tint: Int = CYAN): TextView =

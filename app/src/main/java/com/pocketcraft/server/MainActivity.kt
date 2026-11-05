@@ -157,9 +157,9 @@ class MainActivity : Activity() {
         val logo = ImageView(this).apply {
             setImageResource(R.drawable.pocket_logo)
             scaleType = ImageView.ScaleType.FIT_CENTER
-            background = ui.shape(this@MainActivity,ui.SUBTLE,14,ui.BORDER)
-            setPadding(ui.dp(this@MainActivity,6),ui.dp(this@MainActivity,6),
-                ui.dp(this@MainActivity,6),ui.dp(this@MainActivity,6))
+            background = ui.shape(this@MainActivity,ui.SUBTLE,12,ui.BORDER)
+            setPadding(ui.dp(this@MainActivity,3),ui.dp(this@MainActivity,3),
+                ui.dp(this@MainActivity,3),ui.dp(this@MainActivity,3))
             contentDescription = "PocketCraft app logo"
         }
         brand.addView(logo,LinearLayout.LayoutParams(ui.dp(this,44),ui.dp(this,44)))
@@ -170,7 +170,7 @@ class MainActivity : Activity() {
             setPadding(ui.dp(this@MainActivity,12),0,0,0)
             addView(ui.text(this@MainActivity,"PocketCraft",20f,ui.WHITE,true))
             addView(ui.space(this@MainActivity,4))
-            addView(ui.text(this@MainActivity,"SERVER STUDIO  •  v$version",10f,ui.MUTED,true))
+            addView(ui.text(this@MainActivity,"v$version",11f,ui.MUTED))
         }, LinearLayout.LayoutParams(0,-2,1f))
         val settings = ImageView(this).apply {
             setImageResource(R.drawable.pc_settings)
@@ -210,7 +210,7 @@ class MainActivity : Activity() {
         val navbar = ui.row(this).apply {
             background = ui.shape(this@MainActivity,ui.PANEL,0,ui.BORDER)
             setPadding(ui.dp(this@MainActivity,7),ui.dp(this@MainActivity,8),
-                ui.dp(this@MainActivity,7),ui.dp(this@MainActivity,9))
+                ui.dp(this@MainActivity,7),ui.dp(this@MainActivity,7))
         }
         val icons = intArrayOf(R.drawable.pc_home,R.drawable.pc_mods,
             R.drawable.pc_worlds,R.drawable.pc_console)
@@ -244,7 +244,7 @@ class MainActivity : Activity() {
             item.addView(ui.text(this,names[i],11f,if(selected)ui.GREEN else ui.MUTED,selected)
                 .apply { gravity=Gravity.CENTER
                     importantForAccessibility=View.IMPORTANT_FOR_ACCESSIBILITY_NO })
-            navbar.addView(item,LinearLayout.LayoutParams(0,ui.dp(this,62),1f))
+            navbar.addView(item,LinearLayout.LayoutParams(0,ui.dp(this,56),1f))
         }
         screen.addView(navbar)
         ui.styleFormInputs(screen)
@@ -360,32 +360,26 @@ class MainActivity : Activity() {
     }
 
     private fun dashboard(body: LinearLayout) {
-        body.addView(h("Home","Manage your Minecraft server"))
-        body.addView(ui.space(this,14))
+        // A calm, compact Home page. Technical detail is available on demand.
+        body.addView(ui.space(this,6))
         val hero = ui.card(this)
         val header = ui.row(this)
         header.addView(ui.pill(this,
-            if(ServerService.javaReady) "●  READY"
+            if(ServerService.javaReady) "●  ONLINE"
             else if(ServerService.running) "●  STARTING" else "●  OFFLINE",
             if(ServerService.javaReady) ui.GREEN else if(ServerService.running) ui.CYAN else ui.MUTED
         ).also { heroState = it })
         header.addView(View(this),LinearLayout.LayoutParams(0,1,1f))
         header.addView(ui.text(this,"FABRIC",11f,ui.MUTED,true))
         hero.addView(header)
-        hero.addView(ui.space(this,17))
-        hero.addView(ui.text(this,"Your server",23f,ui.WHITE,true))
-        hero.addView(ui.space(this,8))
-        hero.addView(ui.text(this,
-            if(ServerService.running) "Minecraft is running. Check Console for readiness."
-            else "Install Java and Fabric, then start your world.",
-            12f,ui.MUTED))
         hero.addView(ui.space(this,16))
+        hero.addView(ui.text(this,"My server",23f,ui.WHITE,true))
+        hero.addView(ui.space(this,13))
         val readyForStart = HostingHealth.startBlockers(healthSnapshot()) == 0
         hero.addView(ui.action(this,when {
-            ServerService.javaReady -> "✓  SERVER READY — OPEN CONSOLE"
-            ServerService.running -> "◌  SERVER STARTING — OPEN CONSOLE"
-            readyForStart -> "▶  START MY SERVER"
-            else -> "✦  COMPLETE SERVER SETUP"
+            ServerService.running -> "OPEN CONSOLE"
+            readyForStart -> "▶  START SERVER"
+            else -> "SET UP SERVER"
         },true) {
             when {
                 ServerService.running -> { tab=3; render() }
@@ -396,77 +390,93 @@ class MainActivity : Activity() {
                 else -> showHealthCenter()
             }
         })
-        hero.addView(ui.space(this,9))
-        hero.addView(ui.action(this,"SERVER HEALTH & DIAGNOSTICS") { showHealthCenter() })
+        if (ServerService.running) {
+            hero.addView(ui.space(this,8))
+            hero.addView(ui.action(this,"STOP SERVER") { confirmStopMinecraft() })
+        }
         body.addView(hero)
-        body.addView(ui.space(this,14))
+        body.addView(ui.space(this,16))
+
+        val actions = ui.card(this)
+        actions.addView(actionRow("⚙","Settings") {
+            startActivity(Intent(this,SettingsActivity::class.java))
+        })
+        actions.addView(line())
+        actions.addView(actionRow("▤","Files") { openServerFiles() })
+        actions.addView(line())
+        actions.addView(actionRow("✦","Fabric") { installFabricPrompt() })
+        actions.addView(line())
+        actions.addView(actionRow("☕","Java runtime") { installJavaPrompt() })
+        actions.addView(line())
+        actions.addView(actionRow("↓","Import server") { picker(1) })
+        actions.addView(line())
+        actions.addView(actionRow("✓","Health") { showHealthCenter() })
+        actions.addView(line())
+        actions.addView(actionRow("ⓘ","About") { about() })
+        body.addView(actions)
+        body.addView(ui.space(this,16))
+
+        // The full existing local, crossplay, Playit and diagnostic workflows
+        // remain intact but are no longer repeated on the default Home screen.
+        val advancedBody = ui.column(this)
+        val prefs = getSharedPreferences("pocketcraft",0)
+        var expanded = prefs.getBoolean("hostingExpanded",false)
+        advancedBody.visibility = if(expanded) View.VISIBLE else View.GONE
+        lateinit var advancedToggle: TextView
+        advancedToggle = ui.action(this,
+            if(expanded) "−  HIDE HOSTING DETAILS" else "＋  HOSTING & CROSSPLAY"
+        ) {
+            expanded = !expanded
+            prefs.edit().putBoolean("hostingExpanded",expanded).apply()
+            advancedBody.visibility = if(expanded) View.VISIBLE else View.GONE
+            advancedToggle.text = if(expanded) "−  HIDE HOSTING DETAILS" else "＋  HOSTING & CROSSPLAY"
+        }
+        body.addView(advancedToggle)
+        body.addView(ui.space(this,12))
+
         val joinHost = FrameLayout(this)
         joinHost.addView(connectionJourneyPanel())
         connectionHost = joinHost
         lastConnectionSignature = ""
-        body.addView(joinHost)
-        body.addView(ui.space(this,16))
-        body.addView(setupJourney())
-        body.addView(ui.space(this,14))
-        body.addView(enginePanel())
-        body.addView(ui.space(this,14))
+        advancedBody.addView(joinHost)
+        advancedBody.addView(ui.space(this,12))
+        advancedBody.addView(setupJourney())
+        advancedBody.addView(ui.space(this,12))
+        advancedBody.addView(enginePanel())
+        advancedBody.addView(ui.space(this,12))
         val localHost = FrameLayout(this)
         localHost.addView(phoneOnlyPanel())
         phoneHost = localHost
         lastPhoneSignature = ""
-        body.addView(localHost)
-        body.addView(ui.space(this,14))
-        val host = FrameLayout(this)
-        host.addView(internetPanel())
-        onlineHost = host
+        advancedBody.addView(localHost)
+        advancedBody.addView(ui.space(this,12))
+        val online = FrameLayout(this)
+        online.addView(internetPanel())
+        onlineHost = online
         lastOnlineSignature = ""
-        body.addView(host)
-        body.addView(ui.space(this,19))
-        body.addView(h("Overview"))
-        body.addView(ui.space(this,11))
-        val row = ui.row(this)
-        row.addView(stat(serverProperty("max-players","5"), "MAX PLAYERS", "♟"), ui.weight(this))
-        row.addView(stat(modFiles().count { it.name.endsWith(".jar") }.toString(), "MODS", "⬡"), LinearLayout.LayoutParams(0,-2,1f))
-        body.addView(row)
-        body.addView(ui.space(this,10))
-        val row2 = ui.row(this)
-        row2.addView(stat(WorldStore.worlds(this).size.toString(), "WORLDS", "▧"),ui.weight(this))
-        row2.addView(stat((getSharedPreferences("pocketcraft",0).getInt("heapMB",2048)/1024f).let { String.format(Locale.ROOT,"%.1f GB",it) }, "RAM TARGET", "◉"),LinearLayout.LayoutParams(0,-2,1f))
-        body.addView(row2)
-        body.addView(ui.space(this,17))
-        body.addView(h("Quick actions"))
-        body.addView(ui.space(this,11))
-        val actions = ui.card(this)
-        actions.addView(actionRow("✓","Server health","Check Java, Geyser, local network and tunnel setup") { showHealthCenter() })
-        actions.addView(line())
-        actions.addView(actionRow("⚙","Server settings","Addresses, non-premium access, gameplay & performance") {
-            startActivity(Intent(this, SettingsActivity::class.java))
-        })
-        actions.addView(line())
-        actions.addView(actionRow("✦","Download Fabric server","Official Fabric download • select Minecraft version") { installFabricPrompt() })
-        actions.addView(line())
-        actions.addView(actionRow("☕","Install Android Java 25","36 MB verified ARM64 runtime download") { installJavaPrompt() })
-        actions.addView(line())
-        actions.addView(actionRow("↓","Import Fabric server","Choose an existing Fabric server launcher JAR") { picker(1) })
-        actions.addView(line())
-        actions.addView(actionRow("◈","Manage mod library","Import, disable, and remove JAR files") {tab=1;render()})
-        actions.addView(line())
-        actions.addView(actionRow("▧","World vault","Backups, ZIP imports, and active world") {tab=2;render()})
-        actions.addView(line())
-        actions.addView(actionRow("▤","Server files","Browse, edit, export and back up your server") {openServerFiles()})
-        actions.addView(line())
-        actions.addView(actionRow("↻","Fix update installation","Backup and secure APK signing instructions") {updateHelp()})
-        actions.addView(line())
-        actions.addView(actionRow("ⓘ","About PocketCraft","App version, connection facts and privacy") {about()})
-        body.addView(actions)
-        body.addView(ui.space(this,14))
+        advancedBody.addView(online)
+        advancedBody.addView(ui.space(this,15))
+        advancedBody.addView(h("Server details"))
+        advancedBody.addView(ui.space(this,10))
+        val statsRow = ui.row(this)
+        statsRow.addView(stat(serverProperty("max-players","5"),"PLAYERS","♟"),ui.weight(this))
+        statsRow.addView(stat(modFiles().count { it.name.endsWith(".jar") }.toString(),"MODS","⬡"),LinearLayout.LayoutParams(0,-2,1f))
+        advancedBody.addView(statsRow)
+        advancedBody.addView(ui.space(this,9))
+        val statsRow2 = ui.row(this)
+        statsRow2.addView(stat(WorldStore.worlds(this).size.toString(),"WORLDS","▧"),ui.weight(this))
+        statsRow2.addView(stat((getSharedPreferences("pocketcraft",0).getInt("heapMB",2048)/1024f).let {
+            String.format(Locale.ROOT,"%.1f GB",it) },"RAM","◉"),LinearLayout.LayoutParams(0,-2,1f))
+        advancedBody.addView(statsRow2)
+        advancedBody.addView(ui.space(this,12))
         val note = ui.card(this)
-        note.addView(ui.pill(this,"COMPATIBILITY CHECK",ui.PURPLE))
-        note.addView(ui.space(this,9))
         note.addView(ui.text(this,"Crossplay compatibility",15f,ui.WHITE,true))
-        note.addView(ui.space(this,7))
-        note.addView(ui.text(this,"Geyser-Fabric + Floodgate must match your Fabric version. Non-premium Java access and Bedrock authentication are separate settings; neither proves that public multiplayer works.",12f,ui.MUTED))
-        body.addView(note)
+        note.addView(ui.space(this,6))
+        note.addView(ui.text(this,
+            "Use matching Geyser-Fabric and Floodgate versions. Check Console for Java and Bedrock readiness.",
+            12f,ui.MUTED))
+        advancedBody.addView(note)
+        body.addView(advancedBody)
     }
     /**
      * Simplified Anvil-inspired hosting workflow, using PocketCraft's real
@@ -1145,30 +1155,28 @@ class MainActivity : Activity() {
     private fun line():View = View(this).apply {
         setBackgroundColor(ui.BORDER)
         layoutParams=LinearLayout.LayoutParams(-1,ui.dp(this@MainActivity,1)).apply {
-            topMargin=ui.dp(this@MainActivity,12);bottomMargin=ui.dp(this@MainActivity,12)
+            topMargin=ui.dp(this@MainActivity,5)
+            bottomMargin=ui.dp(this@MainActivity,5)
         }
     }
-    private fun actionRow(icon:String,title:String,desc:String,click:()->Unit):LinearLayout {
+    private fun actionRow(icon:String,title:String,click:()->Unit):LinearLayout {
         val row=ui.row(this)
-        row.addView(ui.text(this,icon,22f,ui.CYAN,true).apply {
+        row.addView(ui.text(this,icon,19f,ui.CYAN,true).apply {
             gravity=Gravity.CENTER
-            layoutParams=LinearLayout.LayoutParams(ui.dp(this@MainActivity,34),ui.dp(this@MainActivity,40))
-        })
-        val labels=ui.column(this).apply { setPadding(ui.dp(this@MainActivity,12),0,0,0) }
-        labels.addView(ui.text(this,title,14f,ui.WHITE,true))
-        labels.addView(ui.space(this,4))
-        labels.addView(ui.text(this,desc,11f,ui.MUTED))
-        row.addView(labels,LinearLayout.LayoutParams(0,-2,1f))
-        row.addView(ui.text(this,"›",24f,ui.MUTED))
-        row.background=ui.pressable(this,ui.shape(this,ui.PANEL,8))
+        },LinearLayout.LayoutParams(ui.dp(this,34),ui.dp(this,44)))
+        row.addView(ui.text(this,title,15f,ui.WHITE,true).apply {
+            setPadding(ui.dp(this@MainActivity,12),0,0,0)
+        },LinearLayout.LayoutParams(0,-2,1f))
+        row.addView(ui.text(this,"›",22f,ui.MUTED))
+        row.background=ui.pressable(this,ui.shape(this,ui.PANEL,10))
         row.isClickable=true
         row.isFocusable=true
+        row.minimumHeight=ui.dp(this,54)
+        row.contentDescription=title
         row.setOnClickListener {
             PocketSounds.play(this,PocketSounds.Event.SELECT)
             click()
         }
-        row.contentDescription=title+". "+desc
-        row.minimumHeight=ui.dp(this,56)
         return row
     }
     private fun modFiles():List<File> =

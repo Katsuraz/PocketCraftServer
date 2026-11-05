@@ -1,20 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="96dp"
-    android:height="96dp"
-    android:viewportWidth="96"
-    android:viewportHeight="96">
-    <!-- Original minimal Minecraft-inspired block/server vector icon. -->
-    <path android:fillColor="#10191B" android:pathData="M18,5 L78,5 Q91,5 91,18 L91,78 Q91,91 78,91 L18,91 Q5,91 5,78 L5,18 Q5,5 18,5 Z"/>
-    <path android:fillColor="#23302D" android:pathData="M15,9 L81,9 Q87,9 87,15 L87,81 Q87,87 81,87 L15,87 Q9,87 9,81 L9,15 Q9,9 15,9 Z"/>
-    <path android:fillColor="#0F1615" android:pathData="M48,15 L77,30 L77,69 L48,85 L19,69 L19,30 Z"/>
-    <path android:fillColor="#94B578" android:pathData="M48,19 L72,32 L48,45 L24,32 Z"/>
-    <path android:fillColor="#B4D08B" android:pathData="M48,19 L72,32 L48,38 L24,32 Z"/>
-    <path android:fillColor="#8C7156" android:pathData="M24,35 L46,48 L46,79 L24,66 Z"/>
-    <path android:fillColor="#3C4C46" android:pathData="M50,48 L72,35 L72,66 L50,79 Z"/>
-    <path android:fillColor="#63746A" android:pathData="M51,49 L70,38 L70,43 L51,54 Z"/>
-    <path android:fillColor="#111C1C" android:pathData="M54,53 L68,45 L68,52 L54,60 Z M54,65 L68,57 L68,64 L54,72 Z"/>
-    <path android:fillColor="#DCE3DA" android:pathData="M56,55 L64,50 L64,52 L56,57 Z M56,67 L64,62 L64,64 L56,69 Z"/>
-    <path android:fillColor="#E9BF70" android:pathData="M65,49 L67,48 L67,51 L65,52 Z M65,61 L67,60 L67,63 L65,64 Z"/>
-    <path android:fillColor="#B39069" android:pathData="M27,39 L31,41 L31,47 L27,45 Z M36,46 L40,48 L40,53 L36,51 Z"/>
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="96dp" android:height="96dp" android:viewportWidth="96" android:viewportHeight="96">
+    <path android:fillColor="#0E1714" android:pathData="M48,14 L80,31 L80,70 L48,88 L16,70 L16,31 Z"/>
+    <path android:fillColor="#9DB77B" android:pathData="M48,18 L76,32 L48,47 L20,32 Z"/>
+    <path android:fillColor="#BED18D" android:pathData="M48,18 L76,32 L48,39 L20,32 Z"/>
+    <path android:fillColor="#7F5F44" android:pathData="M20,36 L46,50 L46,82 L20,67 Z"/>
+    <path android:fillColor="#354A43" android:pathData="M50,50 L76,36 L76,67 L50,82 Z"/>
+    <path android:fillColor="#B48B62" android:pathData="M24,43 L28,45 L28,51 L24,49 Z M36,52 L40,54 L40,60 L36,58 Z"/>
+    <path android:fillColor="#14241F" android:pathData="M54,52 L72,42 L72,51 L54,61 Z M54,66 L72,56 L72,65 L54,75 Z"/>
+    <path android:fillColor="#D7DBD0" android:pathData="M57,54 L67,49 L67,52 L57,57 Z M57,68 L67,63 L67,66 L57,71 Z"/>
+    <path android:fillColor="#E6BD71" android:pathData="M69,47 L71,46 L71,49 L69,50 Z M69,61 L71,60 L71,63 L69,64 Z"/>
 </vector>

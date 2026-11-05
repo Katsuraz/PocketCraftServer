@@ -1,5 +1,15 @@
 # PocketCraft changelog
 
+## v0.8.10 (versionCode 32) — Homestead, simplified
+
+- Restored the warm oak-and-parchment Homestead palette while preserving clean, subtle cards.
+- Redesigned Home around one compact status card and single-line actions without descriptive paragraphs.
+- Moved hosting, connection, setup and crossplay diagnostics into a collapsible section, all still accessible.
+- Removed the "Fix update installation" shortcut from Home.
+- Created proper adaptive and round launcher icons with a dark background and a clean voxel server mark; no baked white circle.
+- Shortened the app label to PocketCraft and retained package ID, update signing workflow, worlds, server files and all six existing sounds.
+
+
 ## v0.8.9 (versionCode 31) — Minimal design and menu audio
 
 - Replaced menu click and tab-select audio with original crisp Minecraft-inspired PCM WAV cues.
