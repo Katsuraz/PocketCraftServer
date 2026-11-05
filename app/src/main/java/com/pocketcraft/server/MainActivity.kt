@@ -467,7 +467,7 @@ class MainActivity : Activity() {
                     "Geyser mod: " + state.geyserInstalled,
                     "Floodgate mod: " + state.floodgateInstalled,
                     "Bedrock listening: " + state.bedrockListening,
-                    "NetherNet registered: " + state.nethernetRegistered,
+                    "NetherNet signaling reported: " + state.nethernetSignalingReady,
                     "Playit running: " + state.playitActive,
                     "Java public address assigned: " + !state.javaTunnelAddress.isNullOrBlank(),
                     "Bedrock public address assigned: " + !state.bedrockTunnelAddress.isNullOrBlank()
