@@ -34,6 +34,7 @@ class MainActivity : Activity() {
     private var connectionHost: FrameLayout? = null
     private var lastConnectionSignature = ""
     private var consoleOutput: TextView? = null
+    private var consoleLogScroll: ScrollView? = null
     private var consoleCommandEntry: android.widget.EditText? = null
     private var consoleSuggestionHost: LinearLayout? = null
     private var lastConsoleCommandRevision = -1
@@ -74,7 +75,15 @@ class MainActivity : Activity() {
                     file.lastModified() != lastConsoleModified) {
                     lastConsoleSize = file.length()
                     lastConsoleModified = file.lastModified()
+                    val scroller = consoleLogScroll
+                    val nearBottom = scroller?.let {
+                        it.scrollY + it.height >=
+                            (it.getChildAt(0)?.height ?: 0) - ui.dp(this, 52)
+                    } ?: true
                     consoleOutput?.text = getLog()
+                    if (nearBottom) scroller?.post {
+                        scroller.fullScroll(View.FOCUS_DOWN)
+                    }
                 }
                 if (lastConsoleCommandRevision != ServerCommandHints.revision) {
                     lastConsoleCommandRevision = ServerCommandHints.revision
@@ -1825,11 +1834,18 @@ class MainActivity : Activity() {
         }
         log.addView(ui.pill(this,"●  LOCAL LOG",ui.CYAN))
         log.addView(ui.space(this,12))
-        log.addView(ui.text(this,getLog(),12f,0xFFC0D7D7.toInt()).apply {
+        val logText = ui.text(this,getLog(),12f,0xFFC0D7D7.toInt()).apply {
             typeface = android.graphics.Typeface.MONOSPACE
             setTextIsSelectable(true)
             consoleOutput = this
-        })
+        }
+        val logScroll = ScrollView(this).apply {
+            addView(logText)
+            isFillViewport = false
+        }
+        consoleLogScroll = logScroll
+        log.addView(logScroll, LinearLayout.LayoutParams(-1,ui.dp(this,320)))
+        logScroll.post { logScroll.fullScroll(View.FOCUS_DOWN) }
         body.addView(log)
         body.addView(ui.space(this,15))
         val entry=android.widget.EditText(this).apply {
