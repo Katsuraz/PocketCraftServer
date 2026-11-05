@@ -1,5 +1,13 @@
 # PocketCraft changelog
 
+## v0.8.29 (versionCode 51) — Keep the latest commands visible
+
+- Command Activity now shows the newest 18 events even when the full in-memory transcript contains more lines. This prevents the Android TextView's line limit from hiding the latest issued commands after a busy session.
+- Copy Command Activity continues to include the full bounded transcript.
+- Add a regression test that sends 30 sequential commands and confirms the latest five remain visible in the compact preview.
+- Retain v0.8.28's no-auto-help fix, simplified Homestead Console, searchable command catalog and full log tools, with no changes to server data or networking.
+
+
 ## v0.8.28 (versionCode 50) — Quiet command panel, no automatic help spam
 
 - Remove all automatic `help` and `help N` commands on server readiness or help-pagination detection. Modern Minecraft prints large command lists as System chat, which hid real commands in the live Console.

@@ -60,6 +60,16 @@ class ConsoleCommandActivityTest {
             "[18:16:52] [Server thread/INFO]: System chat: Set the time to 1000"))
     }
 
+    @Test fun compactPreviewAlwaysShowsMostRecentCommands() {
+        ConsoleCommandActivity.reset()
+        for(i in 1..30)ConsoleCommandActivity.queued("list "+i, 1000L+i)
+        val preview=ConsoleCommandActivity.preview(5)
+        assertEquals(5, preview.lines().size)
+        assertTrue(preview.contains("› list 30"))
+        assertFalse(preview.contains("› list 1\n"))
+        assertTrue(ConsoleCommandActivity.snapshot().contains("› list 15"))
+    }
+
     @Test fun transcriptIsBounded() {
         ConsoleCommandActivity.reset()
         for(i in 1..80)ConsoleCommandActivity.queued("say " + i, 1000L+i)

@@ -122,7 +122,7 @@ class MainActivity : Activity() {
                 }
                 if (lastActivityRevision != ConsoleCommandActivity.revision) {
                     lastActivityRevision=ConsoleCommandActivity.revision
-                    consoleActivityView?.text=ConsoleCommandActivity.snapshot()
+                    consoleActivityView?.text=ConsoleCommandActivity.preview()
                 }
                 // Keep full-log decoding dormant while using the compact
                 // command panel. Opening Full Logs starts the async reader.
@@ -2620,7 +2620,7 @@ class MainActivity : Activity() {
             "Your sent commands and nearby Minecraft replies. Unrelated server events can also appear; the full log is available below.",
             11f,ui.MUTED))
         activity.addView(ui.space(this,9))
-        val commandText=ui.text(this,ConsoleCommandActivity.snapshot(),12f,ui.WHITE).apply {
+        val commandText=ui.text(this,ConsoleCommandActivity.preview(),12f,ui.WHITE).apply {
             typeface=android.graphics.Typeface.MONOSPACE
             setTextIsSelectable(false)
             maxLines=24

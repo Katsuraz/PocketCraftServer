@@ -35,6 +35,12 @@ internal object ConsoleCommandActivity {
         else lines.joinToString("\n")
     }
 
+    /** Show the newest activity first in the compact panel, not stale lines. */
+    fun preview(maxLines: Int = 18): String = synchronized(lock) {
+        if (lines.isEmpty()) "No commands sent in this server session.\nTry LIST or type a command above."
+        else lines.toList().takeLast(maxLines.coerceIn(1, MAX_LINES)).joinToString("\n")
+    }
+
     private fun add(message: String) {
         lines.addLast(message.take(350))
         while (lines.size > MAX_LINES) lines.removeFirst()
