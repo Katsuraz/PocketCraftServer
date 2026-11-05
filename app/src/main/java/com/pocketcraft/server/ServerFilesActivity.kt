@@ -108,6 +108,27 @@ class ServerFilesActivity : Activity() {
             shortcuts.addView(ui.action(this,"DIAGNOSE BEDROCK",true){diagnoseBedrock()})
             body.addView(shortcuts)
             body.addView(ui.space(this,13))
+            val access=ui.card(this)
+            access.addView(ui.text(this,"PHONE FILE MANAGER",16f,ui.WHITE,true))
+            access.addView(ui.space(this,8))
+            access.addView(ui.text(this,
+                "Open Android's file picker, then choose PocketCraft Server from Browse locations. This opens your live server files, not a copy.",
+                12f,ui.MUTED))
+            access.addView(ui.space(this,10))
+            access.addView(ui.action(this,"OPEN IN ANDROID FILES",true) {
+                try {
+                    val browse=Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                            Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
+                            Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+                    }
+                    startActivity(browse)
+                } catch (e:Exception) {
+                    toast("Android file picker unavailable: "+e.message)
+                }
+            })
+            body.addView(access)
+            body.addView(ui.space(this,13))
             val backupCard=ui.card(this)
             backupCard.addView(ui.text(this,"BACKUP & RESTORE",11f,ui.GREEN,true))
             backupCard.addView(ui.space(this,8))
