@@ -236,6 +236,20 @@ jobs:
           set -euo pipefail
           APKSIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
           "$APKSIGNER" verify --print-certs app/build/outputs/apk/debug/app-debug.apk
+      - name: Check APK installability metadata and archive integrity
+        run: |
+          set -euo pipefail
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          test -s "$APK"
+          unzip -tq "$APK" >/dev/null
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -v 4 "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --min-sdk-version 26 "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging "$APK" > "$RUNNER_TEMP/pocketcraft-apk-badging.txt"
+          grep -Fq "package: name='com.pocketcraft.server'" "$RUNNER_TEMP/pocketcraft-apk-badging.txt"
+          grep -Fq "sdkVersion:'26'" "$RUNNER_TEMP/pocketcraft-apk-badging.txt"
+          echo "APK SHA-256: $(sha256sum "$APK" | cut -d ' ' -f1)"
+          grep -E '^(package:|sdkVersion:|targetSdkVersion:|native-code:)' "$RUNNER_TEMP/pocketcraft-apk-badging.txt" || true
+          echo "APK archive, signing, alignment and package metadata validated"
       - uses: actions/upload-artifact@v4
         if: success()
         with:
