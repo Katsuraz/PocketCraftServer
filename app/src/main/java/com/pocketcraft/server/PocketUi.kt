@@ -73,7 +73,7 @@ object PocketUi {
                     }
                 }
             } ?: error("Could not read selected font")
-            require(temp.length() in 1..2_000_000) { "Font is empty or too large" }
+            require(temp.length() in 1L..2_000_000L) { "Font is empty or too large" }
             // Malformed fonts must be rejected before replacing a working font.
             Typeface.createFromFile(temp)
             val target = java.io.File(folder,"mojangles.ttf")
