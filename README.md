@@ -186,3 +186,13 @@ cross-build image. For v0.8.2 and later, a missing native binary fails the
 build instead of silently publishing an APK that still has the original
 NetherNet/Bionic failure. **A successful build with this binary is still not
 proof of an operational Bedrock listener; test on a real phone.**
+
+## PocketCraft 0.8.1 — Mods and Android Files integration
+
+- **Mods:** simplified Fabric browser, installed-mod controls, import actions, and Modrinth search with category/version filters. Modrinth project installs attempt to install declared required Fabric dependencies first. Client-only releases are rejected; actual compatibility depends on each mod and the server runtime.
+- **Minecraft versions:** choose a listed Fabric server version or type another official Minecraft version. The device must still provide a compatible Java runtime; choosing a version does not install a matching Android Java runtime automatically.
+- **Live server folder in Android Files:** open PocketCraft → Server files → **Open in Android Files**. In the system picker, select **PocketCraft Server** under Browse locations. This is a virtual Documents Provider exposing the live `WorldStore.root` folder, so Minecraft continues to use private app storage; the project does **not** move or duplicate the world.
+- Editing, deleting, renaming, and creating files through the provider are blocked while Minecraft is running. Large worlds can remain in private app storage; this prevents Android scoped-storage permissions from causing file access problems during hosting.
+- Android third-party file managers do not all expose Documents Provider roots. If yours does not, use the Android system Files/Document picker or PocketCraft's built-in Server Files screen and full ZIP export.
+- **Playit settings:** use **Paste Playit Settings** in Mods. Copy the complete Geyser YAML snippet from the Playit NetherNet tunnel configuration help, not an agent secret. Stop and restart the Minecraft server when editing settings.
+- **Validation:** the GitHub code changes require GitHub Actions APK compilation and on-device verification before they can be considered a tested release. APK upgrades still require a matching Android signing certificate. Back up the world before changing builds.
