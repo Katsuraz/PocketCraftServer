@@ -19,6 +19,10 @@ import java.util.jar.JarFile
  */
 object WebsiteModInstaller {
     private const val MAX_BYTES = 150L * 1024 * 1024
+    // Distinguish a required dependency's failed metadata/CDN from the
+    // parent mod's missing JAR, so the app reports the real failure.
+    private class DependencyInstallFailure(message: String, cause: IOException) :
+        IOException(message, cause)
 
     private fun trusted(host: String): Boolean = host.lowercase() in setOf(
         "api.modrinth.com", "cdn.modrinth.com", "modrinth.com",
@@ -135,6 +139,13 @@ object WebsiteModInstaller {
                 throw IOException("The Modrinth link does not match its project type")
             if (projectType == "mod" && project.optString("server_side") == "unsupported")
                 throw IOException("This Modrinth mod is client-only and cannot be installed on the server")
+            // Use the dependency-aware installer for Modrinth mod pages.
+            // Explicit version URLs preserve their exact selected release.
+            if (projectType == "mod") {
+                val pinned = if (segments.size >= 4 && segments[2] == "version")
+                    segments[3] else null
+                return installWithDependencies(context, slug, pinned)
+            }
             val version = if (segments.size >= 4 && segments[2] == "version") {
                 json("https://api.modrinth.com/v2/version/" + encode(segments[3]))
             } else {
@@ -178,10 +189,13 @@ object WebsiteModInstaller {
      * if a Modrinth CDN asset disappears (HTTP 404/410). Keep checksums and
      * Fabric JAR verification; never install an unverified or client-only JAR.
      */
-    fun installWithDependencies(context: Context, slug: String): String {
+    fun installWithDependencies(context: Context, slug: String, pinnedVersionId: String? = null): String {
         if (ServerService.running) throw IOException("Stop Minecraft before installing mods")
         val current = installedVersion(context)
         require(slug.matches(Regex("[A-Za-z0-9_-]{1,120}"))) { "Invalid Modrinth project" }
+        if (pinnedVersionId != null &&
+            !pinnedVersionId.matches(Regex("[A-Za-z0-9_-]{1,120}")))
+            throw IOException("Invalid Modrinth version")
         val completed = mutableSetOf<String>()
         val visiting = mutableSetOf<String>()
         val installed = mutableListOf<String>()
@@ -208,6 +222,8 @@ object WebsiteModInstaller {
                 val title = project.optString("title",projectSlug)
                 var compatibleCount = 0
                 var missingCount = 0
+                var dependencyIssue: String? = null
+                var missingAssetName: String? = null
                 for (i in 0 until minOf(versions.length(), 20)) {
                     InstallProgress.check()
                     val version = versions.getJSONObject(i)
@@ -235,11 +251,18 @@ object WebsiteModInstaller {
                             if (d.optString("dependency_type") != "required") continue
                             val depId = d.optString("project_id")
                             val depVersion = d.optString("version_id").takeIf { it.isNotBlank() }
-                            if (depId.isNotBlank()) installProject(depId,depVersion,depth+1)
-                            else if (depVersion != null) {
-                                val dep = json("https://api.modrinth.com/v2/version/" + encode(depVersion))
-                                installProject(dep.getString("project_id"),depVersion,depth+1)
-                            } else throw IOException("A required dependency has no Modrinth project")
+                            try {
+                                if (depId.isNotBlank()) installProject(depId,depVersion,depth+1)
+                                else if (depVersion != null) {
+                                    val dep = json("https://api.modrinth.com/v2/version/" + encode(depVersion))
+                                    installProject(dep.getString("project_id"),depVersion,depth+1)
+                                } else throw IOException("A required dependency has no Modrinth project")
+                            } catch (e: IOException) {
+                                throw DependencyInstallFailure(
+                                    title + " needs a dependency (" +
+                                    depId.ifBlank { depVersion ?: "unknown" } +
+                                    ") that could not be installed: " + (e.message ?: "network failure"), e)
+                            }
                         }
                         for (jar in jars) {
                             InstallProgress.check()
@@ -252,13 +275,21 @@ object WebsiteModInstaller {
                             } catch (e: IOException) {
                                 if (!isMissingFile(e)) throw e
                                 missingCount++
+                                missingAssetName = jar.optString("filename")
                                 InstallProgress.emit("Unavailable " + title +
                                     " file; trying another compatible release…")
                             }
                         }
                     } catch (e: IOException) {
-                        if (!isMissingFile(e)) throw e
-                        missingCount++
+                        if (e is DependencyInstallFailure) {
+                            dependencyIssue = e.message
+                            InstallProgress.emit("A dependency for " + title +
+                                " failed; trying another compatible release…")
+                        } else {
+                            // Only a failed parent JAR transfer should produce the
+                            // "Modrinth download missing" message, never metadata.
+                            throw e
+                        }
                     }
                     // Explicit version pins cannot silently fall back to other releases.
                     if (preferredVersionId != null) break
@@ -266,15 +297,19 @@ object WebsiteModInstaller {
                 if (compatibleCount == 0)
                     throw IOException("No Fabric " + current + " server release for " + title)
                 if (missingCount > 0)
-                    throw IOException(title +
-                        " has no reachable Modrinth download for Fabric " + current +
-                        " (HTTP 404/410). Try later or import its official Fabric JAR.")
+                    throw IOException(title + " has a Fabric " + current +
+                        " version, but its JAR download returned HTTP 404/410" +
+                        (missingAssetName?.let { " (" + it + ")" } ?: "") +
+                        ". Try the official Fabric JAR from the author's website, then " +
+                        "Mods > IMPORT MOD. Do not use the Bukkit/Paper plugin JAR." +
+                        (dependencyIssue?.let { "\nAnother issue: " + it } ?: ""))
+                if (dependencyIssue != null) throw IOException(dependencyIssue)
                 throw IOException("No installable Fabric " + current + " JAR for " + title)
             } finally {
                 visiting.remove(id)
             }
         }
-        installProject(slug)
+        installProject(slug, pinnedVersionId)
         return "Installed " + installed.joinToString(", ") +
             ". Restart Minecraft to load mods."
     }
