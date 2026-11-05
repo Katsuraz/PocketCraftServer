@@ -226,3 +226,12 @@ The existing Kotlin app includes original carved timber-panel styling and a fore
 4. A device that already has the matching certificate can check for and install the new release. Older, unrelated debug certificates cannot be upgraded in place: **back up all server files before a one-time reinstall**. Do not uninstall until backups have been exported and verified.
 
 **Known limitations:** A successful CI APK proves it compiled, not that in-app installation, Android permissions, Geyser crossplay, Playit tunneling or server runtime were exercised on a real device. Recheck these flows on the actual phone before treating them as verified.
+
+
+## PocketCraft 0.8.7 — Soundscape, Minecraft-inspired lettering and icon
+
+PocketCraft uses an original woodland-workshop app icon, warm dark-oak navigation and an upgraded pixel typography system. The bundled, **OFL-licensed Monocraft** font resembles Minecraft's Mojangles style but is not the official Mojangles font. For the exact Mojangles appearance, use **Settings → Mojangles font → IMPORT MOJANGLES .TTF/.OTF** and select a font file you have permission to use. PocketCraft imports it into its private UI storage without redistributing it or changing server files. If no font is imported, Monocraft is used. **Classic Android** remains available as a readable alternative.
+
+The new soundscape synthesizes short wooden menu clicks and startup, Java-ready, stop and error cues locally in PocketCraft. It does not copy original Minecraft audio assets. **Settings → Sound effects** offers an enable/disable switch, volume slider, and sound previews. The Java-ready sound only plays after the actual server readiness signal, not when a process is merely launched. These sounds use Android's sonification audio category; OS sound settings and focus rules still apply.
+
+The update remains subject to Android signing rules. An official GitHub Release must be published for the in-app update checker to find it; a passing GitHub Actions artifact alone does not create a release. Back up worlds and mods before any reinstall required by a signing mismatch.
