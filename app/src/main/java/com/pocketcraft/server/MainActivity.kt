@@ -64,13 +64,15 @@ class MainActivity : Activity() {
             val state = ServerService.status
             readyText?.text = when {
                 !ServerService.running -> if(state=="ERROR") "Server error • open Console" else "Server offline"
-                ServerService.javaReady && ServerService.bedrockReady -> "Java + Bedrock listener detected"
+                ServerService.javaReady && ServerService.bedrockJoinVerified -> "Java + Bedrock player joined"
+                ServerService.javaReady && ServerService.bedrockReady -> "Java ready • Geyser started (not tested)"
                 ServerService.javaReady -> "Java server ready • Geyser unverified"
                 else -> "Starting Minecraft • not joinable yet"
             }
             heroState?.text = when {
                 !ServerService.running -> "●  OFFLINE"
-                ServerService.javaReady && ServerService.bedrockReady -> "●  JAVA + BEDROCK"
+                ServerService.javaReady && ServerService.bedrockJoinVerified -> "●  BEDROCK JOIN VERIFIED"
+                ServerService.javaReady && ServerService.bedrockReady -> "●  GEYSER STARTED"
                 ServerService.javaReady -> "●  JAVA READY"
                 else -> "●  STARTING"
             }
@@ -194,6 +196,12 @@ class MainActivity : Activity() {
         tab = (savedInstanceState?.getInt("tab") ?: 0).coerceIn(0,3)
         scrollOffsets = savedInstanceState?.getIntArray("tabScroll")?.takeIf { it.size==4 } ?: IntArray(4)
         render()
+        // Show a real installation guide only on a new app-data installation.
+        val prefs = getSharedPreferences("pocketcraft",0)
+        if (savedInstanceState == null && !serverJar.isFile &&
+            !prefs.getBoolean("firstRunGuideSeenV0833",false)) {
+            uiHandler.post { if (!isFinishing && !isDestroyed) showFirstRunGuide() }
+        }
     }
     override fun onSaveInstanceState(outState: Bundle) {
         if (renderedTab in 0..3) scrollOffsets[renderedTab] = currentScroller?.scrollY ?: 0
@@ -460,7 +468,9 @@ class MainActivity : Activity() {
         bedrockTunnelAddress = PlayitManager.bedrockAddress,
         localIp = NetworkInfo.lanAddress(),
         lastError = ServerService.failure.takeIf { it.isNotBlank() },
-        bedrockEvidence = ServerService.bedrockEvidence
+        bedrockEvidence = ServerService.bedrockEvidence,
+        bedrockJoinVerified = ServerService.bedrockJoinVerified,
+        geyserWarnings = geyserNetworkSettings().warnings
     )
 
     /** All diagnostics are local, with no remote probes or secret disclosure. */
@@ -533,7 +543,9 @@ class MainActivity : Activity() {
                     "Java ready: " + state.javaReady,
                     "Geyser mod: " + state.geyserInstalled,
                     "Floodgate mod: " + state.floodgateInstalled,
-                    "Bedrock listening: " + state.bedrockListening,
+                    "Bedrock bridge started: " + state.bedrockListening,
+                    "Bedrock join verified: " + state.bedrockJoinVerified,
+                    "Geyser config warnings: " + state.geyserWarnings.size,
                     "NetherNet signaling reported: " + state.nethernetSignalingReady,
                     "Playit running: " + state.playitActive,
                     "Java public address assigned: " + !state.javaTunnelAddress.isNullOrBlank(),
@@ -596,6 +608,11 @@ class MainActivity : Activity() {
             11f,ui.MUTED))
         body.addView(vitals)
         body.addView(ui.space(this,12))
+        // A new installation must not hide the essential setup steps in Advanced.
+        if (HostingHealth.startBlockers(healthSnapshot()) > 0) {
+            body.addView(setupJourney())
+            body.addView(ui.space(this,12))
+        }
         val crossplaySummary = FrameLayout(this)
         crossplaySummary.addView(crossplaySummaryPanel())
         crossplaySummaryHost = crossplaySummary
@@ -607,6 +624,8 @@ class MainActivity : Activity() {
         val actions = ui.card(this)
         actions.addView(ui.text(this,"MANAGE SERVER",11f,ui.CYAN,true))
         actions.addView(ui.space(this,7))
+        actions.addView(actionRow("◎","First-time setup guide") { showFirstRunGuide() })
+        actions.addView(line())
         actions.addView(actionRow("▧","Worlds & backups") { tab=2; render() })
         actions.addView(line())
         actions.addView(actionRow("♟","Players & permissions") {showPlayerManager()})
@@ -720,8 +739,12 @@ class MainActivity : Activity() {
             if (ServerService.javaReady) ui.GREEN else ui.MUTED))
         indicators.addView(ui.space(this, 7))
         indicators.addView(ui.pill(this,
-            if (ServerService.bedrockReady) "✓ BEDROCK LISTENER" else "○ BEDROCK WAITING",
-            if (ServerService.bedrockReady) ui.GREEN else ui.MUTED))
+            when {
+                ServerService.bedrockJoinVerified -> "✓ BEDROCK JOIN VERIFIED"
+                ServerService.bedrockReady -> "○ GEYSER STARTED"
+                else -> "○ GEYSER WAITING"
+            },
+            if (ServerService.bedrockJoinVerified) ui.GREEN else ui.MUTED))
         card.addView(indicators)
         if (ServerService.nethernetNativeFailure) {
             card.addView(ui.space(this, 10))
@@ -769,7 +792,8 @@ class MainActivity : Activity() {
             javaPublicAddress = PlayitManager.javaAddress,
             bedrockPublicAddress = PlayitManager.bedrockAddress,
             bedrockPort = geyserNetworkSettings().bedrockPort.toString(),
-            bedrockTransport = geyserNetworkSettings().transport
+            bedrockTransport = geyserNetworkSettings().transport,
+            signalingMode = geyserNetworkSettings().signalingMode
         )
         val result = ConnectionJourney.assess(target, state)
         val content = ui.column(this).apply {
@@ -828,6 +852,56 @@ class MainActivity : Activity() {
                 }
             }
             .show()
+    }
+
+    /** Guided, reusable onboarding; displays automatically after clearing app data. */
+    private fun showFirstRunGuide() {
+        getSharedPreferences("pocketcraft",0).edit()
+            .putBoolean("firstRunGuideSeenV0833",true).apply()
+        val body = ui.column(this).apply {
+            setPadding(ui.dp(this@MainActivity,18),ui.dp(this@MainActivity,12),
+                ui.dp(this@MainActivity,18),ui.dp(this@MainActivity,18))
+        }
+        body.addView(ui.text(this,"Set up a server on your phone",19f,ui.WHITE,true))
+        body.addView(ui.space(this,8))
+        body.addView(ui.text(this,
+            "Follow these steps in order. Java runs locally first; Geyser and Playit are optional. All installations require internet for downloads. Keep your phone charged and allow PocketCraft to run while hosting.",
+            12f,ui.MUTED))
+        body.addView(ui.space(this,12))
+        body.addView(ui.text(this,
+            "Clearing PocketCraft app data deletes private worlds, mods, server settings, downloaded runtimes and Playit agent credentials. Export backups from Worlds before clearing data.",
+            12f,ui.RED))
+        lateinit var dialog: AlertDialog
+        fun step(title: String, detail: String, action: () -> Unit) {
+            body.addView(ui.space(this,12))
+            body.addView(ui.text(this,detail,12f,ui.MUTED))
+            body.addView(ui.space(this,5))
+            body.addView(ui.action(this,title,false) { dialog.dismiss(); action() })
+        }
+        step("1  INSTALL FABRIC SERVER",
+            "Choose the Minecraft version you want to host. This installs the launcher, not a working server until Java is installed.") { installFabricPrompt() }
+        step("2  ACCEPT MINECRAFT EULA",
+            "Review the official agreement yourself before continuing.") { offerEula() }
+        step("3  INSTALL ANDROID JAVA RUNTIME",
+            "Download the compatible ARM64 Java runtime. The engine test is available in the setup tools.") { installJavaPrompt() }
+        step("4  CHECK SERVER HEALTH",
+            "Check prerequisites and start Minecraft. The Console shows actual startup errors.") { showHealthCenter() }
+        step("5  ADD BEDROCK CROSSPLAY (OPTIONAL)",
+            "Open Mods to install matching Fabric API, Geyser and Floodgate. First verify Java works over LAN.") {
+            tab=1; render()
+        }
+        step("6  CONFIGURE PLAYIT (OPTIONAL)",
+            "Create Java and Minecraft Bedrock (NetherNet) tunnels, copy Geyser's NXS settings from Playit's Configuration help, then test an external Bedrock join. For local NetherNet joining, review hybrid signaling.") {
+            getSharedPreferences("pocketcraft",0).edit().putBoolean("hostingExpanded",true).apply()
+            tab=0; render()
+        }
+        val scroll = ScrollView(this).apply { addView(body) }
+        dialog = AlertDialog.Builder(this)
+            .setTitle("Welcome to PocketCraft")
+            .setView(scroll)
+            .setNegativeButton("CLOSE",null)
+            .create()
+        dialog.show()
     }
 
     /** Setup checks separate core prerequisites from optional crossplay. */
@@ -975,9 +1049,11 @@ class MainActivity : Activity() {
             it.name.endsWith(".jar", true) }
         card.addView(ui.text(this, "BEDROCK / GEYSER", 11f, ui.CYAN, true))
         card.addView(ui.space(this, 7))
-        val connected = ServerService.running && ServerService.bedrockReady
+        val bridgeStarted = ServerService.running && ServerService.bedrockReady
+        val connected = ServerService.running && ServerService.bedrockJoinVerified
         card.addView(ui.pill(this, when {
-            connected -> "✓  BEDROCK CONNECTION DETECTED"
+            connected -> "✓  BEDROCK JOIN VERIFIED"
+            bridgeStarted -> "○  GEYSER STARTED • JOIN NOT VERIFIED"
             !geyserInstalled -> "○  GEYSER NOT INSTALLED"
             !ServerService.running -> "○  SERVER OFFLINE"
             !ServerService.javaReady -> "○  JAVA SERVER STARTING"
@@ -986,6 +1062,8 @@ class MainActivity : Activity() {
         card.addView(ui.space(this, 7))
         card.addView(ui.text(this, when {
             connected -> "Evidence: " + ServerService.bedrockEvidence
+            bridgeStarted -> "Geyser reported startup/signaling: " + ServerService.bedrockEvidence +
+                ". A successful Bedrock player login has not been observed. Test with a second device."
             geyserInstalled && ServerService.javaReady ->
                 "Try joining from Bedrock. If you are already playing, confirm the connection below; a missing Geyser startup line does not mean the bridge is offline."
             geyserInstalled -> "Start the Java server, then test connecting from Bedrock."
@@ -1038,9 +1116,11 @@ class MainActivity : Activity() {
         card.addView(ui.space(this,11))
         val ready = ServerService.javaReady
         val geyser = ServerService.bedrockReady
+        val localBedrockSupported = geyserSettings.localJoinSupported()
         card.addView(ui.pill(this,
             when {
-                geyser -> "●  JAVA + BEDROCK LISTENERS"
+                geyser && localBedrockSupported -> "●  JAVA + GEYSER STARTED"
+                geyser -> "○  EXTERNAL SIGNALING ONLY"
                 ready -> "●  JAVA LISTENER READY"
                 ServerService.running -> "●  MINECRAFT STARTING"
                 else -> "●  OFFLINE"
@@ -1052,12 +1132,24 @@ class MainActivity : Activity() {
             13f,ui.WHITE,true))
         card.addView(ui.space(this,5))
         card.addView(ui.text(this,
-            "BEDROCK: " + (local?.let { "$it:$bedrockPort" } ?: "Local network required") +
-                if (geyser) " • Geyser connection detected" else " • Startup message not captured",
-            12f,if(geyser)ui.GREEN else ui.MUTED))
+            "BEDROCK: " + if (!localBedrockSupported)
+                "Local-IP joins unavailable with external-only NXS signaling"
+            else (local?.let { "$it:$bedrockPort" } ?: "Local network required") +
+                if (geyser) " • Geyser started, join unverified" else " • Startup not captured",
+            12f,if(geyser && localBedrockSupported)ui.GREEN else ui.MUTED))
+        if (!localBedrockSupported) {
+            card.addView(ui.space(this,7))
+            card.addView(ui.text(this,
+                "For local NetherNet joins, enable built-in signaling alongside Playit's NXS (hybrid mode), then restart. Do not remove your private NXS token.",
+                11f,ui.RED))
+        }
+        geyserSettings.warnings.take(3).forEach { warning ->
+            card.addView(ui.space(this,5))
+            card.addView(ui.text(this,"Geyser: " + warning,11f,ui.RED))
+        }
         if (geyser) {
             card.addView(ui.space(this,5))
-            card.addView(ui.text(this,"Evidence: " + ServerService.bedrockEvidence,11f,ui.GREEN))
+            card.addView(ui.text(this,"Startup evidence: " + ServerService.bedrockEvidence,11f,ui.MUTED))
         } else if (geyserInstalled && ServerService.javaReady) {
             card.addView(ui.space(this,7))
             card.addView(ui.text(this,
