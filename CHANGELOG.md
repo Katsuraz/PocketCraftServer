@@ -1,5 +1,11 @@
 # PocketCraft changelog
 
+## v0.8.31 (versionCode 53) — Experimental Game Lab lifecycle controls
+
+- Keep both Start and Stop buttons interactive after the Mindustry service changes state, even without re-opening the Game Lab screen. Validate current state at the moment of each tap rather than permanently disabling the view on initial render.
+- Preserve all v0.8.30 isolated Mindustry Java-hosting functionality, experimental safety labeling, world separation, Android JRE/Java native bootstrap, and stable Minecraft features.
+
+
 ## v0.8.30 (versionCode 52) — Experimental Multi-Game Hosting: Mindustry
 
 - Add **Experimental Game Lab** to the Homestead Home management tools; Minecraft remains the supported default, entirely separate from experimental game data.

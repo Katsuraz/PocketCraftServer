@@ -212,16 +212,24 @@ class MindustryHostingActivity : Activity() {
         serverCard.addView(installButtons)
         serverCard.addView(ui.space(this,8))
         val actions=ui.row(this)
-        actions.addView(ui.action(this,"▶ START GAME",true,
-            !installing && MindustryHostFiles.installed(this) &&
-            !MindustryHostService.active() && !ServerService.running &&
-            ServerService.status!="STARTING" && ServerService.status!="STOPPING") {
-            if(!RuntimeStore.isInstalled(this))
-                notifyUser("Install the Android Java runtime under Home → Advanced & Setup first")
-            else dispatch(MindustryHostService.ACTION_START)
+        // Keep both controls wired even when the game starts/stops after
+        // initial render; PocketUi.action only attaches listeners if enabled.
+        actions.addView(ui.action(this,"▶ START GAME",true) {
+            when {
+                installing -> notifyUser("Finish the JAR installation first")
+                MindustryHostService.active() -> notifyUser("Mindustry is already running or starting")
+                ServerService.running || ServerService.status in listOf("STARTING","STOPPING") ->
+                    notifyUser("Stop Minecraft completely before hosting Mindustry")
+                !MindustryHostFiles.installed(this) ->
+                    notifyUser("Install the official Mindustry server JAR first")
+                !RuntimeStore.isInstalled(this) ->
+                    notifyUser("Install Android Java under Home → Advanced & Setup first")
+                else -> dispatch(MindustryHostService.ACTION_START)
+            }
         },ui.weight(this))
-        actions.addView(ui.action(this,"■ STOP",false,MindustryHostService.active()){
-            dispatch(MindustryHostService.ACTION_STOP)
+        actions.addView(ui.action(this,"■ STOP") {
+            if(MindustryHostService.active())dispatch(MindustryHostService.ACTION_STOP)
+            else notifyUser("Mindustry is already stopped")
         },LinearLayout.LayoutParams(0,-2,1f))
         serverCard.addView(actions)
         serverCard.addView(ui.space(this,8))
