@@ -172,6 +172,67 @@ object WebsiteModInstaller {
         return installFile(context, link, filenamesafe(path), null, "Website download")
     }
 
+
+    /** Resolve declared required Fabric dependencies before installing a Modrinth project. */
+    fun installWithDependencies(context: Context, slug: String): String {
+        if (ServerService.running) throw IOException("Stop Minecraft before installing mods")
+        val current=installedVersion(context)
+        require(slug.matches(Regex("[A-Za-z0-9_-]{1,120}"))) { "Invalid Modrinth project" }
+        val completed=mutableSetOf<String>()
+        val visiting=mutableSetOf<String>()
+        val installed=mutableListOf<String>()
+        fun installProject(projectSlug:String, preferredVersionId:String?=null, depth:Int=0) {
+            if (depth > 12 || completed.size > 30) throw IOException("Too many nested dependencies")
+            val project=json("https://api.modrinth.com/v2/project/"+encode(projectSlug))
+            val id=project.getString("id")
+            if(id in completed)return
+            if(!visiting.add(id))throw IOException("Dependency cycle: "+project.optString("title"))
+            if(project.optString("server_side")=="unsupported")
+                throw IOException(project.optString("title")+" is client-only")
+            val versions=if (preferredVersionId!=null) {
+                JSONArray().put(json("https://api.modrinth.com/v2/version/"+encode(preferredVersionId)))
+            } else array("https://api.modrinth.com/v2/project/"+encode(id)+
+                "/version?loaders="+encode("[\"fabric\"]")+
+                "&game_versions="+encode("[\""+current+"\"]"))
+            var selected:JSONObject?=null
+            for(i in 0 until versions.length()) {
+                val v=versions.getJSONObject(i)
+                val games=v.optJSONArray("game_versions") ?: JSONArray()
+                val loaders=v.optJSONArray("loaders") ?: JSONArray()
+                if ((0 until games.length()).any { games.optString(it)==current } &&
+                    (0 until loaders.length()).any { loaders.optString(it)=="fabric" }) {
+                    selected=v;break
+                }
+            }
+            val version=selected ?: throw IOException("No Fabric "+current+" release for "+project.optString("title"))
+            val dependencies=version.optJSONArray("dependencies") ?: JSONArray()
+            for(i in 0 until dependencies.length()) {
+                val d=dependencies.getJSONObject(i)
+                if(d.optString("dependency_type")!="required")continue
+                val depId=d.optString("project_id")
+                val depVersion=d.optString("version_id").takeIf {it.isNotBlank()}
+                if(depId.isNotBlank())installProject(depId,depVersion,depth+1)
+                else if(depVersion!=null) {
+                    val dep=json("https://api.modrinth.com/v2/version/"+encode(depVersion))
+                    installProject(dep.getString("project_id"),depVersion,depth+1)
+                } else throw IOException("A required dependency has no downloadable Modrinth project")
+            }
+            val files=version.getJSONArray("files")
+            val jar=(0 until files.length()).map {files.getJSONObject(it)}
+                .filter {it.optString("filename").endsWith(".jar",true)}
+                .sortedByDescending {it.optBoolean("primary")}.firstOrNull()
+                ?: throw IOException("Missing Fabric JAR for "+project.optString("title"))
+            val message=installFile(context,jar.getString("url"),jar.getString("filename"),
+                jar.optJSONObject("hashes")?.optString("sha512"),
+                project.optString("title"))
+            installed.add(project.optString("title"))
+            completed.add(id)
+            visiting.remove(id)
+        }
+        installProject(slug)
+        return "Installed "+installed.joinToString(", ")+". Restart Minecraft to load mods."
+    }
+
     private fun installFile(context: Context, url: String, name: String, sha512: String?, title: String): String {
         val filename = filenamesafe(name)
         val pack = filename.endsWith(".mrpack", true)
