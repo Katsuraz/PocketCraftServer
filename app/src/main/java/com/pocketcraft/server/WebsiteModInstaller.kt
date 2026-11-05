@@ -195,8 +195,8 @@ object WebsiteModInstaller {
     fun previewDependencies(context: Context, slug: String): List<DependencyChoice> {
         val current = installedVersion(context)
         val versions = array("https://api.modrinth.com/v2/project/" + encode(slug) +
-            "/version?loaders=" + encode("[\\\"fabric\\\"]") +
-            "&game_versions=" + encode("[\\\"" + current + "\\"]") +
+            "/version?loaders=" + encode("[\"fabric\"]") +
+            "&game_versions=" + encode("[\"" + current + "\"]") +
             "&include_changelog=false")
         if (versions.length() == 0) throw IOException("No Fabric $current version found")
         val deps = versions.getJSONObject(0).optJSONArray("dependencies") ?: JSONArray()
