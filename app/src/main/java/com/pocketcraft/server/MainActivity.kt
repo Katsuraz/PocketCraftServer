@@ -196,6 +196,7 @@ class MainActivity : Activity() {
         window.navigationBarColor = ui.BG
         window.decorView.systemUiVisibility = 0
         tab = (savedInstanceState?.getInt("tab") ?: 0).coerceIn(0,3)
+        openedWorldFolder = savedInstanceState?.getString("openedWorldFolder")
         scrollOffsets = savedInstanceState?.getIntArray("tabScroll")?.takeIf { it.size==4 } ?: IntArray(4)
         render()
         // Show a real installation guide only on a new app-data installation.
@@ -208,6 +209,7 @@ class MainActivity : Activity() {
     override fun onSaveInstanceState(outState: Bundle) {
         if (renderedTab in 0..3) scrollOffsets[renderedTab] = currentScroller?.scrollY ?: 0
         outState.putInt("tab", tab)
+        outState.putString("openedWorldFolder", openedWorldFolder)
         outState.putIntArray("tabScroll", scrollOffsets)
         super.onSaveInstanceState(outState)
     }
@@ -2060,6 +2062,7 @@ class MainActivity : Activity() {
             card.addView(ui.space(this,11))
             card.addView(ui.action(this,"OPEN WORLD  ›",true) {
                 openedWorldFolder = file.name
+                currentScroller?.scrollTo(0,0)
                 render()
             })
             body.addView(card)
