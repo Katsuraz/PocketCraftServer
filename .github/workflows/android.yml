@@ -280,16 +280,32 @@ jobs:
         run: |
           set -euo pipefail
           APK=app/build/outputs/apk/debug/app-debug.apk
+          SDK_BUILD_TOOLS="$ANDROID_HOME/build-tools/35.0.0"
           test -s "$APK"
           unzip -tq "$APK" >/dev/null
-          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -v 4 "$APK"
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --min-sdk-version 26 "$APK"
-          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging "$APK" > "$RUNNER_TEMP/pocketcraft-apk-badging.txt"
-          grep -Fq "package: name='com.pocketcraft.server'" "$RUNNER_TEMP/pocketcraft-apk-badging.txt"
-          grep -Fq "sdkVersion:'26'" "$RUNNER_TEMP/pocketcraft-apk-badging.txt"
+          "$SDK_BUILD_TOOLS/zipalign" -c -v 4 "$APK"
+          "$SDK_BUILD_TOOLS/apksigner" verify --verbose --min-sdk-version 26 "$APK"
+
+          # aapt (not the AAPT2 resource compiler) is the stable tool for
+          # APK badging output. Capture it before checking, so failed checks
+          # always show the actual manifest metadata in the Actions log.
+          BADGING="$RUNNER_TEMP/pocketcraft-apk-badging.txt"
+          if ! "$SDK_BUILD_TOOLS/aapt" dump badging "$APK" > "$BADGING"; then
+            echo "::error::Unable to inspect APK package metadata with aapt"
+            exit 1
+          fi
+          grep -E '^(package:|sdkVersion:|targetSdkVersion:|native-code:)' "$BADGING" || true
+          if ! grep -Fq "package: name='com.pocketcraft.server'" "$BADGING"; then
+            echo "::error::Unexpected application ID. See APK metadata above."
+            exit 1
+          fi
+          if ! grep -Eq "^sdkVersion:'[0-9]+'" "$BADGING"; then
+            echo "::error::Missing valid Android minSdkVersion. See metadata above."
+            exit 1
+          fi
+
           echo "APK SHA-256: $(sha256sum "$APK" | cut -d ' ' -f1)"
-          grep -E '^(package:|sdkVersion:|targetSdkVersion:|native-code:)' "$RUNNER_TEMP/pocketcraft-apk-badging.txt" || true
-          echo "APK archive, signing, alignment and package metadata validated"
+          echo "APK archive, signature, zip alignment and package metadata validated"
       - uses: actions/upload-artifact@v4
         if: success()
         with:
