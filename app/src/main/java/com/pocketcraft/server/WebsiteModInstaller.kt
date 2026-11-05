@@ -26,6 +26,7 @@ object WebsiteModInstaller {
 
     private fun trusted(host: String): Boolean = host.lowercase() in setOf(
         "api.modrinth.com", "cdn.modrinth.com", "modrinth.com",
+        "maven.fabricmc.net", // Official Fabric API fallback, validated against Modrinth SHA-512
         "github.com", "objects.githubusercontent.com",
         "release-assets.githubusercontent.com", "github-releases.githubusercontent.com"
     )
@@ -340,6 +341,38 @@ object WebsiteModInstaller {
                                 if (!isMissingFile(e)) throw e
                                 missingCount++
                                 missingAssetName = jar.optString("filename")
+                                // Modrinth's Fabric API CDN links can return 404
+                                // even while the exact artifact is published by Fabric.
+                                // Only use the official Fabric Maven artifact when the
+                                // Modrinth-provided SHA-512 can authenticate its bytes.
+                                if (id == "P7dR8mSH") {
+                                    val number = version.optString("version_number")
+                                    val hash = jar.optJSONObject("hashes")?.optString("sha512")
+                                        ?.takeIf { it.matches(Regex("[0-9a-fA-F]{128}")) }
+                                    if (hash != null &&
+                                        number.matches(Regex("[A-Za-z0-9._+-]{1,80}")) &&
+                                        number.endsWith("+" + current) &&
+                                        jar.optString("filename").startsWith("fabric-api-")) {
+                                        val officialJar = "fabric-api-" + number + ".jar"
+                                        val officialUrl = "https://maven.fabricmc.net/" +
+                                            "net/fabricmc/fabric-api/fabric-api/" +
+                                            number + "/" + officialJar
+                                        try {
+                                            InstallProgress.emit("Trying official Fabric Maven for " +
+                                                title + " (checksum verified)")
+                                            installFile(context, officialUrl, officialJar, hash, title)
+                                            installed.add(title + " (official Fabric Maven)")
+                                            completed.add(id)
+                                            return
+                                        } catch (fallbackError: IOException) {
+                                            if (fallbackError.message?.contains("checksum", true) == true)
+                                                throw IOException("Official Fabric Maven checksum " +
+                                                    "did not match Modrinth; download refused", fallbackError)
+                                            InstallProgress.emit("Official Fabric Maven was unavailable; " +
+                                                "trying other releases…")
+                                        }
+                                    }
+                                }
                                 InstallProgress.emit("Unavailable " + title +
                                     " file; trying another compatible release…")
                             }
