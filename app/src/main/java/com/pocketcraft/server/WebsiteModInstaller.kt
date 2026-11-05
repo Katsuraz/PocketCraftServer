@@ -184,12 +184,67 @@ object WebsiteModInstaller {
     }
 
 
+    data class DependencyChoice(
+        val projectId: String, val title: String, val required: Boolean,
+        val installed: Boolean, val versionId: String?
+    )
+
+    /** Preview the exact compatible release's dependencies for a selection dialog. */
+    fun previewDependencies(context: Context, slug: String): List<DependencyChoice> {
+        val current = installedVersion(context)
+        val versions = array("https://api.modrinth.com/v2/project/" + encode(slug) +
+            "/version?loaders=" + encode("[\\\"fabric\\\"]") +
+            "&game_versions=" + encode("[\\\"" + current + "\\"]") +
+            "&include_changelog=false")
+        if (versions.length() == 0) throw IOException("No Fabric $current version found")
+        val deps = versions.getJSONObject(0).optJSONArray("dependencies") ?: JSONArray()
+        val found = mutableListOf<DependencyChoice>()
+        for (i in 0 until deps.length()) {
+            val dep = deps.getJSONObject(i)
+            val type = dep.optString("dependency_type")
+            if (type != "required" && type != "optional") continue
+            val versionId = dep.optString("version_id").takeIf { it.isNotBlank() }
+            val id = dep.optString("project_id").ifBlank {
+                if (versionId == null) return@for
+                json("https://api.modrinth.com/v2/version/" + encode(versionId))
+                    .optString("project_id")
+            }
+            if (id.isBlank()) continue
+            val project = json("https://api.modrinth.com/v2/project/" + encode(id))
+            val modId = project.optString("slug")
+            val installed = installedModIds(context).contains(modId) ||
+                installedModIds(context).contains(id) ||
+                installedModIds(context).contains(project.optString("title").lowercase())
+            found.add(DependencyChoice(id, project.optString("title", id),
+                type == "required", installed, versionId))
+        }
+        return found.distinctBy { it.projectId }
+    }
+
+    private fun installedModIds(context: Context): Set<String> {
+        val mods = File(WorldStore.root(context), "mods")
+        return mods.listFiles().orEmpty().asSequence()
+            .filter { it.isFile && it.name.endsWith(".jar", true) }
+            .mapNotNull { file ->
+                runCatching {
+                    JarFile(file).use { jar ->
+                        val entry = jar.getJarEntry("fabric.mod.json") ?: return@use null
+                        if (entry.size > 1024 * 1024) return@use null
+                        val meta = JSONObject(jar.getInputStream(entry).bufferedReader().use {
+                            it.readText().take(1024 * 1024)
+                        })
+                        meta.optString("id").takeIf { it.isNotBlank() }
+                    }
+                }.getOrNull()
+            }.toSet()
+    }
+
     /**
      * Resolve required Fabric dependencies and try alternate matching releases
      * if a Modrinth CDN asset disappears (HTTP 404/410). Keep checksums and
      * Fabric JAR verification; never install an unverified or client-only JAR.
      */
-    fun installWithDependencies(context: Context, slug: String, pinnedVersionId: String? = null): String {
+    fun installWithDependencies(context: Context, slug: String, pinnedVersionId: String? = null, selectedOptional: Set<String> = emptySet()): String {
         if (ServerService.running) throw IOException("Stop Minecraft before installing mods")
         val current = installedVersion(context)
         require(slug.matches(Regex("[A-Za-z0-9_-]{1,120}"))) { "Invalid Modrinth project" }
@@ -199,6 +254,7 @@ object WebsiteModInstaller {
         val completed = mutableSetOf<String>()
         val visiting = mutableSetOf<String>()
         val installed = mutableListOf<String>()
+        val existingModIds = installedModIds(context)
         fun contains(value: JSONArray, text: String): Boolean =
             (0 until value.length()).any { value.optString(it) == text }
         fun isMissingFile(e: Exception): Boolean =
@@ -209,6 +265,11 @@ object WebsiteModInstaller {
             val project = json("https://api.modrinth.com/v2/project/" + encode(projectSlug))
             val id = project.getString("id")
             if (id in completed) return
+            if (project.optString("slug") in existingModIds || id in existingModIds) {
+                installed.add(project.optString("title", projectSlug) + " (already installed)")
+                completed.add(id)
+                return
+            }
             if (!visiting.add(id)) throw IOException("Dependency cycle: " + project.optString("title"))
             try {
                 if (project.optString("server_side") == "unsupported")
@@ -248,7 +309,9 @@ object WebsiteModInstaller {
                         val deps = version.optJSONArray("dependencies") ?: JSONArray()
                         for (j in 0 until deps.length()) {
                             val d = deps.getJSONObject(j)
-                            if (d.optString("dependency_type") != "required") continue
+                            if (d.optString("dependency_type") != "required" &&
+                                !(d.optString("dependency_type") == "optional" &&
+                                    (d.optString("project_id") in selectedOptional))) continue
                             val depId = d.optString("project_id")
                             val depVersion = d.optString("version_id").takeIf { it.isNotBlank() }
                             try {
