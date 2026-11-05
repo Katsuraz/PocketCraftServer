@@ -180,7 +180,10 @@ class MainActivity : Activity() {
             background = ui.pressable(this@MainActivity,ui.shape(this@MainActivity,ui.SURFACE,14))
             contentDescription = "Server settings"
             isFocusable = true
-            setOnClickListener { startActivity(Intent(this@MainActivity,SettingsActivity::class.java)) }
+            setOnClickListener {
+                PocketSounds.play(this@MainActivity,PocketSounds.Event.CLICK)
+                startActivity(Intent(this@MainActivity,SettingsActivity::class.java))
+            }
         }
         brand.addView(settings,LinearLayout.LayoutParams(ui.dp(this,46),ui.dp(this,46)))
         screen.addView(brand)
@@ -204,7 +207,7 @@ class MainActivity : Activity() {
         screen.addView(scroller,LinearLayout.LayoutParams(-1,0,1f))
 
         val navbar = ui.row(this).apply {
-            background = ui.shape(this@MainActivity,0xFF111B29.toInt(),0,ui.BORDER)
+            background = ui.shape(this@MainActivity,if (ui.homestead()) 0xFF2B201B.toInt() else 0xFF111B29.toInt(),0,ui.BORDER)
             setPadding(ui.dp(this@MainActivity,7),ui.dp(this@MainActivity,8),
                 ui.dp(this@MainActivity,7),ui.dp(this@MainActivity,9))
         }
@@ -216,13 +219,15 @@ class MainActivity : Activity() {
             val item = ui.column(this).apply {
                 gravity = Gravity.CENTER
                 background = ui.pressable(this@MainActivity,
-                    ui.shape(this@MainActivity,if(selected)0xFF233C42.toInt() else 0xFF111B29.toInt(),15))
+                    if(ui.homestead()) ui.shape(this@MainActivity,if(selected)0xFF805632.toInt() else 0xFF2B201B.toInt(),11,if(selected)0xFFE0AE66.toInt() else 0xFF463225.toInt())
+                    else ui.shape(this@MainActivity,if(selected)0xFF233C42.toInt() else 0xFF111B29.toInt(),15))
                 isClickable = true
                 isFocusable = true
                 isSelected = selected
                 contentDescription = names[i] + if(selected) ", selected" else ", tab"
                 setOnClickListener {
                     if(tab != i) {
+                        PocketSounds.play(this@MainActivity,PocketSounds.Event.SELECT)
                         tab = i
                         render()
                     }
@@ -1136,7 +1141,7 @@ class MainActivity : Activity() {
         return card
     }
     private fun line():View = View(this).apply {
-        setBackgroundColor(0xFF26354C.toInt())
+        setBackgroundColor(if (ui.homestead()) 0xFF725037.toInt() else 0xFF26354C.toInt())
         layoutParams=LinearLayout.LayoutParams(-1,ui.dp(this@MainActivity,1)).apply {
             topMargin=ui.dp(this@MainActivity,12);bottomMargin=ui.dp(this@MainActivity,12)
         }
@@ -1157,7 +1162,10 @@ class MainActivity : Activity() {
         row.background=ui.pressable(this,ui.shape(this,ui.PANEL,12))
         row.isClickable=true
         row.isFocusable=true
-        row.setOnClickListener { click() }
+        row.setOnClickListener {
+            PocketSounds.play(this,PocketSounds.Event.SELECT)
+            click()
+        }
         row.contentDescription=title+". "+desc
         row.minimumHeight=ui.dp(this,56)
         return row
@@ -1629,7 +1637,7 @@ class MainActivity : Activity() {
         body.addView(actions)
         body.addView(ui.space(this,13))
         val log=ui.column(this).apply {
-            background=ui.shape(this@MainActivity,0xFF0F1728.toInt(),18,0xFF26354D.toInt())
+            background=ui.shape(this@MainActivity,if(ui.homestead()) 0xFF211A16.toInt() else 0xFF0F1728.toInt(),18,if(ui.homestead()) 0xFF745035.toInt() else 0xFF26354D.toInt())
             ui.run {padding(this@MainActivity,16,16,16,16)}
         }
         log.addView(ui.pill(this,"●  LOCAL LOG",ui.CYAN))
