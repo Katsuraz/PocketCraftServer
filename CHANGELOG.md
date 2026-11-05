@@ -1,5 +1,14 @@
 # PocketCraft changelog
 
+## v0.8.20 (versionCode 42) — Console freeze fix
+
+- Console now opens immediately with cached output and loads its logfile tail on a dedicated background worker rather than blocking the Android UI thread.
+- Replaced focus-scrolling over selectable nested log text with focus-free scroll positioning to avoid Android text selection/scroll focus stalls.
+- Limited live console rendering to a bounded logfile tail; coalesced reads and ignored outdated results after switching tabs.
+- Kept command input, autocomplete, command discovery, copy-log and refresh actions intact.
+- Preserved original Homestead UI, datapack management, Geyser, RAM slider, icon and six existing sound effects.
+
+
 ## v0.8.19 (versionCode 41) — Datapack installer
 
 - Added a Datapacks manager accessible from Worlds and Mods. It shows installed ZIPs for the active world, supports safe removal, and opens the datapack folder in the file browser.

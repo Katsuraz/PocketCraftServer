@@ -40,6 +40,13 @@ class MainActivity : Activity() {
     private var lastConsoleCommandRevision = -1
     private var lastConsoleSize = -1L
     private var lastConsoleModified = -1L
+    private var consoleViewVersion = 0
+    private var consoleCachedTail = "[PocketCraft] Loading console…"
+    private val consoleReadPending = java.util.concurrent.atomic.AtomicBoolean(false)
+    // Log I/O and decoding must never compete with the Android main thread.
+    private val consoleReader = java.util.concurrent.Executors.newSingleThreadExecutor { job ->
+        Thread(job, "PocketCraft-console-reader").apply { isDaemon = true }
+    }
     private val updateStatus = object: Runnable {
         override fun run() {
             val state = ServerService.status
@@ -75,15 +82,7 @@ class MainActivity : Activity() {
                     file.lastModified() != lastConsoleModified) {
                     lastConsoleSize = file.length()
                     lastConsoleModified = file.lastModified()
-                    val scroller = consoleLogScroll
-                    val nearBottom = scroller?.let {
-                        it.scrollY + it.height >=
-                            (it.getChildAt(0)?.height ?: 0) - ui.dp(this@MainActivity, 52)
-                    } ?: true
-                    consoleOutput?.text = getLog()
-                    if (nearBottom && scroller != null) {
-                        scroller.post { scroller.fullScroll(View.FOCUS_DOWN) }
-                    }
+                    requestConsoleLogRefresh()
                 }
                 if (lastConsoleCommandRevision != ServerCommandHints.revision) {
                     lastConsoleCommandRevision = ServerCommandHints.revision
@@ -151,6 +150,51 @@ class MainActivity : Activity() {
     }
     override fun onResume() { super.onResume(); ui.loadTheme(this); PocketUpdates.maybeCheck(this); render(); uiHandler.removeCallbacks(updateStatus); uiHandler.post(updateStatus) }
     override fun onPause() { uiHandler.removeCallbacks(updateStatus); super.onPause() }
+    override fun onDestroy() {
+        uiHandler.removeCallbacks(updateStatus)
+        consoleReader.shutdownNow()
+        super.onDestroy()
+    }
+
+    /** Fetch the logfile tail off the main thread to prevent Console navigation freezes. */
+    private fun requestConsoleLogRefresh() {
+        if (tab != 3 || consoleReader.isShutdown) return
+        val viewer = consoleOutput ?: return
+        if (!consoleReadPending.compareAndSet(false,true)) return
+        val generation = consoleViewVersion
+        try {
+            consoleReader.execute {
+                val tail = getLog()
+                uiHandler.post {
+                    consoleReadPending.set(false)
+                    if (!isFinishing && !isDestroyed && tab == 3) {
+                        if (generation == consoleViewVersion && consoleOutput === viewer) {
+                            val scroller = consoleLogScroll
+                            val nearBottom = scroller?.let {
+                                it.scrollY + it.height >=
+                                    (it.getChildAt(0)?.height ?: 0) - ui.dp(this, 52)
+                            } ?: true
+                            consoleCachedTail = tail
+                            if (viewer.text.toString() != tail) viewer.text = tail
+                            // Scroll position, not keyboard/text-selection focus.
+                            if (nearBottom && scroller != null) {
+                                scroller.post {
+                                    if (consoleLogScroll === scroller && consoleOutput === viewer)
+                                        scroller.scrollTo(0, ((scroller.getChildAt(0)?.height ?: 0) -
+                                            scroller.height).coerceAtLeast(0))
+                                }
+                            }
+                        } else {
+                            // A tab re-rendered while the previous read was in flight.
+                            requestConsoleLogRefresh()
+                        }
+                    }
+                }
+            }
+        } catch (_: java.util.concurrent.RejectedExecutionException) {
+            consoleReadPending.set(false)
+        }
+    }
 
     private fun h(label: String, sub: String? = null): LinearLayout {
         val item = ui.column(this)
@@ -162,6 +206,12 @@ class MainActivity : Activity() {
         return item
     }
     private fun render() {
+        if (tab != 3) {
+            consoleOutput = null
+            consoleLogScroll = null
+            consoleCommandEntry = null
+            consoleSuggestionHost = null
+        }
         if (renderedTab in 0..3) {
             scrollOffsets[renderedTab] = currentScroller?.scrollY ?: scrollOffsets[renderedTab]
         }
@@ -265,6 +315,12 @@ class MainActivity : Activity() {
         screen.addView(navbar)
         ui.styleFormInputs(screen)
         setContentView(screen)
+        if (tab == 3) {
+            // Show cached content immediately while the fresh log is read asynchronously.
+            lastConsoleSize = -1L
+            lastConsoleModified = -1L
+            requestConsoleLogRefresh()
+        }
         currentScroller = scroller
         renderedTab = tab
         val restoreY = scrollOffsets[tab]
@@ -1963,6 +2019,7 @@ class MainActivity : Activity() {
     }
 
     private fun consolePage(body:LinearLayout) {
+        consoleViewVersion++
         body.addView(h("Server console","Live output • Minecraft and Fabric mod commands"))
         body.addView(ui.space(this,14))
         val actions = ui.row(this)
@@ -1996,9 +2053,11 @@ class MainActivity : Activity() {
         }
         log.addView(ui.pill(this,"●  LOCAL LOG",ui.CYAN))
         log.addView(ui.space(this,12))
-        val logText = ui.text(this,getLog(),12f,0xFFC0D7D7.toInt()).apply {
+        val logText = ui.text(this,consoleCachedTail,12f,0xFFC0D7D7.toInt()).apply {
             typeface = android.graphics.Typeface.MONOSPACE
-            setTextIsSelectable(true)
+            // Selectable TextView inside nested ScrollViews may steal focus and
+            // stall layout on some Android skins. "Copy log" remains available.
+            setTextIsSelectable(false)
             consoleOutput = this
         }
         val logScroll = ScrollView(this).apply {
@@ -2007,7 +2066,7 @@ class MainActivity : Activity() {
         }
         consoleLogScroll = logScroll
         log.addView(logScroll, LinearLayout.LayoutParams(-1,ui.dp(this,320)))
-        logScroll.post { logScroll.fullScroll(View.FOCUS_DOWN) }
+        // The async reader scrolls via scrollTo() without requesting text focus.
         body.addView(log)
         body.addView(ui.space(this,15))
         val entry=android.widget.EditText(this).apply {
@@ -2057,9 +2116,10 @@ class MainActivity : Activity() {
         val file = File(base,"console.log")
         if(!file.isFile) return "[PocketCraft] No server output yet.\nStart the server to see live status here."
         return try {
-            // Read the last 16KB rather than loading a multi-megabyte logfile on UI.
+            // A bounded tail prevents unbounded text layout and memory churn.
+            // This function is used by the console's background worker.
             java.io.RandomAccessFile(file,"r").use { reader ->
-                val count = minOf(reader.length(), 16_384L).toInt()
+                val count = minOf(reader.length(), 12_288L).toInt()
                 reader.seek(reader.length()-count)
                 val buffer = ByteArray(count)
                 reader.readFully(buffer)
