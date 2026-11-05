@@ -14,7 +14,8 @@ import java.util.Properties
 internal object WorldHostingProfiles {
     val keys = listOf(
         "motd", "difficulty", "gamemode", "pvp",
-        "view-distance", "simulation-distance", "spawn-protection"
+        "view-distance", "simulation-distance", "spawn-protection",
+        "allow-flight", "hardcore", "generate-structures", "level-seed"
     )
     private val defaults = mapOf(
         "motd" to "PocketCraft Server",
@@ -23,7 +24,11 @@ internal object WorldHostingProfiles {
         "pvp" to "true",
         "view-distance" to "5",
         "simulation-distance" to "4",
-        "spawn-protection" to "0"
+        "spawn-protection" to "0",
+        "allow-flight" to "false",
+        "hardcore" to "false",
+        "generate-structures" to "true",
+        "level-seed" to ""
     )
     private val validWorld = Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,47}")
 
@@ -73,6 +78,13 @@ internal object WorldHostingProfiles {
             return "Choose a supported game mode"
         if (props.getProperty("pvp") !in setOf("true","false"))
             return "PvP must be enabled or disabled"
+        for (key in listOf("allow-flight","hardcore","generate-structures")) {
+            if (props.getProperty(key) !in setOf("true","false"))
+                return "$key must be enabled or disabled"
+        }
+        val seed = props.getProperty("level-seed","")
+        if (seed.length > 120 || seed.any { it == '\\n' || it == '\\r' })
+            return "Seed must be at most 120 characters and on one line"
         for ((key,range) in mapOf("view-distance" to 2..32,
             "simulation-distance" to 2..32,"spawn-protection" to 0..256)) {
             val value = props.getProperty(key)?.toIntOrNull()
