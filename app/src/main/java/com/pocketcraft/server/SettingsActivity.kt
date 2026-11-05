@@ -61,7 +61,7 @@ class SettingsActivity : Activity() {
             setText(props.getProperty(key, default))
             if (numeric) inputType = InputType.TYPE_CLASS_NUMBER
             if (key=="level-name") { isEnabled = false; alpha = 0.72f }
-            background = ui.shape(this@SettingsActivity, ui.SURFACE, 12, 0xFF304862.toInt())
+            background = ui.shape(this@SettingsActivity, ui.SURFACE, 12, ui.BORDER)
             setPadding(ui.dp(this@SettingsActivity,14),ui.dp(this@SettingsActivity,13),
                 ui.dp(this@SettingsActivity,14),ui.dp(this@SettingsActivity,13))
         }
@@ -116,6 +116,7 @@ class SettingsActivity : Activity() {
 
     override fun onCreate(savedInstanceState:Bundle?) {
         super.onCreate(savedInstanceState)
+        ui.loadTheme(this)
         window.statusBarColor=ui.BG
         window.navigationBarColor=ui.BG
         if (file.exists()) file.inputStream().use { props.load(it) }
@@ -148,8 +149,31 @@ class SettingsActivity : Activity() {
         hero.addView(ui.space(this,13))
         hero.addView(ui.text(this,"Make this world yours.",23f,ui.WHITE,true))
         hero.addView(ui.space(this,7))
-        hero.addView(ui.text(this,"Custom multiplayer options, connection details and privacy controls. Changes apply after a server restart.",12f,0xFFD7E9F8.toInt()))
+        hero.addView(ui.text(this,"Custom multiplayer options, connection details and privacy controls. Changes apply after a server restart.",12f,ui.WHITE))
         body.addView(hero)
+        section(body,"Appearance","Choose your PocketCraft theme") { card ->
+            card.addView(ui.text(this,"Homestead",16f,ui.WHITE,true))
+            card.addView(ui.space(this,6))
+            card.addView(ui.text(this,"Woodland colors, warm parchment and mossy buttons. Inspired by cozy Minecraft GUIs, with original artwork.",12f,ui.MUTED))
+            card.addView(ui.space(this,13))
+            card.addView(ui.action(this,
+                if(ui.homestead()) "✓ HOMESTEAD • ACTIVE" else "🌿  USE HOMESTEAD",true) {
+                if(!ui.homestead()) {
+                    ui.setTheme(this,"homestead")
+                    recreate()
+                }
+            })
+            card.addView(ui.space(this,9))
+            card.addView(ui.action(this,
+                if(!ui.homestead()) "✓ MIDNIGHT • ACTIVE" else "USE MIDNIGHT") {
+                if(ui.homestead()) {
+                    ui.setTheme(this,"classic")
+                    recreate()
+                }
+            })
+            card.addView(ui.space(this,8))
+            card.addView(ui.text(this,"Theme changes apply immediately and never modify Minecraft server files.",11f,ui.MUTED))
+        }
         if(ServerService.running) {
             body.addView(ui.space(this,12))
             val notice=ui.card(this)
@@ -172,7 +196,7 @@ class SettingsActivity : Activity() {
                 setTextColor(ui.WHITE);setHintTextColor(ui.MUTED)
                 hint="Example: myworld.example.net"
                 setText(getSharedPreferences("pocketcraft",0).getString("shareAddress","") ?: "")
-                background=ui.shape(this@SettingsActivity,ui.SURFACE,12,0xFF304862.toInt())
+                background=ui.shape(this@SettingsActivity,ui.SURFACE,12,ui.BORDER)
                 setPadding(ui.dp(this@SettingsActivity,14),ui.dp(this@SettingsActivity,13),
                     ui.dp(this@SettingsActivity,14),ui.dp(this@SettingsActivity,13))
             }
@@ -224,7 +248,7 @@ class SettingsActivity : Activity() {
                 setSingleLine(true);inputType=InputType.TYPE_CLASS_NUMBER
                 setTextColor(ui.WHITE);textSize=15f
                 setText(getSharedPreferences("pocketcraft",0).getInt("heapMB",2048).toString())
-                background=ui.shape(this@SettingsActivity,ui.SURFACE,12,0xFF304862.toInt())
+                background=ui.shape(this@SettingsActivity,ui.SURFACE,12,ui.BORDER)
                 setPadding(ui.dp(this@SettingsActivity,14),ui.dp(this@SettingsActivity,13),
                     ui.dp(this@SettingsActivity,14),ui.dp(this@SettingsActivity,13))
             }
