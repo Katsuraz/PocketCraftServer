@@ -2,125 +2,143 @@ package com.pocketcraft.server
 
 import android.content.Context
 import android.media.AudioAttributes
-import android.media.AudioFormat
-import android.media.AudioTrack
+import android.media.AudioManager
+import android.media.SoundPool
 import android.os.SystemClock
-import java.util.Random
-import java.util.concurrent.Executors
+import java.util.EnumMap
+import java.util.HashMap
+import java.util.HashSet
 import java.util.concurrent.atomic.AtomicLong
-import kotlin.math.PI
-import kotlin.math.exp
-import kotlin.math.sin
 
 /**
- * Tiny original synthesized UI sounds. No copyrighted Minecraft audio files.
- * Audio is generated and played off the main thread at the system UI-effects volume.
+ * Original short WAV effects preloaded in a SoundPool, routed through MEDIA volume.
+ *
+ * The old AudioTrack implementation used USAGE_ASSISTANCE_SONIFICATION, which
+ * can be inaudible on phones where touch sounds are disabled. This version is
+ * low-latency and never blocks server startup or UI event handling.
  */
 object PocketSounds {
     enum class Event { CLICK, SELECT, SERVER_START, SERVER_READY, SERVER_STOP, ERROR }
-    private const val RATE = 22050
-    private val audioThread = Executors.newSingleThreadExecutor { task ->
-        Thread(task,"PocketCraft UI sound").apply { isDaemon = true }
-    }
-    private val lastClick = AtomicLong(0L)
+
+    private val guard = Any()
+    private val lastClickAt = AtomicLong(0)
+    private val samples = EnumMap<Event,Int>(Event::class.java)
+    private val ready = HashSet<Int>()
+    private val awaiting = HashMap<Int,Pair<Float,Long>>()
+    private var pool: SoundPool? = null
+    @Volatile private var lastError = ""
+
     fun isEnabled(context: Context): Boolean =
         context.getSharedPreferences("pocketcraft",0).getBoolean("soundEffects",true)
+
     fun setEnabled(context: Context, enabled: Boolean) {
-        context.getSharedPreferences("pocketcraft",0).edit()
-            .putBoolean("soundEffects",enabled).apply()
-    }
-    fun volume(context: Context): Int =
-        context.getSharedPreferences("pocketcraft",0).getInt("soundVolume",45).coerceIn(0,100)
-    fun setVolume(context: Context, level: Int) {
-        context.getSharedPreferences("pocketcraft",0).edit()
-            .putInt("soundVolume",level.coerceIn(0,100)).apply()
+        context.getSharedPreferences("pocketcraft",0)
+            .edit().putBoolean("soundEffects",enabled).apply()
     }
 
+    fun volume(context: Context): Int =
+        context.getSharedPreferences("pocketcraft",0)
+            .getInt("soundVolume",75).coerceIn(0,100)
+
+    fun setVolume(context: Context, level: Int) {
+        context.getSharedPreferences("pocketcraft",0)
+            .edit().putInt("soundVolume",level.coerceIn(0,100)).apply()
+    }
+
+    /** Warm up sounds asynchronously on application launch. */
+    fun prepare(context: Context) {
+        synchronized(guard) {
+            if (pool != null) return
+            try {
+                val attributes = AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build()
+                val player = SoundPool.Builder()
+                    .setMaxStreams(5)
+                    .setAudioAttributes(attributes)
+                    .build()
+                pool = player
+                player.setOnLoadCompleteListener { soundPool, id, status ->
+                    synchronized(guard) {
+                        if (status == 0) {
+                            ready.add(id)
+                            val waiting = awaiting.remove(id)
+                            if (waiting != null &&
+                                SystemClock.elapsedRealtime() - waiting.second < 1500) {
+                                val stream = soundPool.play(id,waiting.first,waiting.first,1,0,1f)
+                                if (stream == 0) lastError = "SoundPool rejected queued playback"
+                            }
+                        } else {
+                            lastError = "Android could not load sound resource (code $status)"
+                            awaiting.remove(id)
+                        }
+                    }
+                }
+                val resources = mapOf(
+                    Event.CLICK to R.raw.pc_click,
+                    Event.SELECT to R.raw.pc_select,
+                    Event.SERVER_START to R.raw.pc_server_start,
+                    Event.SERVER_READY to R.raw.pc_server_ready,
+                    Event.SERVER_STOP to R.raw.pc_server_stop,
+                    Event.ERROR to R.raw.pc_error
+                )
+                resources.forEach { (event,resId) ->
+                    val id = player.load(context.applicationContext,resId,1)
+                    if (id > 0) samples[event] = id
+                    else lastError = "Android refused to load $event sound"
+                }
+            } catch (e: Exception) {
+                lastError = "Sound initialization: " + e.javaClass.simpleName +
+                    ": " + e.message.orEmpty()
+                pool?.release()
+                pool = null
+                samples.clear()
+                ready.clear()
+                awaiting.clear()
+            }
+        }
+    }
+
+    /** Disabled and zero-volume settings take effect immediately. */
     fun play(context: Context, event: Event) {
         if (!isEnabled(context)) return
-        val level = volume(context)
-        if (level == 0) return
-        if (event == Event.CLICK || event == Event.SELECT) {
+        val percent = volume(context)
+        if (percent == 0) return
+        if (event == Event.CLICK) {
             val now = SystemClock.elapsedRealtime()
-            if (now-lastClick.get() < 45L) return
-            lastClick.set(now)
+            if (now - lastClickAt.get() < 35L) return
+            lastClickAt.set(now)
         }
-        audioThread.execute {
-            try { playOriginalSample(event,level) }
-            catch (_: Exception) { /* never interrupt server controls or clicks */ }
+        prepare(context)
+        val level = (percent/100f).coerceIn(0f,1f)
+        synchronized(guard) {
+            val id = samples[event] ?: return
+            val player = pool ?: return
+            if (!ready.contains(id)) {
+                awaiting[id] = level to SystemClock.elapsedRealtime()
+                return
+            }
+            try {
+                val stream = player.play(id,level,level,1,0,1f)
+                if (stream == 0) lastError = "SoundPool rejected $event playback"
+            } catch (e: Exception) {
+                lastError = "Playback: " + e.javaClass.simpleName
+            }
         }
     }
 
-    private fun playOriginalSample(event: Event, volume: Int) {
-        val length = when(event) {
-            Event.CLICK -> 65
-            Event.SELECT -> 96
-            Event.SERVER_START -> 175
-            Event.SERVER_READY -> 450
-            Event.SERVER_STOP -> 200
-            Event.ERROR -> 260
+    /** Visible, non-secret diagnostics to help when the phone is muted. */
+    fun diagnostic(context: Context): String {
+        val systemVolume = runCatching {
+            val audio = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            "Media volume " + audio.getStreamVolume(AudioManager.STREAM_MUSIC) +
+                "/" + audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        }.getOrDefault("Media volume unknown")
+        val soundInfo = synchronized(guard) {
+            "Effects loaded " + ready.size + "/" + samples.size +
+                if (lastError.isNotBlank()) " • " + lastError else ""
         }
-        val count = RATE * length / 1000
-        val data = ShortArray(count)
-        val random = Random(9900L + event.ordinal)
-        var phase = 0.0
-        val gain = volume / 100.0 * 0.29
-        for (i in 0 until count) {
-            val t = i.toDouble()/RATE
-            val progress = i.toDouble()/count
-            val envelope = when(event) {
-                Event.CLICK -> exp(-37.0*t)
-                Event.SELECT -> exp(-25.0*t)
-                Event.SERVER_START -> exp(-12.0*t)
-                Event.SERVER_READY -> (sin(PI*progress).coerceAtLeast(0.0)*0.85 +
-                    (1.0-progress)*0.15)
-                Event.SERVER_STOP -> exp(-13.0*t)
-                Event.ERROR -> exp(-12.0*t)
-            }
-            val pitch = when(event) {
-                Event.CLICK -> 920.0-580.0*progress
-                Event.SELECT -> 630.0-200.0*progress
-                Event.SERVER_START -> 390.0+330.0*progress
-                Event.SERVER_READY -> when {
-                    progress < .28 -> 523.25
-                    progress < .55 -> 659.25
-                    else -> 783.99
-                }
-                Event.SERVER_STOP -> 490.0-280.0*progress
-                Event.ERROR -> 260.0-115.0*progress
-            }
-            phase += 2.0*PI*pitch/RATE
-            // Wood-like attack: a few harmonics plus gently damped percussive noise.
-            val noise = (random.nextDouble()*2.0-1.0) * exp(-65.0*t) *
-                if(event==Event.SERVER_READY) 0.06 else 0.34
-            val fundamental = sin(phase)*0.75 + sin(phase*1.99)*0.18 +
-                sin(phase*3.02)*0.07
-            val v = ((fundamental+noise)*envelope*gain)
-                .coerceIn(-0.95,0.95)
-            data[i] = (v*Short.MAX_VALUE).toInt().toShort()
-        }
-        val bytes = ByteArray(count*2)
-        for(i in data.indices) {
-            val sample = data[i].toInt()
-            bytes[2*i] = (sample and 0xff).toByte()
-            bytes[2*i+1] = ((sample shr 8) and 0xff).toByte()
-        }
-        val track = AudioTrack.Builder()
-            .setAudioAttributes(AudioAttributes.Builder()
-                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION).build())
-            .setAudioFormat(AudioFormat.Builder()
-                .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                .setSampleRate(RATE)
-                .setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build())
-            .setTransferMode(AudioTrack.MODE_STATIC)
-            .setBufferSizeInBytes(bytes.size).build()
-        try {
-            if(track.state == AudioTrack.STATE_INITIALIZED) {
-                track.write(bytes,0,bytes.size)
-                track.play()
-                Thread.sleep(length.toLong()+30)
-            }
-        } finally { track.release() }
+        return systemVolume + " • " + soundInfo
     }
 }
