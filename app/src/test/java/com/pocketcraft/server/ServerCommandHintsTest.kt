@@ -27,6 +27,22 @@ class ServerCommandHintsTest {
         assertFalse(ServerCommandHints.suggestions("secret").isNotEmpty())
     }
 
+    @Test fun vanillaHelpPagesAreDetectedAndReset() {
+        ServerCommandHints.reset()
+        ServerCommandHints.observe("[16:00:00] [Server thread/INFO]: -------- Help: Index (1/7) --------")
+        assertEquals(7, ServerCommandHints.helpPageCount)
+        ServerCommandHints.observe("[16:00:01] [Server thread/INFO]: /chunky start")
+        assertTrue(ServerCommandHints.registered().contains("chunky"))
+        ServerCommandHints.reset()
+        assertEquals(1, ServerCommandHints.helpPageCount)
+    }
+
+    @Test fun textualHelpPaginationIsBounded() {
+        ServerCommandHints.reset()
+        ServerCommandHints.observe("[Server thread/INFO]: Showing help page 1 of 300")
+        assertEquals(24, ServerCommandHints.helpPageCount)
+    }
+
     @Test fun resetClearsPreviousWorldModCommands() {
         ServerCommandHints.reset()
         ServerCommandHints.observe("[Server thread/INFO]: Usage: /some_mod:teleport home")
