@@ -1133,12 +1133,12 @@ class MainActivity : Activity() {
             "JAVA: " + (local?.let { "$it:$port" } ?: "Connect to Wi-Fi / hotspot"),
             13f,ui.WHITE,true))
         card.addView(ui.space(this,5))
-        card.addView(ui.text(this,
-            "BEDROCK: " + if (!localBedrockSupported)
-                "Local-IP joins unavailable with external-only NXS signaling"
-            else (local?.let { "$it:$bedrockPort" } ?: "Local network required") +
-                if (geyser) " • Geyser started, join unverified" else " • Startup not captured",
-            12f,if(geyser && localBedrockSupported)ui.GREEN else ui.MUTED))
+        val bedrockLanText = if (!localBedrockSupported)
+            "Local-IP joins unavailable with external-only NXS signaling"
+        else (local?.let { "$it:$bedrockPort" } ?: "Local network required") +
+            if (geyser) " • Geyser started, join unverified" else " • Startup not captured"
+        card.addView(ui.text(this,"BEDROCK: $bedrockLanText",12f,
+            if(geyser && localBedrockSupported)ui.GREEN else ui.MUTED))
         if (!localBedrockSupported) {
             card.addView(ui.space(this,7))
             card.addView(ui.text(this,
