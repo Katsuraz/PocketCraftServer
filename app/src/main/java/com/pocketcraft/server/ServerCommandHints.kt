@@ -20,7 +20,9 @@ object ServerCommandHints {
 
     private val colorCodes = Regex("\u00a7[0-9a-fk-or]", RegexOption.IGNORE_CASE)
     private val ansiCodes = Regex("\u001b\\[[0-9;]*m")
-    private val helpPagination = Regex("""(?i)(?:showing\s+)?help\s+page\s+(\d+)\s*(?:of|/)\s*(\d+)""")
+    private val helpPagination = Regex(
+        """(?i)(?:help\s+page\s+(\d+)\s*(?:of|/)\s*(\d+)|help:\s*(?:index|page)\s*\((\d+)\s*/\s*(\d+)\))"""
+    )
     private val commandUsage = Regex(
         """(?:^|[\s(:])\/([A-Za-z0-9_:.+-]{1,80})((?:\s+[A-Za-z0-9_:.+-]{1,70}){0,4})"""
     )
@@ -48,7 +50,8 @@ object ServerCommandHints {
         val clean = rawLine.replace(ansiCodes, "").replace(colorCodes, "")
         val body = clean.substringAfter("]: ", clean).trim()
         helpPagination.find(body)?.let { match ->
-            val pages = match.groupValues[2].toIntOrNull()?.coerceIn(1, 32) ?: 1
+            val pages = (match.groupValues[2].ifBlank { match.groupValues[4] })
+                .toIntOrNull()?.coerceIn(1, 24) ?: 1
             synchronized(lock) {
                 if (pages > helpPageCount) { helpPageCount = pages; revision++ }
             }
