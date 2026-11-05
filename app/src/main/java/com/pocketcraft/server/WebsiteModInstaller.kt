@@ -173,64 +173,110 @@ object WebsiteModInstaller {
     }
 
 
-    /** Resolve declared required Fabric dependencies before installing a Modrinth project. */
+    /**
+     * Resolve required Fabric dependencies and try alternate matching releases
+     * if a Modrinth CDN asset disappears (HTTP 404/410). Keep checksums and
+     * Fabric JAR verification; never install an unverified or client-only JAR.
+     */
     fun installWithDependencies(context: Context, slug: String): String {
         if (ServerService.running) throw IOException("Stop Minecraft before installing mods")
-        val current=installedVersion(context)
+        val current = installedVersion(context)
         require(slug.matches(Regex("[A-Za-z0-9_-]{1,120}"))) { "Invalid Modrinth project" }
-        val completed=mutableSetOf<String>()
-        val visiting=mutableSetOf<String>()
-        val installed=mutableListOf<String>()
-        fun installProject(projectSlug:String, preferredVersionId:String?=null, depth:Int=0) {
+        val completed = mutableSetOf<String>()
+        val visiting = mutableSetOf<String>()
+        val installed = mutableListOf<String>()
+        fun contains(value: JSONArray, text: String): Boolean =
+            (0 until value.length()).any { value.optString(it) == text }
+        fun isMissingFile(e: Exception): Boolean =
+            e is IOException && (e.message?.contains("HTTP 404") == true ||
+                e.message?.contains("HTTP 410") == true)
+        fun installProject(projectSlug: String, preferredVersionId: String? = null, depth: Int = 0) {
             if (depth > 12 || completed.size > 30) throw IOException("Too many nested dependencies")
-            val project=json("https://api.modrinth.com/v2/project/"+encode(projectSlug))
-            val id=project.getString("id")
-            if(id in completed)return
-            if(!visiting.add(id))throw IOException("Dependency cycle: "+project.optString("title"))
-            if(project.optString("server_side")=="unsupported")
-                throw IOException(project.optString("title")+" is client-only")
-            val versions=if (preferredVersionId!=null) {
-                JSONArray().put(json("https://api.modrinth.com/v2/version/"+encode(preferredVersionId)))
-            } else array("https://api.modrinth.com/v2/project/"+encode(id)+
-                "/version?loaders="+encode("[\"fabric\"]")+
-                "&game_versions="+encode("[\""+current+"\"]"))
-            var selected:JSONObject?=null
-            for(i in 0 until versions.length()) {
-                val v=versions.getJSONObject(i)
-                val games=v.optJSONArray("game_versions") ?: JSONArray()
-                val loaders=v.optJSONArray("loaders") ?: JSONArray()
-                if ((0 until games.length()).any { games.optString(it)==current } &&
-                    (0 until loaders.length()).any { loaders.optString(it)=="fabric" }) {
-                    selected=v;break
+            val project = json("https://api.modrinth.com/v2/project/" + encode(projectSlug))
+            val id = project.getString("id")
+            if (id in completed) return
+            if (!visiting.add(id)) throw IOException("Dependency cycle: " + project.optString("title"))
+            try {
+                if (project.optString("server_side") == "unsupported")
+                    throw IOException(project.optString("title") + " is client-only")
+                val versions = if (preferredVersionId != null) {
+                    JSONArray().put(json("https://api.modrinth.com/v2/version/" + encode(preferredVersionId)))
+                } else array("https://api.modrinth.com/v2/project/" + encode(id) +
+                    "/version?loaders=" + encode("[\"fabric\"]") +
+                    "&game_versions=" + encode("[\"" + current + "\"]") +
+                    "&include_changelog=false")
+                val title = project.optString("title",projectSlug)
+                var compatibleCount = 0
+                var missingCount = 0
+                for (i in 0 until minOf(versions.length(), 20)) {
+                    InstallProgress.check()
+                    val version = versions.getJSONObject(i)
+                    if (version.optString("project_id") != id) continue
+                    val games = version.optJSONArray("game_versions") ?: JSONArray()
+                    val loaders = version.optJSONArray("loaders") ?: JSONArray()
+                    if (!contains(games,current) || !contains(loaders,"fabric")) continue
+                    if (version.optString("environment") in setOf("client_only","singleplayer_only")) continue
+                    val files = version.optJSONArray("files") ?: JSONArray()
+                    val jars = (0 until files.length()).map { files.getJSONObject(it) }
+                        .filter {
+                            val filename = it.optString("filename")
+                            filename.endsWith(".jar",true) &&
+                                it.optString("file_type") !in setOf("sources-jar","dev-jar","javadoc-jar")
+                        }
+                        .sortedWith(compareByDescending<JSONObject> {
+                            it.optString("filename").contains("fabric",true)
+                        }.thenByDescending { it.optBoolean("primary") })
+                    if (jars.isEmpty()) continue
+                    compatibleCount++
+                    try {
+                        val deps = version.optJSONArray("dependencies") ?: JSONArray()
+                        for (j in 0 until deps.length()) {
+                            val d = deps.getJSONObject(j)
+                            if (d.optString("dependency_type") != "required") continue
+                            val depId = d.optString("project_id")
+                            val depVersion = d.optString("version_id").takeIf { it.isNotBlank() }
+                            if (depId.isNotBlank()) installProject(depId,depVersion,depth+1)
+                            else if (depVersion != null) {
+                                val dep = json("https://api.modrinth.com/v2/version/" + encode(depVersion))
+                                installProject(dep.getString("project_id"),depVersion,depth+1)
+                            } else throw IOException("A required dependency has no Modrinth project")
+                        }
+                        for (jar in jars) {
+                            InstallProgress.check()
+                            try {
+                                installFile(context,jar.getString("url"),jar.getString("filename"),
+                                    jar.optJSONObject("hashes")?.optString("sha512"),title)
+                                installed.add(title)
+                                completed.add(id)
+                                return
+                            } catch (e: IOException) {
+                                if (!isMissingFile(e)) throw e
+                                missingCount++
+                                InstallProgress.emit("Unavailable " + title +
+                                    " file; trying another compatible release…")
+                            }
+                        }
+                    } catch (e: IOException) {
+                        if (!isMissingFile(e)) throw e
+                        missingCount++
+                    }
+                    // Explicit version pins cannot silently fall back to other releases.
+                    if (preferredVersionId != null) break
                 }
+                if (compatibleCount == 0)
+                    throw IOException("No Fabric " + current + " server release for " + title)
+                if (missingCount > 0)
+                    throw IOException(title +
+                        " has no reachable Modrinth download for Fabric " + current +
+                        " (HTTP 404/410). Try later or import its official Fabric JAR.")
+                throw IOException("No installable Fabric " + current + " JAR for " + title)
+            } finally {
+                visiting.remove(id)
             }
-            val version=selected ?: throw IOException("No Fabric "+current+" release for "+project.optString("title"))
-            val dependencies=version.optJSONArray("dependencies") ?: JSONArray()
-            for(i in 0 until dependencies.length()) {
-                val d=dependencies.getJSONObject(i)
-                if(d.optString("dependency_type")!="required")continue
-                val depId=d.optString("project_id")
-                val depVersion=d.optString("version_id").takeIf {it.isNotBlank()}
-                if(depId.isNotBlank())installProject(depId,depVersion,depth+1)
-                else if(depVersion!=null) {
-                    val dep=json("https://api.modrinth.com/v2/version/"+encode(depVersion))
-                    installProject(dep.getString("project_id"),depVersion,depth+1)
-                } else throw IOException("A required dependency has no downloadable Modrinth project")
-            }
-            val files=version.getJSONArray("files")
-            val jar=(0 until files.length()).map {files.getJSONObject(it)}
-                .filter {it.optString("filename").endsWith(".jar",true)}
-                .sortedByDescending {it.optBoolean("primary")}.firstOrNull()
-                ?: throw IOException("Missing Fabric JAR for "+project.optString("title"))
-            val message=installFile(context,jar.getString("url"),jar.getString("filename"),
-                jar.optJSONObject("hashes")?.optString("sha512"),
-                project.optString("title"))
-            installed.add(project.optString("title"))
-            completed.add(id)
-            visiting.remove(id)
         }
         installProject(slug)
-        return "Installed "+installed.joinToString(", ")+". Restart Minecraft to load mods."
+        return "Installed " + installed.joinToString(", ") +
+            ". Restart Minecraft to load mods."
     }
 
     private fun installFile(context: Context, url: String, name: String, sha512: String?, title: String): String {

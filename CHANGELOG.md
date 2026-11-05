@@ -1,5 +1,13 @@
 # PocketCraft changelog
 
+## v0.8.12 (versionCode 34) — Mod compatibility checks & broken download fallback
+
+- Mod browser shows the published Fabric version plus an initial server-support hint. Tap "Check compatibility" for exact release metadata, server-only/client-only support, and declared required dependencies or incompatibilities before installing.
+- Check labels distinguish compatible published metadata, incompatible releases, and uncertain server support. They cannot guarantee mods work together or run well on Android.
+- Resolve required dependencies and retry alternate Fabric-compatible versions/JAR artifacts when Modrinth returns HTTP 404/410 for a stale file, while retaining SHA-512 checks and server-side Fabric JAR validation.
+- Preserve original Homestead GUI, PS launcher icon, RAM slider, hosting files, and all six sounds.
+
+
 ## v0.8.11 (versionCode 33) — Original Homestead and RAM control
 
 - Restored the exact original v0.8.8 Homestead GUI design system, including timber buttons/cards, woodland colors, gradients and woodland artwork. The compact v0.8.10 Home screen remains.

@@ -1557,17 +1557,51 @@ class MainActivity : Activity() {
                 card.addView(ui.text(this,item.description,11f,ui.MUTED))
             }
             card.addView(ui.space(this,8))
-            card.addView(ui.pill(this,"FABRIC  •  "+version,ui.CYAN))
+            val hintColor = if (item.serverHint == "Client only") ui.RED else ui.CYAN
+            card.addView(ui.pill(this,"FABRIC " + version + "  •  " +
+                item.serverHint, hintColor))
             card.addView(ui.space(this,10))
-            card.addView(ui.action(this,"INSTALL",true,!ServerService.running) {
-                AlertDialog.Builder(this).setTitle("Install "+item.title+"?")
-                    .setMessage("Install a matching Fabric server release from Modrinth. Client-only mods will be rejected.")
-                    .setNegativeButton("CANCEL",null)
-                    .setPositiveButton("INSTALL"){_,_->
-                        downloadAsync("Installing "+item.title) {
-                            WebsiteModInstaller.installWithDependencies(this,item.slug)
-                        }
-                    }.show()
+            card.addView(ui.action(this,"CHECK COMPATIBILITY",true) {
+                val wait = AlertDialog.Builder(this)
+                    .setTitle("Checking "+item.title)
+                    .setMessage("Verifying its exact Fabric release and server support…")
+                    .setCancelable(false).create()
+                wait.show()
+                Thread {
+                    val result = runCatching {
+                        ModrinthDiscovery.checkCompatibility(item.id,version)
+                    }
+                    runOnUiThread {
+                        if (isFinishing || isDestroyed) return@runOnUiThread
+                        wait.dismiss()
+                        result.onSuccess { compatibility ->
+                            val supported = compatibility.verdict !=
+                                ModrinthDiscovery.Verdict.UNSUPPORTED
+                            val name = when(compatibility.verdict) {
+                                ModrinthDiscovery.Verdict.COMPATIBLE -> "✓ Compatible"
+                                ModrinthDiscovery.Verdict.UNSUPPORTED -> "✕ Not compatible"
+                                ModrinthDiscovery.Verdict.UNCERTAIN -> "? Needs verification"
+                            }
+                            val confirmation = AlertDialog.Builder(this)
+                                .setTitle(name + " • " + compatibility.title)
+                                .setMessage(compatibility.details)
+                                .setNegativeButton("CLOSE",null)
+                            if (supported && !ServerService.running) {
+                                confirmation.setPositiveButton(
+                                    if(compatibility.verdict ==
+                                        ModrinthDiscovery.Verdict.UNCERTAIN)
+                                        "INSTALL ANYWAY" else "INSTALL"
+                                ) { _, _ ->
+                                    downloadAsync("Installing "+item.title) {
+                                        WebsiteModInstaller.installWithDependencies(this,item.slug)
+                                    }
+                                }
+                            }
+                            confirmation.show()
+                        }.onFailure { toast("Compatibility check failed: " +
+                            (it.message ?: "Network unavailable")) }
+                    }
+                }.start()
             })
             column.addView(card)
             column.addView(ui.space(this,10))

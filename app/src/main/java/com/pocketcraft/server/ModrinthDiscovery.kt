@@ -39,7 +39,37 @@ object ModrinthDiscovery {
         }
     }
 
-    data class Mod(val id:String,val slug:String,val title:String,val description:String)
+    data class Mod(
+        val id:String,val slug:String,val title:String,val description:String,
+        val serverHint:String
+    )
+    enum class Verdict { COMPATIBLE, UNSUPPORTED, UNCERTAIN }
+    data class Compatibility(
+        val verdict: Verdict,
+        val title: String,
+        val details: String
+    )
+
+    /** Search hit environments describe all releases, not necessarily the selected one. */
+    private fun serverHint(hit: JSONObject): String {
+        val environments = hit.optJSONArray("environment")
+        if (environments != null) {
+            val values = (0 until environments.length()).map { environments.optString(it) }
+            val eligible = values.any {
+                it in setOf("client_and_server","server_only","dedicated_server_only",
+                    "server_only_client_optional","client_or_server","client_or_server_prefers_both")
+            }
+            if (eligible) return "Server versions available"
+            if (values.isNotEmpty() && values.all {
+                it in setOf("client_only","singleplayer_only")
+            }) return "Client only"
+        }
+        return when(hit.optString("server_side")) {
+            "unsupported" -> "Client only"
+            "required", "optional" -> "Server versions available"
+            else -> "Server support: check"
+        }
+    }
     /** Current game version + Fabric + server-compatible mod search. */
     fun findMods(query:String, gameVersion:String, category:String = "all"):List<Mod> {
         val facets = mutableListOf(
@@ -62,8 +92,71 @@ object ModrinthDiscovery {
         return (0 until list.length()).map { i ->
             val item=list.getJSONObject(i)
             Mod(item.optString("project_id"),item.optString("slug"),
-                item.optString("title"),item.optString("description").take(110))
+                item.optString("title"),item.optString("description").take(110),
+                serverHint(item))
         }.filter { it.id.isNotBlank() && it.slug.isNotBlank() }
+    }
+
+    /**
+     * Check the specific server-version release, not just broad search facets.
+     * Matching published metadata cannot prove third-party mod combinations work.
+     */
+    fun checkCompatibility(projectId: String, gameVersion: String): Compatibility {
+        require(projectId.matches(Regex("[A-Za-z0-9_-]{1,120}"))) { "Invalid Modrinth project" }
+        val project = JSONObject(readJson("https://api.modrinth.com/v2/project/" +
+            URLEncoder.encode(projectId,"UTF-8")))
+        val title = project.optString("title",projectId)
+        if (project.optString("project_type") != "mod")
+            return Compatibility(Verdict.UNSUPPORTED,title,"This project is not a Fabric mod.")
+        val loaders = URLEncoder.encode("[\"fabric\"]","UTF-8")
+        val mc = URLEncoder.encode("[\"" + gameVersion + "\"]","UTF-8")
+        val result = JSONArray(readJson("https://api.modrinth.com/v2/project/" +
+            URLEncoder.encode(projectId,"UTF-8") +
+            "/version?loaders=" + loaders + "&game_versions=" + mc + "&include_changelog=false"))
+        if (result.length() == 0)
+            return Compatibility(Verdict.UNSUPPORTED,title,
+                "No release published for Fabric Minecraft " + gameVersion + ".")
+        var unverified: Compatibility? = null
+        for (i in 0 until result.length()) {
+            val version = result.getJSONObject(i)
+            val supported = version.optJSONArray("game_versions") ?: JSONArray()
+            val platforms = version.optJSONArray("loaders") ?: JSONArray()
+            if (!(0 until supported.length()).any { supported.optString(it) == gameVersion } ||
+                !(0 until platforms.length()).any { platforms.optString(it) == "fabric" }) continue
+            val files = version.optJSONArray("files") ?: JSONArray()
+            if (!(0 until files.length()).any { files.optJSONObject(it)
+                    ?.optString("filename")?.endsWith(".jar",true) == true }) continue
+            val env = version.optString("environment").ifBlank {
+                when (project.optString("server_side")) {
+                    "unsupported" -> "client_only"
+                    "required" -> "server_only"
+                    "optional" -> "client_or_server"
+                    else -> "unknown"
+                }
+            }
+            if (env in setOf("client_only","singleplayer_only")) continue
+            val dependencies = version.optJSONArray("dependencies") ?: JSONArray()
+            val required = (0 until dependencies.length()).count {
+                dependencies.optJSONObject(it)?.optString("dependency_type") == "required"
+            }
+            val conflicts = (0 until dependencies.length()).count {
+                dependencies.optJSONObject(it)?.optString("dependency_type") == "incompatible"
+            }
+            val notes = "Fabric " + gameVersion + " • " +
+                version.optString("version_number","matching release") +
+                "\nRequired dependencies: " + required +
+                (if (conflicts > 0) "\nDeclared incompatibilities: " + conflicts else "") +
+                "\nPublished metadata only; other mods and Android performance are not verified."
+            if (env in setOf("unknown","client_only_server_optional")) {
+                unverified = Compatibility(Verdict.UNCERTAIN,title,
+                    "Server support needs verification.\n" + notes)
+                continue
+            }
+            return Compatibility(Verdict.COMPATIBLE,title,
+                "Compatible with your Fabric server on paper.\n" + notes)
+        }
+        return unverified ?: Compatibility(Verdict.UNSUPPORTED,title,
+            "No downloadable server-compatible Fabric JAR for Minecraft " + gameVersion + ".")
     }
 
     fun downloadLatest(context:Context,pack:Pack,gameVersion:String):Uri {
