@@ -1546,7 +1546,7 @@ class MainActivity : Activity() {
                     .setNegativeButton("CANCEL",null)
                     .setPositiveButton("INSTALL"){_,_->
                         downloadAsync("Installing "+item.title) {
-                            WebsiteModInstaller.install(this,"https://modrinth.com/mod/"+item.slug)
+                            WebsiteModInstaller.installWithDependencies(this,item.slug)
                         }
                     }.show()
             })
