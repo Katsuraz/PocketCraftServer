@@ -2,13 +2,7 @@ package com.pocketcraft.server
 
 import android.content.Context
 import android.content.res.ColorStateList
-import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.Paint
-import android.graphics.PixelFormat
-import android.graphics.ColorFilter
-import android.graphics.RectF
-import android.graphics.drawable.Drawable
 import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.Switch
@@ -24,8 +18,8 @@ import android.widget.TextView
 /**
  * PocketCraft design system.
  *
- * Restrained graphite surfaces, generous spacing, prominent single-call-to-action
- * controls and true Android ripple/focus feedback. No network or theme dependency.
+ * Flat graphite surfaces, warm neutral highlights, uncluttered controls,
+ * and native Android ripple/focus feedback. No decorative textures.
  */
 object PocketUi {
     /**
@@ -121,39 +115,31 @@ object PocketUi {
     }
     fun homestead(): Boolean = currentTheme=="homestead"
 
-    val BG: Int get() = if(homestead()) 0xFF1C1814.toInt() else 0xFF080E18.toInt()
-    val PANEL: Int get() = if(homestead()) 0xFF30251E.toInt() else 0xFF141E2C.toInt()
-    val SURFACE: Int get() = if(homestead()) 0xFF654A34.toInt() else 0xFF223245.toInt()
-    val MUTED: Int get() = if(homestead()) 0xFFC9BA9E.toInt() else 0xFFACBED1.toInt()
-    val WHITE: Int get() = if(homestead()) 0xFFF1E5CA.toInt() else 0xFFF6F9FD.toInt()
-    val GREEN: Int get() = if(homestead()) 0xFFD6B47D.toInt() else 0xFF70E9B4.toInt()
-    val CYAN: Int get() = if(homestead()) 0xFFE1B977.toInt() else 0xFF80D7FA.toInt()
-    val PURPLE: Int get() = if(homestead()) 0xFFC29A70.toInt() else 0xFFB5A5FF.toInt()
-    val RED: Int get() = if(homestead()) 0xFFF5AA93.toInt() else 0xFFFFA0AB.toInt()
-    val BORDER: Int get() = if(homestead()) 0xFF97704D.toInt() else 0xFF324459.toInt()
-    val SUBTLE: Int get() = if(homestead()) 0xFF261D18.toInt() else 0xFF182737.toInt()
+    // The legacy names GREEN/CYAN map to subtle sandstone accents in Homestead.
+    val BG: Int get() = if(homestead()) 0xFF121617.toInt() else 0xFF080E18.toInt()
+    val PANEL: Int get() = if(homestead()) 0xFF1C2223.toInt() else 0xFF141E2C.toInt()
+    val SURFACE: Int get() = if(homestead()) 0xFF292F30.toInt() else 0xFF223245.toInt()
+    val MUTED: Int get() = if(homestead()) 0xFFA8B2B0.toInt() else 0xFFACBED1.toInt()
+    val WHITE: Int get() = if(homestead()) 0xFFF4F0E6.toInt() else 0xFFF6F9FD.toInt()
+    val GREEN: Int get() = if(homestead()) 0xFFD5C39B.toInt() else 0xFF70E9B4.toInt()
+    val CYAN: Int get() = if(homestead()) 0xFFD5C39B.toInt() else 0xFF80D7FA.toInt()
+    val PURPLE: Int get() = if(homestead()) 0xFFBFB5A3.toInt() else 0xFFB5A5FF.toInt()
+    val RED: Int get() = if(homestead()) 0xFFF0AD9C.toInt() else 0xFFFFA0AB.toInt()
+    val BORDER: Int get() = if(homestead()) 0xFF364042.toInt() else 0xFF324459.toInt()
+    val SUBTLE: Int get() = if(homestead()) 0xFF181D1E.toInt() else 0xFF182737.toInt()
 
     fun dp(c: Context, v: Int): Int = (v * c.resources.displayMetrics.density + .5f).toInt()
 
-    fun shape(c: Context, color: Int, radius: Int = 18, stroke: Int? = null): GradientDrawable =
+    fun shape(c: Context, color: Int, radius: Int = 16, stroke: Int? = null): GradientDrawable =
         GradientDrawable().apply {
-            if (homestead() && (color==PANEL || color==SURFACE)) {
-                setColors(if (color==PANEL)
-                    intArrayOf(0xFF3D2D24.toInt(), 0xFF28211C.toInt())
-                else intArrayOf(0xFF75583D.toInt(), 0xFF553E2B.toInt()))
-                orientation = GradientDrawable.Orientation.TOP_BOTTOM
-            } else setColor(color)
-            cornerRadius = dp(c, if(homestead()) radius.coerceAtMost(15) else radius).toFloat()
+            setColor(color)
+            cornerRadius = dp(c, radius).toFloat()
             if (stroke != null) setStroke(dp(c, 1), stroke)
         }
 
+    // Compatibility for screens that previously requested colorful gradients.
     fun gradient(c: Context, vararg colors: Int): GradientDrawable =
-        GradientDrawable(GradientDrawable.Orientation.TL_BR,
-            if (homestead()) intArrayOf(0xFF846347.toInt(),0xFF4D3428.toInt())
-            else colors).apply {
-            cornerRadius = dp(c, if(homestead()) 14 else 24).toFloat()
-            if (homestead()) setStroke(dp(c,2),0xFFA07D50.toInt())
-        }
+        shape(c, if (homestead()) PANEL else (colors.firstOrNull() ?: PANEL), 16, BORDER)
 
     fun column(c: Context, gap: Int = 0): LinearLayout = LinearLayout(c).apply {
         orientation = LinearLayout.VERTICAL
@@ -187,8 +173,7 @@ object PocketUi {
         View(c).apply { layoutParams = LinearLayout.LayoutParams(1, dp(c,h)) }
 
     fun card(c: Context): LinearLayout = column(c).apply {
-        background = if (homestead()) TimberDrawable(c, false, true)
-            else shape(c, PANEL, 22, BORDER)
+        background = shape(c, PANEL, 16, BORDER)
         padding(c, 18, 18, 18, 18)
     }
 
@@ -203,14 +188,13 @@ object PocketUi {
 
     /** Material-like touch state, including keyboard and accessibility semantics. */
     fun pressable(c: Context, background: android.graphics.drawable.Drawable): RippleDrawable =
-        RippleDrawable(ColorStateList.valueOf(0x40FFFFFF),background,null)
+        RippleDrawable(ColorStateList.valueOf(0x22FFFFFF),background,null)
 
     fun action(c: Context, label: String, primary: Boolean = false, enabledAction: Boolean = true, click: () -> Unit): TextView =
         text(c, label, 13f, if (primary) BG else WHITE, true).apply {
             gravity = Gravity.CENTER
-            background = pressable(c,if (homestead()) TimberDrawable(c, primary, false)
-                else if (primary) gradient(c, GREEN, CYAN)
-                else shape(c, SURFACE, 14, BORDER))
+            background = pressable(c, if (primary) shape(c, GREEN, 12)
+                else shape(c, SURFACE, 12, BORDER))
             padding(c, 16, 15, 16, 15)
             minHeight = dp(c, 52)
             isEnabled = enabledAction
@@ -236,146 +220,4 @@ object PocketUi {
 
     fun weight(c: Context): LinearLayout.LayoutParams =
         LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = dp(c, 8) }
-}
-
-/** A tiny, original block-world landscape drawn with rectangles (no game assets). */
-class WorldArt(context: Context) : View(context) {
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        setMeasuredDimension(MeasureSpec.getSize(widthMeasureSpec), PocketUi.dp(context, 116))
-    }
-    private fun paintHomestead(canvas: Canvas) {
-        val u = width / 28f
-        val h = height.toFloat()
-        val grass = h * 0.74f
-        paint.color = 0xFF3A4534.toInt()
-        canvas.drawRect(0f,0f,width.toFloat(),h,paint)
-        paint.color = 0xFF7E8B5D.toInt()
-        canvas.drawCircle(width * 0.79f,h * .23f, u * 1.7f,paint)
-        // Layered timber silhouettes create a calm handmade woodland scene.
-        for(i in 0..7) {
-            val x = (i * 4.1f - 1f) * u
-            paint.color = 0xFF303D2D.toInt()
-            canvas.drawRect(x+1.4f*u,grass-5.9f*u,x+2f*u,grass+0.9f*u,paint)
-            paint.color = if(i%2==0) 0xFF5F7950.toInt() else 0xFF516B49.toInt()
-            canvas.drawCircle(x+1.8f*u,grass-6.7f*u,2.9f*u,paint)
-            paint.color = 0xFF789267.toInt()
-            canvas.drawCircle(x+0.6f*u,grass-6.2f*u,1.5f*u,paint)
-        }
-        paint.color = 0xFF678157.toInt()
-        canvas.drawRect(0f,grass,width.toFloat(),h,paint)
-        // Small original homestead cabin — timber roof, stone base, lit window.
-        val x = 11f*u
-        paint.color = 0xFF66513B.toInt()
-        canvas.drawRect(x,grass-5.2f*u,x+7.5f*u,grass+2f*u,paint)
-        paint.color = 0xFF9A7954.toInt()
-        canvas.drawRect(x+0.4f*u,grass-4.6f*u,x+7.1f*u,grass+1.7f*u,paint)
-        paint.color = 0xFF453C32.toInt()
-        canvas.drawRect(x-0.8f*u,grass-6.0f*u,x+8.3f*u,grass-4.9f*u,paint)
-        paint.color = 0xFFB89A70.toInt()
-        canvas.drawRect(x+1.6f*u,grass-3.8f*u,x+3.2f*u,grass-2.1f*u,paint)
-        paint.color = 0xFFFFD98F.toInt()
-        canvas.drawRect(x+1.82f*u,grass-3.55f*u,x+2.94f*u,grass-2.31f*u,paint)
-        paint.color = 0xFF3B3929.toInt()
-        canvas.drawRect(x+4.8f*u,grass-3.6f*u,x+6.3f*u,grass+2f*u,paint)
-        paint.color = 0xFFA2A17D.toInt()
-        for(i in 0..27) {
-            val xx = i * u
-            val lift = if(i%4==0) 1.1f*u else 0.5f*u
-            canvas.drawRect(xx,grass+2.3f*u-lift,xx+0.45f*u,grass+2.4f*u,paint)
-        }
-    }
-    override fun onDraw(canvas: Canvas) {
-        if (PocketUi.homestead()) {
-            paintHomestead(canvas)
-            return
-        }
-        val unit = width / 25f
-        val ground = height * .72f
-        paint.color = 0x3357DCF5
-        for (i in 0..4) {
-            val x = width * (.08f + i * .22f)
-            canvas.drawCircle(x, height * .25f, unit * (if (i % 2 == 0) 1.3f else .7f), paint)
-        }
-        val grass = 0xFF68E2AA.toInt()
-        val dirt = 0xFF316A67.toInt()
-        val shadow = 0xFF234F66.toInt()
-        for (i in 0..24) {
-            val terrain = if (i in 5..9) 3 else if (i in 15..17) 2 else 1
-            paint.color = dirt
-            canvas.drawRect(i*unit, ground - terrain*unit, (i+1)*unit+1, height.toFloat(), paint)
-            paint.color = grass
-            canvas.drawRect(i*unit, ground - terrain*unit, (i+1)*unit+1, ground - (terrain-0.45f)*unit, paint)
-            if (i % 4 == 0) {
-                paint.color = shadow
-                canvas.drawRect(i*unit, ground + .5f*unit, (i+1)*unit, ground + 1.1f*unit, paint)
-            }
-        }
-        paint.color = 0xFFAB95FF.toInt()
-        canvas.drawRect(unit*19, ground-unit*5, unit*20.8f, ground-unit*3, paint)
-        paint.color = 0xFF8C77E9.toInt()
-        canvas.drawRect(unit*19.5f, ground-unit*6.3f, unit*20.3f, ground-unit*4, paint)
-        paint.color = 0xFFDBE5FF.toInt()
-        canvas.drawRect(unit*19.7f, ground-unit*5.6f, unit*20.1f, ground-unit*5.2f, paint)
-    }
-}
-
-
-/**
- * Original timber-panel styling: carved double rims, plank seams and subtle
- * grain. Pure Android drawing; no Minecraft/Homestead copyrighted assets.
- */
-class TimberDrawable(private val context: Context, private val primary: Boolean,
-                     private val panel: Boolean) : Drawable() {
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val rect = RectF()
-    override fun draw(canvas: Canvas) {
-        val b = bounds
-        val scale = context.resources.displayMetrics.density
-        val rim = 2f * scale
-        val radius = (if (panel) 13f else 8f) * scale
-        rect.set(b.left.toFloat(),b.top.toFloat(),b.right.toFloat(),b.bottom.toFloat())
-        paint.style = Paint.Style.FILL
-        paint.color = 0xFF211A16.toInt()
-        canvas.drawRoundRect(rect,radius,radius,paint)
-        rect.inset(rim,rim)
-        paint.color = if (panel) 0xFF3A2C24.toInt() else if (primary)
-            0xFF856446.toInt() else 0xFF634830.toInt()
-        canvas.drawRoundRect(rect,radius-rim,radius-rim,paint)
-        paint.color = 0x335B3722
-        val seamY = if (panel) 24f*scale else 16f*scale
-        var y = rect.top + seamY
-        while (y < rect.bottom-3*scale) {
-            canvas.drawRect(rect.left+4*scale,y,rect.right-4*scale,y+1f*scale,paint)
-            y += seamY
-        }
-        paint.color = 0x33DCC3A0
-        var grain = rect.top+7*scale
-        var i = 0
-        while (grain < rect.bottom-5*scale) {
-            val left = rect.left + (8 + ((i*13)%37))*scale
-            val right = (left + (22 + (i%5)*9)*scale).coerceAtMost(rect.right-8*scale)
-            canvas.drawRect(left,grain,right,grain+0.65f*scale,paint)
-            grain += 15f*scale
-            i++
-        }
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = rim
-        paint.color = if (primary) 0xFFB69467.toInt() else 0xFF92714F.toInt()
-        canvas.drawRoundRect(rect,radius-rim,radius-rim,paint)
-        rect.inset(rim*1.5f,rim*1.5f)
-        paint.strokeWidth = 0.75f*scale
-        paint.color = 0x88412C20.toInt()
-        canvas.drawRoundRect(rect,radius-2*rim,radius-2*rim,paint)
-        paint.style = Paint.Style.FILL
-        paint.color = 0xFFBD9569.toInt()
-        for (x in listOf(rect.left+6*scale,rect.right-6*scale)) {
-            canvas.drawRect(x,rect.top+6*scale,x+1.8f*scale,rect.top+7.8f*scale,paint)
-            canvas.drawRect(x,rect.bottom-7.8f*scale,x+1.8f*scale,rect.bottom-6*scale,paint)
-        }
-    }
-    override fun setAlpha(alpha: Int) { paint.alpha = alpha }
-    override fun setColorFilter(colorFilter: ColorFilter?) { paint.colorFilter = colorFilter }
-    @Deprecated("Android API")
-    override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
 }

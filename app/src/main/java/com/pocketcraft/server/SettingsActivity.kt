@@ -132,7 +132,10 @@ class SettingsActivity : Activity() {
         }
         toolbar.addView(ui.text(this,"‹",34f,ui.GREEN,true).apply {
             contentDescription="Back to dashboard"
-            setOnClickListener { finish() }
+            setOnClickListener {
+                PocketSounds.play(this@SettingsActivity,PocketSounds.Event.CLICK)
+                finish()
+            }
             setPadding(0,0,ui.dp(this@SettingsActivity,19),0)
         })
         toolbar.addView(ui.column(this).apply {
@@ -145,20 +148,20 @@ class SettingsActivity : Activity() {
             setPadding(ui.dp(this@SettingsActivity,18),0,ui.dp(this@SettingsActivity,18),ui.dp(this@SettingsActivity,30))
         }
         val hero=ui.column(this).apply {
-            background=ui.gradient(this@SettingsActivity,0xFF273C69.toInt(),0xFF165153.toInt())
+            background=ui.shape(this@SettingsActivity,ui.PANEL,16,ui.BORDER)
             setPadding(ui.dp(this@SettingsActivity,20),ui.dp(this@SettingsActivity,22),
                 ui.dp(this@SettingsActivity,20),ui.dp(this@SettingsActivity,22))
         }
-        hero.addView(ui.pill(this,"✦  SERVER PROFILE",ui.GREEN))
+        hero.addView(ui.pill(this,"SERVER PROFILE",ui.GREEN))
         hero.addView(ui.space(this,13))
-        hero.addView(ui.text(this,"Make this world yours.",23f,ui.WHITE,true))
+        hero.addView(ui.text(this,"Server preferences",23f,ui.WHITE,true))
         hero.addView(ui.space(this,7))
-        hero.addView(ui.text(this,"Custom multiplayer options, connection details and privacy controls. Changes apply after a server restart.",12f,ui.WHITE))
+        hero.addView(ui.text(this,"Game rules, hosting and privacy. Restart the server to apply gameplay changes.",12f,ui.WHITE))
         body.addView(hero)
         section(body,"Appearance","Choose your PocketCraft theme") { card ->
             card.addView(ui.text(this,"Homestead",16f,ui.WHITE,true))
             card.addView(ui.space(this,6))
-            card.addView(ui.text(this,"Woodland colors, warm parchment and mossy buttons. Inspired by cozy Minecraft GUIs, with original artwork.",12f,ui.MUTED))
+            card.addView(ui.text(this,"Minimal charcoal surfaces, subtle sandstone accents, and Minecraft-inspired typography.",12f,ui.MUTED))
             card.addView(ui.space(this,13))
             card.addView(ui.action(this,
                 if(ui.homestead()) "✓ HOMESTEAD • ACTIVE" else "🌿  USE HOMESTEAD",true) {
@@ -212,11 +215,11 @@ class SettingsActivity : Activity() {
                 if (ui.pixelFont()) { ui.setFontStyle(this,false); recreate() }
             })
         }
-        section(body,"Sound effects","Original wooden menu clicks and server cues") { card ->
+        section(body,"Sound effects","Minecraft-style menu ticks and server cues") { card ->
             card.addView(ui.text(this,"PocketCraft soundscape",16f,ui.WHITE,true))
             card.addView(ui.space(this,7))
             card.addView(ui.text(this,
-                "Soft wooden-style menu ticks, a short ready chime, and distinct start, stop, and error sounds. Original synthesized audio; no extracted Minecraft sound assets.",
+                "Crisp, Minecraft-style menu clicks. Your existing server start, ready, stop and error cues stay unchanged. All effects are original audio.",
                 12f,ui.MUTED))
             card.addView(ui.space(this,14))
             val soundRow = ui.row(this)
@@ -274,7 +277,7 @@ class SettingsActivity : Activity() {
             })
             card.addView(ui.space(this,8))
             card.addView(ui.text(this,
-                "Sounds use your phone's MEDIA volume. If nothing plays, turn up media volume, disable Bluetooth audio routing if necessary, and check 'Effects loaded 6/6' above. No Minecraft sound files are included.",
+                "Sounds use MEDIA volume. If you hear nothing, raise media volume and check 'Effects loaded 6/6'. The menu sounds are original Minecraft-inspired effects.",
                 11f,ui.MUTED))
         }
         section(body,"App updates","Check GitHub Releases and install verified APKs") { card ->

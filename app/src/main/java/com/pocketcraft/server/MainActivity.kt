@@ -208,7 +208,7 @@ class MainActivity : Activity() {
         screen.addView(scroller,LinearLayout.LayoutParams(-1,0,1f))
 
         val navbar = ui.row(this).apply {
-            background = ui.shape(this@MainActivity,if (ui.homestead()) 0xFF2B201B.toInt() else 0xFF111B29.toInt(),0,ui.BORDER)
+            background = ui.shape(this@MainActivity,ui.PANEL,0,ui.BORDER)
             setPadding(ui.dp(this@MainActivity,7),ui.dp(this@MainActivity,8),
                 ui.dp(this@MainActivity,7),ui.dp(this@MainActivity,9))
         }
@@ -220,8 +220,7 @@ class MainActivity : Activity() {
             val item = ui.column(this).apply {
                 gravity = Gravity.CENTER
                 background = ui.pressable(this@MainActivity,
-                    if(ui.homestead()) ui.shape(this@MainActivity,if(selected)0xFF805632.toInt() else 0xFF2B201B.toInt(),11,if(selected)0xFFE0AE66.toInt() else 0xFF463225.toInt())
-                    else ui.shape(this@MainActivity,if(selected)0xFF233C42.toInt() else 0xFF111B29.toInt(),15))
+                    ui.shape(this@MainActivity,if(selected)ui.SURFACE else ui.PANEL,12))
                 isClickable = true
                 isFocusable = true
                 isSelected = selected
@@ -361,23 +360,25 @@ class MainActivity : Activity() {
     }
 
     private fun dashboard(body: LinearLayout) {
-        body.addView(h("Pocket server","Your Minecraft world, your rules"))
-        body.addView(ui.space(this,16))
-        val hero = ui.column(this).apply {
-            background = ui.gradient(this@MainActivity,0xFF29366A.toInt(),0xFF17354D.toInt(),0xFF145044.toInt())
-            ui.run { padding(this@MainActivity,20,18,20,18) }
-        }
+        body.addView(h("Home","Manage your Minecraft server"))
+        body.addView(ui.space(this,14))
+        val hero = ui.card(this)
         val header = ui.row(this)
-        header.addView(ui.pill(this,if(ServerService.javaReady)"●  JAVA READY" else if(ServerService.running)"●  STARTING" else "●  OFFLINE",if(ServerService.javaReady)ui.GREEN else if(ServerService.running)ui.CYAN else ui.RED).also { heroState = it })
+        header.addView(ui.pill(this,
+            if(ServerService.javaReady) "●  READY"
+            else if(ServerService.running) "●  STARTING" else "●  OFFLINE",
+            if(ServerService.javaReady) ui.GREEN else if(ServerService.running) ui.CYAN else ui.MUTED
+        ).also { heroState = it })
         header.addView(View(this),LinearLayout.LayoutParams(0,1,1f))
-        header.addView(ui.pill(this,"FABRIC HOST",ui.CYAN))
+        header.addView(ui.text(this,"FABRIC",11f,ui.MUTED,true))
         hero.addView(header)
-        hero.addView(ui.space(this,10))
-        hero.addView(ui.text(this,"Build a world.\nBring your friends.",25f,ui.WHITE,true))
-        hero.addView(WorldArt(this))
-        hero.addView(ui.text(this,if(ServerService.running)"Minecraft process launched" else "Server engine setup",13f,ui.WHITE,true))
-        hero.addView(ui.space(this,6))
-        hero.addView(ui.text(this,if(ServerService.running)"Java process is active. Check the Console tab to confirm Minecraft has fully started." else "Install the ARM64 Java runtime, Fabric, and crossplay files before starting. Startup on Android is experimental.",12f,0xFFB7CFE0.toInt()))
+        hero.addView(ui.space(this,17))
+        hero.addView(ui.text(this,"Your server",23f,ui.WHITE,true))
+        hero.addView(ui.space(this,8))
+        hero.addView(ui.text(this,
+            if(ServerService.running) "Minecraft is running. Check Console for readiness."
+            else "Install Java and Fabric, then start your world.",
+            12f,ui.MUTED))
         hero.addView(ui.space(this,16))
         val readyForStart = HostingHealth.startBlockers(healthSnapshot()) == 0
         hero.addView(ui.action(this,when {
@@ -1142,7 +1143,7 @@ class MainActivity : Activity() {
         return card
     }
     private fun line():View = View(this).apply {
-        setBackgroundColor(if (ui.homestead()) 0xFF725037.toInt() else 0xFF26354C.toInt())
+        setBackgroundColor(ui.BORDER)
         layoutParams=LinearLayout.LayoutParams(-1,ui.dp(this@MainActivity,1)).apply {
             topMargin=ui.dp(this@MainActivity,12);bottomMargin=ui.dp(this@MainActivity,12)
         }
@@ -1151,8 +1152,7 @@ class MainActivity : Activity() {
         val row=ui.row(this)
         row.addView(ui.text(this,icon,22f,ui.CYAN,true).apply {
             gravity=Gravity.CENTER
-            background=ui.shape(this@MainActivity,ui.SURFACE,12)
-            layoutParams=LinearLayout.LayoutParams(ui.dp(this@MainActivity,46),ui.dp(this@MainActivity,46))
+            layoutParams=LinearLayout.LayoutParams(ui.dp(this@MainActivity,34),ui.dp(this@MainActivity,40))
         })
         val labels=ui.column(this).apply { setPadding(ui.dp(this@MainActivity,12),0,0,0) }
         labels.addView(ui.text(this,title,14f,ui.WHITE,true))
@@ -1160,7 +1160,7 @@ class MainActivity : Activity() {
         labels.addView(ui.text(this,desc,11f,ui.MUTED))
         row.addView(labels,LinearLayout.LayoutParams(0,-2,1f))
         row.addView(ui.text(this,"›",24f,ui.MUTED))
-        row.background=ui.pressable(this,ui.shape(this,ui.PANEL,12))
+        row.background=ui.pressable(this,ui.shape(this,ui.PANEL,8))
         row.isClickable=true
         row.isFocusable=true
         row.setOnClickListener {

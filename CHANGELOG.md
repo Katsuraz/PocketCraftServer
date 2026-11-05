@@ -1,5 +1,14 @@
 # PocketCraft changelog
 
+## v0.8.9 (versionCode 31) — Minimal design and menu audio
+
+- Replaced menu click and tab-select audio with original crisp Minecraft-inspired PCM WAV cues.
+- Preserved existing server start, ready, stop and error sounds and media-volume SoundPool playback.
+- Replaced timber-textured panels, gradients and artwork with simple charcoal surfaces, sandstone highlights and streamlined navigation.
+- Replaced the old detailed cabin icon with a bold vector Minecraft-style server block.
+- Kept Mojangles import and all hosting, settings and update functionality.
+
+
 ## v0.8.8 (versionCode 30) — Audible sound fix
 
 - Replaced short-lived AudioTrack synthesis on Android's easily muted UI-effects stream with SoundPool playing through **media volume**.
