@@ -131,6 +131,7 @@ class ServerService : Service() {
     private fun begin() {
         notice("Checking server prerequisites…")
         status = "STARTING"
+        PocketSounds.play(this, PocketSounds.Event.SERVER_START)
         failure = ""
         readiness.reset()
         javaReady = false
@@ -210,12 +211,14 @@ class ServerService : Service() {
                     lines.forEach { line ->
                         append(line)
                         val previous = status
+                        val wasJavaReady = javaReady
                         readiness.observe(line)
                         javaReady = readiness.javaReady
                         bedrockReady = readiness.bedrockListener
                         nethernetReady = readiness.nethernetRegistered
                         nethernetNativeFailure = readiness.nethernetNativeFailure
                         if (javaReady) {
+                            if (!wasJavaReady) PocketSounds.play(this,PocketSounds.Event.SERVER_READY)
                             status = readiness.state()
                             if (previous != status) {
                                 append("Readiness changed: $status")
@@ -229,6 +232,7 @@ class ServerService : Service() {
                 if (code != 0) failure = "Java exited with code $code; check console"
             } catch (e: Exception) {
                 failure = e.message ?: e.javaClass.simpleName
+                PocketSounds.play(this,PocketSounds.Event.ERROR)
                 append("Launch failed: $failure")
             } finally {
                 release()
@@ -242,6 +246,7 @@ class ServerService : Service() {
             return
         }
         status = "STOPPING"
+        PocketSounds.play(this,PocketSounds.Event.SERVER_STOP)
         append("Graceful stop requested")
         Thread {
             try {
