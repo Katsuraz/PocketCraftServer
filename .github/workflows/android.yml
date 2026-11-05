@@ -354,7 +354,7 @@ jobs:
 
   release:
     name: Publish verified PocketCraft GitHub Release
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -384,9 +384,9 @@ jobs:
           content = Path("app/build.gradle.kts").read_text()
           name = re.search(r'versionName\s*=\s*"([^"]+)"', content).group(1)
           code = int(re.search(r"versionCode\s*=\s*(\d+)", content).group(1))
-          tag = os.environ["GITHUB_REF_NAME"]
-          if tag != "v" + name:
-              raise SystemExit("Tag " + tag + " does not match build version v" + name)
+          tag = "v" + name
+          if os.environ["GITHUB_REF"].startswith("refs/tags/") and os.environ["GITHUB_REF_NAME"] != tag:
+              raise SystemExit("Git tag " + os.environ["GITHUB_REF_NAME"] + " does not match build version " + tag)
           source = Path("release-dist/app-debug.apk")
           if not source.is_file():
               raise SystemExit("Build artifact missing")
@@ -408,8 +408,25 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh release create "$GITHUB_REF_NAME" \
-            release-dist/PocketCraft-v*.apk release-dist/pocketcraft-update.json \
-            --title "PocketCraft $GITHUB_REF_NAME" \
-            --notes-file CHANGELOG.md \
-            --verify-tag
+          VERSION="$(sed -nE 's/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' app/build.gradle.kts | head -n 1)"
+          test -n "$VERSION"
+          TAG="v$VERSION"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::notice::GitHub Release $TAG already published; leaving it unchanged."
+            exit 0
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Publishing release for existing tag $TAG"
+            gh release create "$TAG" \
+              release-dist/PocketCraft-v*.apk release-dist/pocketcraft-update.json \
+              --title "PocketCraft $TAG" \
+              --notes-file CHANGELOG.md \
+              --verify-tag
+          else
+            echo "Creating release and tag $TAG from verified main build $GITHUB_SHA"
+            gh release create "$TAG" \
+              release-dist/PocketCraft-v*.apk release-dist/pocketcraft-update.json \
+              --title "PocketCraft $TAG" \
+              --notes-file CHANGELOG.md \
+              --target "$GITHUB_SHA"
+          fi
