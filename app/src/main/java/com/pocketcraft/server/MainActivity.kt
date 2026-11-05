@@ -1373,110 +1373,194 @@ class MainActivity : Activity() {
     }
 
     private fun modsPage(body:LinearLayout) {
+        val version = getSharedPreferences("pocketcraft",0).getString("gameVersion",null)
         val hero=ui.card(this)
-        hero.addView(ui.pill(this,"FABRIC  •  SERVER ADD-ONS",ui.CYAN))
-        hero.addView(ui.space(this,9))
-        hero.addView(ui.text(this,"Mods & modpacks",21f,ui.WHITE,true))
-        hero.addView(ui.space(this,7))
-        hero.addView(ui.text(this,"Explore, install and manage add-ons. Everything runs on your phone.",12f,ui.MUTED))
+        hero.addView(ui.text(this,"Mods",24f,ui.WHITE,true))
+        hero.addView(ui.space(this,6))
+        hero.addView(ui.text(this,"Discover · Install · Manage",12f,ui.MUTED))
+        hero.addView(ui.space(this,12))
+        hero.addView(ui.pill(this, "FABRIC  •  " + (version ?: "Select server version"),ui.CYAN))
+        hero.addView(ui.space(this,13))
+        hero.addView(ui.action(this,"⌕  BROWSE MODS",true) { browseMods() })
         hero.addView(ui.space(this,8))
-        hero.addView(WorldArt(this))
-        val activeVersion=getSharedPreferences("pocketcraft",0).getString("gameVersion",null)
-        hero.addView(ui.text(this,"Fabric • " + (activeVersion ?: "Version unknown"),11f,ui.CYAN,true))
+        hero.addView(ui.action(this,"▦  BROWSE MODPACKS") { browseModrinth() })
         body.addView(hero)
-        body.addView(ui.space(this,16))
+        body.addView(ui.space(this,15))
 
-        body.addView(ui.text(this,"Discover",16f,ui.WHITE,true))
-        body.addView(ui.space(this,8))
-        val discover=ui.card(this)
-        discover.addView(ui.action(this,"⌕  BROWSE MODRINTH PACKS",true) { browseModrinth() })
-        discover.addView(ui.space(this,9))
-        discover.addView(ui.action(this,"↗  ADD MODS FROM WEBSITE") { installFromWebsite() })
-        discover.addView(ui.space(this,9))
-        discover.addView(ui.text(this,"Paste Modrinth mod/modpack pages or trusted direct Fabric JAR / .mrpack download links.",11f,ui.MUTED))
-        body.addView(discover)
-        body.addView(ui.space(this,16))
-
-        body.addView(ui.text(this,"Import & manage",16f,ui.WHITE,true))
-        body.addView(ui.space(this,8))
-        val imports=ui.card(this)
-        imports.addView(ui.action(this,"＋  IMPORT MODPACK",true) {
-            if (ServerService.running) toast("Stop Minecraft before importing a modpack") else picker(5)
-        })
-        imports.addView(ui.space(this,8))
-        imports.addView(ui.action(this,"＋  IMPORT MOD JAR") { picker(2) })
-        imports.addView(ui.space(this,8))
-        imports.addView(ui.action(this,"▤  SERVER FILES") {openServerFiles("mods")})
-        imports.addView(ui.space(this,10))
-        imports.addView(ui.text(this,"Supports Modrinth .mrpack and Fabric CurseForge manifest ZIP. Existing files are preserved.",11f,ui.MUTED))
-        body.addView(imports)
-        body.addView(ui.space(this,16))
-
-        body.addView(ui.text(this,"Crossplay",16f,ui.WHITE,true))
-        body.addView(ui.space(this,8))
-        val crossplayCard=ui.card(this)
-        crossplayCard.addView(ui.action(this,"↓  INSTALL GEYSER + FLOODGATE") {
-            AlertDialog.Builder(this).setTitle("Install crossplay bridge?")
-                .setMessage("Downloads Fabric API, Geyser-Fabric and Floodgate-Fabric for supported Minecraft versions. Stop the server before changing installed mods.")
-                .setNegativeButton("CANCEL",null)
-                .setPositiveButton("INSTALL") {_,_-> downloadAsync("Crossplay files") {ServerDownloads.installCrossplay(this)} }
-                .show()
-        })
-        crossplayCard.addView(ui.space(this,8))
-        crossplayCard.addView(ui.action(this,"⎘  PASTE PLAYIT GEYSER SETTINGS") {pastePlayitGeyserSettings()})
-        crossplayCard.addView(ui.space(this,8))
-        crossplayCard.addView(ui.action(this,"⚙  EDIT GEYSER SETTINGS") {editGeyserConfiguration()})
-        crossplayCard.addView(ui.space(this,8))
-        crossplayCard.addView(ui.action(this,"↶  RESTORE GEYSER BACKUP") {restoreGeyserBackup()})
-        body.addView(crossplayCard)
-        body.addView(ui.space(this,18))
-        body.addView(ui.text(this,"Installed mods",16f,ui.WHITE,true))
-        body.addView(ui.space(this,9))
+        val actions=ui.card(this)
+        actions.addView(ui.text(this,"Your library",17f,ui.WHITE,true))
+        actions.addView(ui.space(this,10))
         val list=modFiles()
-        body.addView(ui.text(this,list.size.toString() + " total  •  " + list.count {it.name.endsWith(".jar")} + " enabled",12f,ui.MUTED))
-        body.addView(ui.space(this,12))
-        if (list.isEmpty()) {
-            body.addView(empty("⬡","A blank slate","Import .jar mods that support your server's Fabric and Minecraft versions."))
+        actions.addView(ui.text(this,
+            list.count { it.name.endsWith(".jar") }.toString() + " active  •  " +
+                list.count { it.name.endsWith(".disabled") } + " disabled",12f,ui.MUTED))
+        actions.addView(ui.space(this,10))
+        actions.addView(ui.action(this,"＋  IMPORT MOD") { picker(2) })
+        actions.addView(ui.space(this,7))
+        actions.addView(ui.action(this,"＋  IMPORT MODPACK") {
+            if(ServerService.running) toast("Stop Minecraft first") else picker(5)
+        })
+        actions.addView(ui.space(this,7))
+        actions.addView(ui.action(this,"▤  OPEN MODS FOLDER") {openServerFiles("mods")})
+        body.addView(actions)
+        body.addView(ui.space(this,15))
+
+        val crossplay=ui.card(this)
+        crossplay.addView(ui.text(this,"Bedrock crossplay",17f,ui.WHITE,true))
+        crossplay.addView(ui.space(this,9))
+        crossplay.addView(ui.action(this,"INSTALL GEYSER + FLOODGATE",true) {
+            AlertDialog.Builder(this).setTitle("Install crossplay?")
+                .setMessage("Install matching Geyser, Floodgate and Fabric API files where supported.")
+                .setNegativeButton("CANCEL",null)
+                .setPositiveButton("INSTALL") {_,_->
+                    downloadAsync("Crossplay files") { ServerDownloads.installCrossplay(this) }
+                }.show()
+        })
+        crossplay.addView(ui.space(this,7))
+        crossplay.addView(ui.action(this,"PASTE PLAYIT SETTINGS") {pastePlayitGeyserSettings()})
+        crossplay.addView(ui.space(this,7))
+        crossplay.addView(ui.action(this,"EDIT GEYSER CONFIG") {editGeyserConfiguration()})
+        body.addView(crossplay)
+        body.addView(ui.space(this,18))
+
+        body.addView(ui.text(this,"Installed",18f,ui.WHITE,true))
+        body.addView(ui.space(this,10))
+        if(list.isEmpty()) {
+            body.addView(ui.text(this,"No mods yet. Find your first mod above.",12f,ui.MUTED))
         }
         list.forEach { file ->
             val enabled=file.name.endsWith(".jar")
             val meta=ModInspector.inspect(file)
             val card=ui.card(this)
             val top=ui.row(this)
-            top.addView(ui.text(this,"⬡",22f,ui.PURPLE,true))
-            top.addView(ui.text(this,meta.title,13f,ui.WHITE,true).apply {
-                setPadding(ui.dp(this@MainActivity,10),0,0,0); maxLines=2
-            },LinearLayout.LayoutParams(0,-2,1f))
-            top.addView(ui.pill(this,if(enabled)"ON" else "OFF",if(enabled)ui.GREEN else ui.MUTED))
+            top.addView(ui.text(this,meta.title,14f,ui.WHITE,true),
+                LinearLayout.LayoutParams(0,-2,1f))
+            top.addView(ui.pill(this,if(enabled)"ACTIVE" else "OFF",
+                if(enabled)ui.GREEN else ui.MUTED))
             card.addView(top)
             card.addView(ui.space(this,6))
-            card.addView(ui.text(this,meta.version+"  •  "+(if(meta.fabric)"Fabric mod" else "Check format"),11f,ui.MUTED))
+            card.addView(ui.text(this,meta.version+"  •  "+(if(meta.fabric)"Fabric" else "Review format"),
+                11f,ui.MUTED))
             card.addView(ui.space(this,10))
-            val lower=ui.row(this)
-            lower.addView(ui.action(this,if(enabled)"Disable" else "Enable") {
-                val target=File(mods,if(enabled) file.name+".disabled" else file.name.removeSuffix(".disabled"))
-                if(target.exists() || !file.renameTo(target)) toast("Could not change mod status") else render()
+            val row=ui.row(this)
+            row.addView(ui.action(this,if(enabled)"Disable" else "Enable",false,!ServerService.running) {
+                val target=File(mods,if(enabled)file.name+".disabled" else file.name.removeSuffix(".disabled"))
+                if(target.exists() || !file.renameTo(target))toast("Could not change mod")
+                else render()
             },ui.weight(this))
-            lower.addView(ui.action(this,"Delete") {
-                AlertDialog.Builder(this).setTitle("Delete mod?")
-                    .setMessage(file.name).setNegativeButton("Cancel",null)
-                    .setPositiveButton("Delete"){_,_->if(file.delete())render()else toast("Unable to delete")}.show()
+            row.addView(ui.action(this,"Delete",false,!ServerService.running) {
+                AlertDialog.Builder(this).setTitle("Remove mod?")
+                    .setMessage(meta.title)
+                    .setNegativeButton("CANCEL",null)
+                    .setPositiveButton("REMOVE"){_,_->if(file.delete())render()else toast("Delete failed")}
+                    .show()
             },LinearLayout.LayoutParams(0,-2,1f))
-            card.addView(lower)
-            body.addView(card); body.addView(ui.space(this,10))
+            card.addView(row)
+            body.addView(card)
+            body.addView(ui.space(this,9))
         }
-        val help=ui.card(this)
-        help.addView(ui.text(this,"Crossplay checklist",16f,ui.WHITE,true))
-        help.addView(ui.space(this,8))
-        listOf("Fabric API","Geyser-Fabric","Floodgate-Fabric").forEach { name ->
-            val installed=list.any { it.name.replace(" ","-").contains(name.replace(" ","-").substringBefore("-"),true) && it.name.endsWith(".jar") }
-            help.addView(ui.text(this,(if(installed)"✓  " else "○  ") + name,
-                13f,if(installed)ui.GREEN else ui.MUTED))
-            help.addView(ui.space(this,7))
-        }
-        help.addView(ui.text(this,"File presence does not confirm version compatibility or that the server can start.",11f,ui.MUTED))
-        body.addView(help)
+        body.addView(ui.space(this,8))
+        body.addView(ui.action(this,"ADVANCED: INSTALL FROM URL") {installFromWebsite()})
+        body.addView(ui.space(this,8))
+        body.addView(ui.action(this,"RESTORE GEYSER BACKUP") {restoreGeyserBackup()})
     }
+
+    private fun browseMods(category:String = "all") {
+        val version=getSharedPreferences("pocketcraft",0).getString("gameVersion",null)
+        if (version.isNullOrBlank()) {
+            AlertDialog.Builder(this).setTitle("Choose Minecraft version")
+                .setMessage("Install your Fabric server first. The mod browser will show matching releases.")
+                .setNegativeButton("CANCEL",null)
+                .setPositiveButton("SELECT VERSION"){_,_->installFabricPrompt()}
+                .show()
+            return
+        }
+        val query=android.widget.EditText(this).apply {
+            hint="Search Fabric mods"
+            setSingleLine(true)
+            textSize=16f
+            setTextColor(ui.WHITE)
+            setHintTextColor(ui.MUTED)
+            background=ui.shape(this@MainActivity,ui.SURFACE,12)
+            setPadding(ui.dp(this@MainActivity,12),ui.dp(this@MainActivity,12),
+                ui.dp(this@MainActivity,12),ui.dp(this@MainActivity,12))
+        }
+        val content=ui.column(this).apply {
+            setPadding(ui.dp(this@MainActivity,16),ui.dp(this@MainActivity,10),
+                ui.dp(this@MainActivity,16),ui.dp(this@MainActivity,12))
+            addView(ui.pill(this@MainActivity,"FABRIC  •  "+version,ui.CYAN))
+            addView(ui.space(this@MainActivity,12))
+            addView(query)
+            addView(ui.space(this@MainActivity,12))
+        }
+        val groups=listOf("all" to "All","performance" to "Performance",
+            "worldgen" to "Worldgen","utility" to "Utility","adventure" to "Adventure")
+        groups.chunked(2).forEach { pair ->
+            val row=ui.row(this)
+            pair.forEach { (key,title) ->
+                row.addView(ui.action(this,if(category==key)"✓ "+title else title) {
+                    browseMods(key)
+                },ui.weight(this))
+            }
+            content.addView(row)
+            content.addView(ui.space(this,7))
+        }
+        AlertDialog.Builder(this).setTitle("Find mods")
+            .setView(content)
+            .setNegativeButton("CANCEL",null)
+            .setPositiveButton("SEARCH"){_,_->
+                val search=query.text.toString().trim()
+                val waiting=AlertDialog.Builder(this).setTitle("Finding mods")
+                    .setMessage("Checking Fabric "+version+"…").setCancelable(false).create()
+                waiting.show()
+                Thread {
+                    val results=runCatching {ModrinthDiscovery.findMods(search,version,category)}
+                    runOnUiThread {
+                        waiting.dismiss()
+                        results.onSuccess {showModResults(it,version)}
+                            .onFailure {toast("Search failed: "+it.message)}
+                    }
+                }.start()
+            }.show()
+    }
+
+    private fun showModResults(list:List<ModrinthDiscovery.Mod>,version:String) {
+        if(list.isEmpty()) {toast("No matching Fabric mods for "+version);return}
+        val column=ui.column(this).apply {
+            setPadding(ui.dp(this@MainActivity,13),ui.dp(this@MainActivity,9),
+                ui.dp(this@MainActivity,13),ui.dp(this@MainActivity,13))
+        }
+        list.forEach { item ->
+            val card=ui.card(this)
+            card.addView(ui.text(this,item.title,15f,ui.WHITE,true))
+            if(item.description.isNotBlank()){
+                card.addView(ui.space(this,5))
+                card.addView(ui.text(this,item.description,11f,ui.MUTED))
+            }
+            card.addView(ui.space(this,8))
+            card.addView(ui.pill(this,"FABRIC  •  "+version,ui.CYAN))
+            card.addView(ui.space(this,10))
+            card.addView(ui.action(this,"INSTALL",true,!ServerService.running) {
+                AlertDialog.Builder(this).setTitle("Install "+item.title+"?")
+                    .setMessage("Install a matching Fabric server release from Modrinth. Client-only mods will be rejected.")
+                    .setNegativeButton("CANCEL",null)
+                    .setPositiveButton("INSTALL"){_,_->
+                        downloadAsync("Installing "+item.title) {
+                            WebsiteModInstaller.install(this,"https://modrinth.com/mod/"+item.slug)
+                        }
+                    }.show()
+            })
+            column.addView(card)
+            column.addView(ui.space(this,10))
+        }
+        val dlg=AlertDialog.Builder(this).setTitle("Mods for "+version)
+            .setView(ScrollView(this).apply {addView(column)})
+            .setNegativeButton("CLOSE",null).create()
+        dlg.show()
+        dlg.window?.setLayout((resources.displayMetrics.widthPixels*.95).toInt(),
+            (resources.displayMetrics.heightPixels*.82).toInt())
+    }
+
     private fun worldsPage(body:LinearLayout) {
         body.addView(h("World vault","Protect every block you've placed"))
         body.addView(ui.space(this,15))
