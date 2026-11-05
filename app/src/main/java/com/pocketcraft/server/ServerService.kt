@@ -40,7 +40,9 @@ class ServerService : Service() {
         @Volatile var javaReady = false
             private set
         @Volatile var bedrockReady = false
+            private set
         @Volatile var bedrockJoinVerified = false
+            private set
         @Volatile var compatibilityWarnings: List<String> = emptyList()
             private set
         @Volatile var nethernetReady = false
