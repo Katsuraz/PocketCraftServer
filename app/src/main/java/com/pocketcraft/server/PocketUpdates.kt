@@ -86,9 +86,17 @@ object PocketUpdates {
                 error("GitHub returned HTTP " + connection.responseCode)
             }
             connection.inputStream.use { stream ->
-                val bytes = stream.readNBytes(limit + 1)
-                require(bytes.size <= limit) { "Update metadata too large" }
-                return bytes.toString(Charsets.UTF_8)
+                val output = java.io.ByteArrayOutputStream()
+                val buffer = ByteArray(8192)
+                var consumed = 0
+                while (true) {
+                    val n = stream.read(buffer)
+                    if (n < 0) break
+                    consumed += n
+                    require(consumed <= limit) { "Update metadata too large" }
+                    output.write(buffer,0,n)
+                }
+                return output.toString("UTF-8")
             }
         } finally { connection.disconnect() }
     }
