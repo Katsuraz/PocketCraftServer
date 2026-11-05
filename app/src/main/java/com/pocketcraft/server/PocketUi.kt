@@ -150,7 +150,52 @@ class WorldArt(context: Context) : View(context) {
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         setMeasuredDimension(MeasureSpec.getSize(widthMeasureSpec), PocketUi.dp(context, 116))
     }
+    private fun paintHomestead(canvas: Canvas) {
+        val u = width / 28f
+        val h = height.toFloat()
+        val grass = h * 0.74f
+        paint.color = 0xFF3A4534.toInt()
+        canvas.drawRect(0f,0f,width.toFloat(),h,paint)
+        paint.color = 0xFF7E8B5D.toInt()
+        canvas.drawCircle(width * 0.79f,h * .23f, u * 1.7f,paint)
+        // Layered timber silhouettes create a calm handmade woodland scene.
+        for(i in 0..7) {
+            val x = (i * 4.1f - 1f) * u
+            paint.color = 0xFF303D2D.toInt()
+            canvas.drawRect(x+1.4f*u,grass-5.9f*u,x+2f*u,grass+0.9f*u,paint)
+            paint.color = if(i%2==0) 0xFF5F7950.toInt() else 0xFF516B49.toInt()
+            canvas.drawCircle(x+1.8f*u,grass-6.7f*u,2.9f*u,paint)
+            paint.color = 0xFF789267.toInt()
+            canvas.drawCircle(x+0.6f*u,grass-6.2f*u,1.5f*u,paint)
+        }
+        paint.color = 0xFF678157.toInt()
+        canvas.drawRect(0f,grass,width.toFloat(),h,paint)
+        // Small original homestead cabin — timber roof, stone base, lit window.
+        val x = 11f*u
+        paint.color = 0xFF66513B.toInt()
+        canvas.drawRect(x,grass-5.2f*u,x+7.5f*u,grass+2f*u,paint)
+        paint.color = 0xFF9A7954.toInt()
+        canvas.drawRect(x+0.4f*u,grass-4.6f*u,x+7.1f*u,grass+1.7f*u,paint)
+        paint.color = 0xFF453C32.toInt()
+        canvas.drawRect(x-0.8f*u,grass-6.0f*u,x+8.3f*u,grass-4.9f*u,paint)
+        paint.color = 0xFFB89A70.toInt()
+        canvas.drawRect(x+1.6f*u,grass-3.8f*u,x+3.2f*u,grass-2.1f*u,paint)
+        paint.color = 0xFFFFD98F.toInt()
+        canvas.drawRect(x+1.82f*u,grass-3.55f*u,x+2.94f*u,grass-2.31f*u,paint)
+        paint.color = 0xFF3B3929.toInt()
+        canvas.drawRect(x+4.8f*u,grass-3.6f*u,x+6.3f*u,grass+2f*u,paint)
+        paint.color = 0xFFA2A17D.toInt()
+        for(i in 0..27) {
+            val xx = i * u
+            val lift = if(i%4==0) 1.1f*u else 0.5f*u
+            canvas.drawRect(xx,grass+2.3f*u-lift,xx+0.45f*u,grass+2.4f*u,paint)
+        }
+    }
     override fun onDraw(canvas: Canvas) {
+        if (PocketUi.homestead()) {
+            paintHomestead(canvas)
+            return
+        }
         val unit = width / 25f
         val ground = height * .72f
         paint.color = 0x3357DCF5
