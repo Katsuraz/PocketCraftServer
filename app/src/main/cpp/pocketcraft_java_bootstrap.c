@@ -34,10 +34,13 @@ static char *option(const char *key, const char *value) {
 int main(int argc, char **argv) {
     // --probe JAVA_HOME NATIVE_LIB_DIR TMPDIR
     // --server JAVA_HOME NATIVE_LIB_DIR TMPDIR HEAP_MB LAUNCHER_JAR MAIN_CLASS
-    if (!((argc == 5 && !strcmp(argv[1], "--probe")) ||
-          (argc == 8 && !strcmp(argv[1], "--server"))))
+    // --game JAVA_HOME NATIVE_LIB_DIR TMPDIR HEAP_MB GAME_JAR MAIN_CLASS GAME_DATA_DIR
+    // --game omits Minecraft's "nogui" argument.
+    const int server = argc == 8 && !strcmp(argv[1], "--server");
+    const int game = argc == 9 && !strcmp(argv[1], "--game");
+    const int probe = argc == 5 && !strcmp(argv[1], "--probe");
+    if (!(server || game || probe))
         return fail("Invalid bootstrap arguments");
-    const int server = !strcmp(argv[1], "--server");
     const char *home = argv[2], *libs = argv[3], *temp = argv[4];
 
     if (setenv("JAVA_HOME", home, 1) || setenv("TMPDIR", temp, 1))
@@ -114,13 +117,17 @@ int main(int argc, char **argv) {
         }
         fflush(stderr);
     }
-    if (server) {
+    if (game) {
+        if (setenv("HOME", argv[8], 1)) return fail("Unable to set game data home");
+        OPTVAL("-Duser.home", argv[8]);
+    }
+    if (server || game) {
         char *classpath = argv[6];
         OPTVAL("-Djava.class.path", classpath);
         char memory[48];
         snprintf(memory, sizeof memory, "-Xmx%sm", argv[5]);
         // memory is on the stack and lives through JNI_CreateJavaVM.
-        OPT("-Xms256m");
+        OPT(game ? "-Xms128m" : "-Xms256m");
         OPT(memory);
         OPTVAL("-Dsun.java.command", argv[6]);
     }
@@ -139,7 +146,7 @@ int main(int argc, char **argv) {
     }
     for (int i=0; i<n; i++) free(allocated[i]);
 
-    if (!server) {
+    if (probe) {
         jclass system = (*env)->FindClass(env, "java/lang/System");
         if (!system) return java_error(env, "Could not initialize java.lang.System");
         jmethodID get = (*env)->GetStaticMethodID(env, system, "getProperty", "(Ljava/lang/String;)Ljava/lang/String;");
@@ -164,14 +171,16 @@ int main(int argc, char **argv) {
     }
     mainClass[len] = 0;
     jclass app = (*env)->FindClass(env, mainClass);
-    if (!app) return java_error(env, "Fabric main class not found (check server JAR and libraries)");
+    if (!app) return java_error(env, "Server main class not found (check the selected JAR)");
     jmethodID main = (*env)->GetStaticMethodID(env, app, "main", "([Ljava/lang/String;)V");
-    if (!main) return java_error(env, "Fabric launcher has no static main(String[])");
+    if (!main) return java_error(env, "Server JAR has no static main(String[])");
     jclass str = (*env)->FindClass(env, "java/lang/String");
     if (!str) return java_error(env, "Could not initialize Java String class");
-    jobjectArray params = (*env)->NewObjectArray(env, 1, str, NULL);
-    jstring nogui = (*env)->NewStringUTF(env, "nogui");
-    (*env)->SetObjectArrayElement(env, params, 0, nogui);
+    jobjectArray params = (*env)->NewObjectArray(env, game ? 0 : 1, str, NULL);
+    if (!game) {
+        jstring nogui = (*env)->NewStringUTF(env, "nogui");
+        (*env)->SetObjectArrayElement(env, params, 0, nogui);
+    }
     printf("[PocketCraft native Java] Launching %s from %s\n", argv[7], argv[6]);
     fflush(stdout);
     (*env)->CallStaticVoidMethod(env, app, main, params);

@@ -1,5 +1,18 @@
 # PocketCraft changelog
 
+## v0.8.30 (versionCode 52) — Experimental Multi-Game Hosting: Mindustry
+
+- Add **Experimental Game Lab** to the Homestead Home management tools; Minecraft remains the supported default, entirely separate from experimental game data.
+- Add an isolated **Mindustry** Java dedicated-server adapter using its official headless server entry point and default LAN TCP/UDP port 6567; label all launcher and network statuses as experimental until verified on a real Android phone.
+- Add one-tap download of official Mindustry v160.7 from Anuken's GitHub release with a fixed SHA-256 checksum; alternatively import a trusted Mindustry dedicated-server JAR through Android's file picker.
+- Validate the server JAR manifest and dedicated server class before allowing launch, enforce a 64-MB download/import limit, stage updates, and keep the previously installed JAR if a transfer fails.
+- Extend the Android-packaged JNI Java bootstrap with a backward-compatible `--game` mode that starts arbitrary supported Java game-main classes without Minecraft's `nogui` argument. Preserve the existing `--server` and `--probe` behavior.
+- Add a separate Mindustry foreground service, local output log, command input, quick host/maps/players/status commands, stop/exit and memory controls. Store all game files under `files/game-servers/mindustry`.
+- Prevent concurrent Minecraft and Mindustry launches to avoid severe memory pressure on Android phones. Do not change Minecraft worlds, mods, Geyser, Playit, Minecraft consoles, signing, or saved configurations.
+- A Mindustry process or LAN address is NOT proof that other players can join. No public tunnel, port forwarding or unsupported Linux game-server binary is installed or advertised.
+- Add JVM unit tests for Mindustry server JAR acceptance/rejection. Android compilation checks cannot replace device-side game launch and multiplayer tests.
+
+
 ## v0.8.29 (versionCode 51) — Keep the latest commands visible
 
 - Command Activity now shows the newest 18 events even when the full in-memory transcript contains more lines. This prevents the Android TextView's line limit from hiding the latest issued commands after a busy session.
