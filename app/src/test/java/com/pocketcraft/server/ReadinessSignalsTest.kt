@@ -93,7 +93,53 @@ class ReadinessSignalsTest {
         r.observe("[Geyser-Fabric] Player connected with username Alex")
         assertTrue(r.bedrockListener)
         assertTrue(r.bedrockPlayerJoined)
-        assertEquals("Geyser Bedrock join reported", r.bedrockEvidence)
+        assertEquals("Bedrock player joined (Geyser/Floodgate)", r.bedrockEvidence)
+    }
+
+
+    @Test fun floodgatePlayerLoginProvesBedrockEvenWhenGeyserDoesNotLogStartup() {
+        val r = ReadinessSignals()
+        r.observe("[15:11:03] [Server thread/INFO]: Done (5.1s)! For help, type \"help\"")
+        r.observe("[15:11:10] [Server thread/INFO]: .Alex[/192.168.1.5:49800] logged in with entity id 44 at (1.0, 65.0, 1.0)")
+        assertTrue(r.bedrockPlayerJoined)
+        assertTrue(r.bedrockListener)
+        assertEquals("JAVA + BEDROCK READY", r.state())
+        assertFalse(r.nethernetSignalingReady)
+    }
+
+    @Test fun floodgateCustomPrefixIsRecognized() {
+        val r = ReadinessSignals()
+        r.setFloodgateUsernamePrefix("*")
+        r.observe("[Server thread/INFO]: *Player_01[/127.0.0.1:12345] logged in with entity id 7 at (0, 64, 0)")
+        assertTrue(r.bedrockPlayerJoined)
+        r.reset()
+        assertFalse(r.bedrockListener)
+    }
+
+    @Test fun disabledFloodgatePrefixDoesNotGuessPlayerType() {
+        val r = ReadinessSignals()
+        r.setFloodgateUsernamePrefix("")
+        r.observe("[Server thread/INFO]: .Alex[/192.168.1.5:49800] logged in with entity id 44 at (1, 2, 3)")
+        assertFalse(r.bedrockListener)
+    }
+
+    @Test fun ordinaryJavaLoginsOrChatCannotFakeBedrockJoin() {
+        val r = ReadinessSignals()
+        for (line in listOf(
+            "[Server thread/INFO]: Steve[/192.168.1.5:49800] logged in with entity id 44 at (1, 2, 3)",
+            "[Server thread/INFO]: <Steve> .Alex[/127.0.0.1:4567] logged in with entity id 7",
+            "[Server thread/INFO]: .Alex joined the game",
+            "[Server thread/INFO]: .Alex lost connection: Disconnected",
+            "[Server thread/INFO]: .Alex[/127.0.0.1:4567] FAILED logged in with entity id 7",
+            "[Server thread/INFO]: .Alex[/127.0.0.1:4567] logged in with entity id BAD"
+        )) r.observe(line)
+        assertFalse(r.bedrockListener)
+    }
+
+    @Test fun geyserAlternateStartedMessageIsRecognized() {
+        val r = ReadinessSignals()
+        r.observe("[Geyser-Fabric] Geyser started on UDP port 19132")
+        assertTrue(r.bedrockListener)
     }
 
     @Test fun manualEvidenceBelongsOnlyToCurrentRun() {

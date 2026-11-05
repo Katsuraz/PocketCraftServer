@@ -164,6 +164,19 @@ class ServerService : Service() {
         PocketSounds.play(this, PocketSounds.Event.SERVER_START)
         failure = ""
         readiness.reset()
+        // Floodgate's username prefix is public config, not an authentication
+        // secret. Read it to identify real Bedrock logins in Java server output.
+        runCatching {
+            val floodgateConfig = File(root, "config/floodgate/config.yml")
+            if (floodgateConfig.isFile && floodgateConfig.length() in 1..131072) {
+                val configured = Regex("""(?m)^\s*username-prefix:\s*(?:"([^"]*)"|'([^']*)'|([^\s#]*))""")
+                    .find(floodgateConfig.readText(Charsets.UTF_8))
+                if (configured != null) {
+                    val prefix = configured.groupValues.drop(1).firstOrNull { it.isNotEmpty() } ?: ""
+                    readiness.setFloodgateUsernamePrefix(prefix)
+                }
+            }
+        }
         ServerCommandHints.reset()
         requestedHelpPages = 1
         javaReady = false

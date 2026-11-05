@@ -23,6 +23,10 @@ internal class ReadinessSignals {
     @Volatile var userConfirmedBedrock = false
         private set
     @Volatile private var raknetListener = false
+    // Floodgate's default prefix is "."; a verified vanilla player login with
+    // this prefix proves that a Bedrock player reached the Java server.
+    // The prefix can be changed in Floodgate config and is set before startup.
+    private var floodgateUsernamePrefix = "."
 
     val nethernetSignalingReady: Boolean
         get() = nethernetRegistered || nethernetBuiltIn
@@ -37,7 +41,7 @@ internal class ReadinessSignals {
 
     val bedrockEvidence: String
         get() = when {
-            bedrockPlayerJoined -> "Geyser Bedrock join reported"
+            bedrockPlayerJoined -> "Bedrock player joined (Geyser/Floodgate)"
             userConfirmedBedrock -> "Bedrock join confirmed by you"
             raknetListener -> "Geyser RakNet listener reported"
             nethernetSignalingReady -> nethernetSignalDescription
@@ -53,6 +57,16 @@ internal class ReadinessSignals {
         nethernetNativeFailure = false
         bedrockPlayerJoined = false
         userConfirmedBedrock = false
+    }
+
+    /** Configure the actual Floodgate prefix before processing live server output. */
+    fun setFloodgateUsernamePrefix(prefix: String) {
+        // Empty/custom prefixes cannot be reliably inferred from a vanilla login
+        // without an additional Floodgate/Geyser signal.
+        floodgateUsernamePrefix = prefix.takeIf {
+            it.isNotEmpty() && it.length <= 8 &&
+                it.none { ch -> ch.isWhitespace() || ch == '[' || ch == ']' || ch == ':' }
+        } ?: ""
     }
 
     /** Explicit confirmation by someone who joined this running server from Bedrock. */
@@ -77,8 +91,11 @@ internal class ReadinessSignals {
         //  "Started Geyser on 0.0.0.0:19132"
         //  "Started Geyser on UDP port 19132"
         // These refer to a successfully bound RakNet listener.
-        if (lower.contains("started geyser on ") &&
-            !lower.contains("failed") && !lower.contains("could not")) {
+        if ((lower.contains("started geyser on ") ||
+                (lower.contains("geyser started") &&
+                    (lower.contains(" udp ") || lower.contains(" port ")))) &&
+            !lower.contains("failed") && !lower.contains("could not") &&
+            !lower.contains("unable to")) {
             raknetListener = true
         }
 
@@ -112,6 +129,23 @@ internal class ReadinessSignals {
             bedrockPlayerJoined = true
         }
 
+        // Vanilla Minecraft logs the *real* accepted login under [Server thread],
+        // not the Geyser logger. A Floodgate player normally has a leading dot,
+        // so otherwise successful crossplay was invisible to the status panel.
+        // Require a real server "logged in with entity id" event; chat messages,
+        // disconnects, Java joins, and the Floodgate mod merely being installed
+        // must never count as connection evidence.
+        if (floodgateUsernamePrefix.isNotEmpty() &&
+            lower.contains("[server thread/info]") &&
+            lower.contains(" logged in with entity id ") &&
+            !lower.contains("failed") && !lower.contains("lost connection")) {
+            val match = SERVER_LOGIN.find(lower)
+            val player = match?.groupValues?.getOrNull(1).orEmpty()
+            if (player.startsWith(floodgateUsernamePrefix.lowercase(Locale.ROOT)) &&
+                player.length > floodgateUsernamePrefix.length)
+                bedrockPlayerJoined = true
+        }
+
         if (raknetListener || nethernetSignalingReady || bedrockPlayerJoined || userConfirmedBedrock)
             bedrockListener = true
     }
@@ -125,5 +159,7 @@ internal class ReadinessSignals {
     companion object {
         private val ANSI = Regex("\\u001b\\[[0-9;]*[A-Za-z]")
         private val COLOR = Regex("§[0-9a-fk-or]", RegexOption.IGNORE_CASE)
+        // Minecraft's actual login format: Name[/ip:port] logged in with entity id N
+        private val SERVER_LOGIN = Regex("""\]:\s*([^\s\[\]]+)\[[^\]]*\]\s+logged in with entity id\s+\d+""")
     }
 }

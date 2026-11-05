@@ -1,5 +1,15 @@
 # PocketCraft changelog
 
+## v0.8.25 (versionCode 47) — Detect Bedrock joins from Minecraft's normal logs
+
+- Detect successful Floodgate-prefixed Bedrock player logins in Minecraft's ordinary server log, not only Geyser-tagged startup messages; reject generic Java joins, fake chat messages and failed logins.
+- Respect Floodgate's configured username prefix; when it is empty, do not infer Bedrock from Java usernames.
+- Recognize an additional successful Geyser UDP startup message format.
+- Add a visible, live Bedrock status panel to Home and one-tap confirmation for players who already connected successfully; confirmations apply to the current server session only.
+- Add regression tests without changing server networking, Geyser configuration or saved worlds.
+- Preserve existing v0.8.24 improvements, console commands, datapacks, Homestead UI, and update signing.
+
+
 ## v0.8.22 (versionCode 44) — Reliable Bedrock and Geyser phone-hosting status
 
 - Recognize Geyser's modern NetherNet built-in HTTP/HTTPS signaling startup messages, external signaling registration, both official RakNet startup formats, and Geyser-tagged successful Bedrock player joins. Never equate a Geyser mod JAR with a working listener.

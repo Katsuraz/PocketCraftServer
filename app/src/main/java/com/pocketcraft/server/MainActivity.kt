@@ -32,6 +32,8 @@ class MainActivity : Activity() {
     private var phoneHost: FrameLayout? = null
     private var lastPhoneSignature = ""
     private var connectionHost: FrameLayout? = null
+    private var crossplaySummaryHost: FrameLayout? = null
+    private var lastCrossplaySummarySignature = ""
     private var lastConnectionSignature = ""
     private var consoleOutput: TextView? = null
     private var consoleLogScroll: ScrollView? = null
@@ -64,6 +66,18 @@ class MainActivity : Activity() {
             }
             // Keep live hosting state up to date without redrawing the entire
             // page or unexpectedly resetting the user's scroll position.
+            if (tab == 0) {
+                val crossplaySignature = listOf(ServerService.running, ServerService.javaReady,
+                    ServerService.bedrockReady, ServerService.bedrockEvidence,
+                    ServerService.nethernetNativeFailure).joinToString("|")
+                if (crossplaySignature != lastCrossplaySummarySignature) {
+                    lastCrossplaySummarySignature = crossplaySignature
+                    crossplaySummaryHost?.let { host ->
+                        host.removeAllViews()
+                        host.addView(crossplaySummaryPanel())
+                    }
+                }
+            }
             if (tab == 0) {
                 val signature = listOf(ServerService.running, ServerService.status,
                     ServerService.javaReady, ServerService.bedrockReady,
@@ -520,6 +534,12 @@ class MainActivity : Activity() {
             hero.addView(ui.action(this,"STOP SERVER") { confirmStopMinecraft() })
         }
         body.addView(hero)
+        body.addView(ui.space(this,12))
+        val crossplaySummary = FrameLayout(this)
+        crossplaySummary.addView(crossplaySummaryPanel())
+        crossplaySummaryHost = crossplaySummary
+        lastCrossplaySummarySignature = ""
+        body.addView(crossplaySummary)
         body.addView(ui.space(this,16))
 
         val actions = ui.card(this)
@@ -877,6 +897,46 @@ class MainActivity : Activity() {
         return box
     }
 
+    /** Home shows observed Bedrock evidence and lets the owner confirm a real join. */
+    private fun crossplaySummaryPanel(): LinearLayout {
+        val card = ui.card(this)
+        val geyserInstalled = modFiles().any { it.name.startsWith("Geyser", true) &&
+            it.name.endsWith(".jar", true) }
+        card.addView(ui.text(this, "BEDROCK / GEYSER", 11f, ui.CYAN, true))
+        card.addView(ui.space(this, 7))
+        val connected = ServerService.running && ServerService.bedrockReady
+        card.addView(ui.pill(this, when {
+            connected -> "✓  BEDROCK CONNECTION DETECTED"
+            !geyserInstalled -> "○  GEYSER NOT INSTALLED"
+            !ServerService.running -> "○  SERVER OFFLINE"
+            !ServerService.javaReady -> "○  JAVA SERVER STARTING"
+            else -> "○  BEDROCK JOIN NOT YET OBSERVED"
+        }, if (connected) ui.GREEN else ui.MUTED))
+        card.addView(ui.space(this, 7))
+        card.addView(ui.text(this, when {
+            connected -> "Evidence: " + ServerService.bedrockEvidence
+            geyserInstalled && ServerService.javaReady ->
+                "Try joining from Bedrock. If you are already playing, confirm the connection below; a missing Geyser startup line does not mean the bridge is offline."
+            geyserInstalled -> "Start the Java server, then test connecting from Bedrock."
+            else -> "Install Geyser-Fabric to enable Bedrock players."
+        }, 11f, ui.MUTED))
+        if (geyserInstalled && ServerService.javaReady && !connected) {
+            card.addView(ui.space(this, 9))
+            card.addView(ui.action(this, "✓  I JOINED FROM BEDROCK", false) {
+                AlertDialog.Builder(this)
+                    .setTitle("Confirm a real Bedrock join?")
+                    .setMessage("Only confirm after successfully joining this running Minecraft server from Bedrock Edition. This confirmation lasts for the current server session.")
+                    .setNegativeButton("CANCEL", null)
+                    .setPositiveButton("CONFIRM") { _, _ ->
+                        startService(Intent(this, ServerService::class.java)
+                            .setAction(ServerService.ACTION_CONFIRM_BEDROCK))
+                        toast("Bedrock join confirmed for this session")
+                    }.show()
+            })
+        }
+        return card
+    }
+
     /**
      * A real local-first path: Android itself hosts both Minecraft listeners.
      * No Playit, cloud account, reverse proxy or external registration needed.
@@ -930,7 +990,7 @@ class MainActivity : Activity() {
         } else if (geyserInstalled && ServerService.javaReady) {
             card.addView(ui.space(this,7))
             card.addView(ui.text(this,
-                "No listener log captured does not mean Bedrock is offline. If you can already join from Bedrock, confirm it below.",
+                "No connection log captured yet. If you already joined from Bedrock, confirm it below or check Home for the connection status.",
                 11f,ui.MUTED))
             card.addView(ui.space(this,8))
             card.addView(ui.action(this,"✓  I JOINED SUCCESSFULLY FROM BEDROCK",false) {
