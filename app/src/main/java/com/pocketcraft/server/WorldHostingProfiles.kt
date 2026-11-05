@@ -83,7 +83,7 @@ internal object WorldHostingProfiles {
                 return "$key must be enabled or disabled"
         }
         val seed = props.getProperty("level-seed","")
-        if (seed.length > 120 || seed.any { it == '\\n' || it == '\\r' })
+        if (seed.length > 120 || seed.any { it == '\n' || it == '\r' })
             return "Seed must be at most 120 characters and on one line"
         for ((key,range) in mapOf("view-distance" to 2..32,
             "simulation-distance" to 2..32,"spawn-protection" to 0..256)) {
