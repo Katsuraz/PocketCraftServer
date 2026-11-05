@@ -21,30 +21,55 @@ import android.widget.TextView
  * controls and true Android ripple/focus feedback. No network or theme dependency.
  */
 object PocketUi {
-    const val BG = 0xFF080E18.toInt()
-    const val PANEL = 0xFF141E2C.toInt()
-    const val SURFACE = 0xFF223245.toInt()
-    const val MUTED = 0xFFACBED1.toInt()
-    const val WHITE = 0xFFF6F9FD.toInt()
-    const val GREEN = 0xFF70E9B4.toInt()
-    const val CYAN = 0xFF80D7FA.toInt()
-    const val PURPLE = 0xFFB5A5FF.toInt()
-    const val RED = 0xFFFFA0AB.toInt()
-    const val BORDER = 0xFF324459.toInt()
-    const val SUBTLE = 0xFF182737.toInt()
+    /**
+     * Original PocketCraft themes. Homestead is an inspired woodland look,
+     * drawn in code; no third-party game resources or textures are bundled.
+     * Save preference under UI-only settings, never Minecraft server.properties.
+     */
+    private var currentTheme = "classic"
+    fun loadTheme(c: Context) {
+        currentTheme = c.getSharedPreferences("pocketcraft",0)
+            .getString("uiTheme","classic").let { if(it=="homestead") "homestead" else "classic" }
+    }
+    fun setTheme(c: Context, theme: String) {
+        require(theme=="homestead" || theme=="classic")
+        c.getSharedPreferences("pocketcraft",0).edit().putString("uiTheme",theme).apply()
+        currentTheme = theme
+    }
+    fun homestead(): Boolean = currentTheme=="homestead"
+
+    val BG: Int get() = if(homestead()) 0xFF161A13.toInt() else 0xFF080E18.toInt()
+    val PANEL: Int get() = if(homestead()) 0xFF2C3023.toInt() else 0xFF141E2C.toInt()
+    val SURFACE: Int get() = if(homestead()) 0xFF444634.toInt() else 0xFF223245.toInt()
+    val MUTED: Int get() = if(homestead()) 0xFFC6C1AA.toInt() else 0xFFACBED1.toInt()
+    val WHITE: Int get() = if(homestead()) 0xFFF6ECD7.toInt() else 0xFFF6F9FD.toInt()
+    val GREEN: Int get() = if(homestead()) 0xFFB4CE86.toInt() else 0xFF70E9B4.toInt()
+    val CYAN: Int get() = if(homestead()) 0xFFE1BC83.toInt() else 0xFF80D7FA.toInt()
+    val PURPLE: Int get() = if(homestead()) 0xFFD6B894.toInt() else 0xFFB5A5FF.toInt()
+    val RED: Int get() = if(homestead()) 0xFFF5AA93.toInt() else 0xFFFFA0AB.toInt()
+    val BORDER: Int get() = if(homestead()) 0xFF67684C.toInt() else 0xFF324459.toInt()
+    val SUBTLE: Int get() = if(homestead()) 0xFF252D20.toInt() else 0xFF182737.toInt()
 
     fun dp(c: Context, v: Int): Int = (v * c.resources.displayMetrics.density + .5f).toInt()
 
     fun shape(c: Context, color: Int, radius: Int = 18, stroke: Int? = null): GradientDrawable =
         GradientDrawable().apply {
-            setColor(color)
-            cornerRadius = dp(c, radius).toFloat()
+            if (homestead() && (color==PANEL || color==SURFACE)) {
+                setColors(if (color==PANEL)
+                    intArrayOf(0xFF36382A.toInt(), 0xFF27291F.toInt())
+                else intArrayOf(0xFF514D38.toInt(), 0xFF3D402F.toInt()))
+                orientation = GradientDrawable.Orientation.TOP_BOTTOM
+            } else setColor(color)
+            cornerRadius = dp(c, if(homestead()) radius.coerceAtMost(15) else radius).toFloat()
             if (stroke != null) setStroke(dp(c, 1), stroke)
         }
 
     fun gradient(c: Context, vararg colors: Int): GradientDrawable =
-        GradientDrawable(GradientDrawable.Orientation.TL_BR, colors).apply {
-            cornerRadius = dp(c, 24).toFloat()
+        GradientDrawable(GradientDrawable.Orientation.TL_BR,
+            if (homestead()) intArrayOf(0xFFB3C886.toInt(),0xFFE0BB87.toInt())
+            else colors).apply {
+            cornerRadius = dp(c, if(homestead()) 14 else 24).toFloat()
+            if (homestead()) setStroke(dp(c,1),0xFFE4D5A3.toInt())
         }
 
     fun column(c: Context, gap: Int = 0): LinearLayout = LinearLayout(c).apply {
@@ -57,7 +82,7 @@ object PocketUi {
             text = value
             textSize = size
             setTextColor(color)
-            if (bold) typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+            if (bold) typeface = Typeface.create(if (homestead() && size >= 17f) "serif" else "sans-serif-medium", Typeface.BOLD)
             includeFontPadding = false
             setLineSpacing(dp(c, 2).toFloat(), 1.03f)
         }
@@ -73,7 +98,7 @@ object PocketUi {
         View(c).apply { layoutParams = LinearLayout.LayoutParams(1, dp(c,h)) }
 
     fun card(c: Context): LinearLayout = column(c).apply {
-        background = shape(c, PANEL, 22, BORDER)
+        background = shape(c, PANEL, if(homestead()) 14 else 22, BORDER)
         padding(c, 18, 18, 18, 18)
     }
 
@@ -94,7 +119,7 @@ object PocketUi {
         text(c, label, 13f, if (primary) BG else WHITE, true).apply {
             gravity = Gravity.CENTER
             background = pressable(c,if (primary) gradient(c, GREEN, CYAN)
-                else shape(c, SURFACE, 14, BORDER))
+                else shape(c, SURFACE, if(homestead()) 9 else 14, BORDER))
             padding(c, 16, 15, 16, 15)
             minHeight = dp(c, 52)
             isEnabled = enabledAction
