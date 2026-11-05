@@ -68,6 +68,39 @@ class ServerFilesActivity : Activity() {
         }
     }
 
+    /**
+     * Launch the real Android Files browser, NOT ACTION_OPEN_DOCUMENT_TREE.
+     * DocumentsUI intentionally hides a caller's own DocumentsProvider in
+     * self-initiated picker dialogs, so PocketCraft's provider is absent there.
+     */
+    private fun openInAndroidFiles() {
+        val rootUri=android.provider.DocumentsContract.buildRootUri(
+            PocketCraftDocumentsProvider.AUTHORITY,
+            PocketCraftDocumentsProvider.ROOT_ID)
+        val openRoot=Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(rootUri,android.provider.DocumentsContract.Root.MIME_TYPE_ITEM)
+        }
+        try {
+            startActivity(openRoot)
+            return
+        } catch (_:android.content.ActivityNotFoundException) {
+            // Older OEM file managers may not implement the root VIEW action.
+        } catch (_:SecurityException) {
+            // Fall back to the Files launcher when direct root navigation is unavailable.
+        }
+        if (android.os.Build.VERSION.SDK_INT >= 29) {
+            try {
+                startActivity(Intent.makeMainSelectorActivity(
+                    Intent.ACTION_MAIN,Intent.CATEGORY_APP_FILES))
+                toast("In Files, open the menu and choose PocketCraft Server.")
+                return
+            } catch (_:Exception) { }
+        }
+        AlertDialog.Builder(this).setTitle("Android Files unavailable")
+            .setMessage("Open your phone's Files app directly and look for PocketCraft Server in storage locations. If it isn't supported by your file manager, use PocketCraft's built-in file editor or Export Complete Server ZIP.")
+            .setPositiveButton("OK",null).show()
+    }
+
     private fun showFolder() {
         val current=runCatching{safe(directory ?: serverRoot)}.getOrDefault(serverRoot)
         if(!current.isDirectory){directory=serverRoot;return showFolder()}
@@ -112,20 +145,11 @@ class ServerFilesActivity : Activity() {
             access.addView(ui.text(this,"PHONE FILE MANAGER",16f,ui.WHITE,true))
             access.addView(ui.space(this,8))
             access.addView(ui.text(this,
-                "Open Android's file picker, then choose PocketCraft Server from Browse locations. This opens your live server files, not a copy.",
+                "Open the live server folder in Android Files. If your file manager does not support PocketCraft storage, use the file editor above or export a ZIP below.",
                 12f,ui.MUTED))
             access.addView(ui.space(this,10))
-            access.addView(ui.action(this,"OPEN IN ANDROID FILES",true) {
-                try {
-                    val browse=Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or
-                            Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
-                            Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
-                    }
-                    startActivity(browse)
-                } catch (e:Exception) {
-                    toast("Android file picker unavailable: "+e.message)
-                }
+            access.addView(ui.action(this,"OPEN SERVER IN FILES",true) {
+                openInAndroidFiles()
             })
             body.addView(access)
             body.addView(ui.space(this,13))
