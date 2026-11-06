@@ -119,6 +119,37 @@ class ServerFilesActivity : Activity() {
         body.addView(ui.text(this,breadcrumb,12f,ui.GREEN,true))
         body.addView(ui.space(this,9))
         body.addView(ui.space(this,10))
+        val controls=ui.row(this)
+        controls.addView(ui.action(this,"SEARCH"){
+            val field=EditText(this).apply {
+                setText(filter);hint="Filter names in this folder";setSingleLine(true)
+            }
+            AlertDialog.Builder(this).setTitle("Search files").setView(field)
+                .setNegativeButton("CANCEL",null)
+                .setNeutralButton("CLEAR"){_,_->filter="";showFolder()}
+                .setPositiveButton("SEARCH"){_,_->filter=field.text.toString().trim();showFolder()}
+                .show()
+        },ui.weight(this))
+        val sortPrefs=getSharedPreferences("pocketcraft",0)
+        val sortMode=ServerFileSort.parse(sortPrefs.getString("fileSortMode",null))
+        controls.addView(ui.action(this,"SORT") {
+            val modes=ServerFileSort.Mode.entries
+            AlertDialog.Builder(this).setTitle("Sort server files")
+                .setSingleChoiceItems(modes.map {it.label}.toTypedArray(),modes.indexOf(sortMode)) {
+                    dialog,index ->
+                    sortPrefs.edit().putString("fileSortMode",modes[index].name).apply()
+                    dialog.dismiss()
+                    showFolder()
+                }.setNegativeButton("CANCEL",null).show()
+        },ui.weight(this))
+        controls.addView(ui.action(this,"REFRESH"){showFolder()},
+            LinearLayout.LayoutParams(0,-2,1f))
+        body.addView(controls)
+        body.addView(ui.space(this,8))
+        body.addView(ui.text(this,"Sorted: "+sortMode.label+
+            if(filter.isBlank())"" else "  ·  Search: "+filter.take(34),
+            11f,ui.MUTED))
+        body.addView(ui.space(this,11))
         if(current==serverRoot){
             val shortcuts=ui.card(this)
             shortcuts.addView(ui.text(this,"QUICK ACCESS",11f,ui.CYAN,true))
@@ -172,24 +203,10 @@ class ServerFilesActivity : Activity() {
             body.addView(backupCard)
             body.addView(ui.space(this,13))
         }
-        val controls=ui.row(this)
-        controls.addView(ui.action(this,if(filter.isEmpty())"SEARCH" else "SEARCH: "+filter){
-            val field=EditText(this).apply {
-                setText(filter);hint="Filter names in this folder";setSingleLine(true)
-            }
-            AlertDialog.Builder(this).setTitle("Search files").setView(field)
-                .setNegativeButton("CANCEL",null)
-                .setNeutralButton("CLEAR"){_,_->filter="";showFolder()}
-                .setPositiveButton("SEARCH"){_,_->filter=field.text.toString().trim();showFolder()}
-                .show()
-        },ui.weight(this))
-        controls.addView(ui.action(this,"REFRESH"){showFolder()},LinearLayout.LayoutParams(0,-2,1f))
-        body.addView(controls)
-        body.addView(ui.space(this,13))
         val files=current.listFiles()?.filter {
             runCatching{safe(it);true}.getOrDefault(false) &&
                 (filter.isBlank()||it.name.contains(filter,true))
-        }?.sortedWith(compareBy<File>{!it.isDirectory}.thenBy{it.name.lowercase()}) ?: emptyList()
+        }?.sortedWith(ServerFileSort.comparator(sortMode)) ?: emptyList()
         if(files.isEmpty()){
             body.addView(ui.text(this,"No files",12f,ui.MUTED))
         }
