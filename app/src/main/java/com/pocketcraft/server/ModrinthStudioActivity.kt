@@ -388,7 +388,7 @@ class ModrinthStudioActivity : Activity() {
             }
         }.start()
     }
-    private fun showChoices(hit:ModrinthCatalog.Hit,v:ModrinthCatalog.Version,
+    internal fun showChoices(hit:ModrinthCatalog.Hit,v:ModrinthCatalog.Version,
                             deps:List<WebsiteModInstaller.DependencyChoice>,allowMismatch:Boolean){
         val conflict=deps.any {it.kind=="incompatible" && it.installed}
         val selected=BooleanArray(deps.size){i ->
