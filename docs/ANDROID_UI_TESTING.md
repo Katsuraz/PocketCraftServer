@@ -17,7 +17,7 @@ The Modrinth search/version screenshot is best-effort because the live API can b
 1. Open GitHub Actions, then Build Android APK, then select a run.
 2. Choose the Android emulator UI smoke and screenshots job.
 3. Under Artifacts, download pocketcraft-emulator-ui-report.
-4. Inspect ui-test-output/screenshots/pocketcraft-ui-smoke/*.png, the last-screen.png screenshot, android-logcat.txt and the instrumented test reports.
+4. Inspect ui-test-output/screenshots/PocketCraftUISmoke/*.png, the last-screen.png screenshot, android-logcat.txt and the instrumented test reports.
 
 If an emulator test fails, available logs and screenshots are still uploaded.
 
