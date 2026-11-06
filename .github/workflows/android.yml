@@ -401,9 +401,16 @@ jobs:
           target = Path("release-dist/PocketCraft-v" + name + ".apk")
           source.rename(target)
           sha = hashlib.sha256(target.read_bytes()).hexdigest()
+          if re.fullmatch(r"\d+\.\d+\.\d+-(?:beta|rc)\.\d+",name):
+              channel="beta"
+          elif re.fullmatch(r"\d+\.\d+\.\d+",name):
+              channel="stable"
+          else:
+              raise SystemExit("Unsupported public version: "+name)
           manifest = {
               "versionName": name,
               "versionCode": code,
+              "channel": channel,
               "apkName": target.name,
               "sha256": sha
           }
@@ -419,6 +426,14 @@ jobs:
           VERSION="$(sed -nE 's/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' app/build.gradle.kts | head -n 1)"
           test -n "$VERSION"
           TAG="v$VERSION"
+          RELEASE_TITLE="PocketCraft $TAG"
+          RELEASE_FLAGS=()
+          case "$VERSION" in
+            *-beta.*|*-rc.*)
+              RELEASE_TITLE="PocketCraft $TAG — Official Beta"
+              RELEASE_FLAGS=(--prerelease)
+              ;;
+          esac
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "::notice::GitHub Release $TAG already published; leaving it unchanged."
             exit 0
@@ -427,14 +442,16 @@ jobs:
             echo "Publishing release for existing tag $TAG"
             gh release create "$TAG" \
               release-dist/PocketCraft-v*.apk release-dist/pocketcraft-update.json \
-              --title "PocketCraft $TAG" \
+              --title "$RELEASE_TITLE" \
               --notes-file CHANGELOG.md \
+              "${RELEASE_FLAGS[@]}" \
               --verify-tag
           else
             echo "Creating release and tag $TAG from verified main build $GITHUB_SHA"
             gh release create "$TAG" \
               release-dist/PocketCraft-v*.apk release-dist/pocketcraft-update.json \
-              --title "PocketCraft $TAG" \
+              --title "$RELEASE_TITLE" \
               --notes-file CHANGELOG.md \
+              "${RELEASE_FLAGS[@]}" \
               --target "$GITHUB_SHA"
           fi
