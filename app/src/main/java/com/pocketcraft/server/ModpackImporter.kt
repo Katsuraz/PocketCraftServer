@@ -32,6 +32,7 @@ object ModpackImporter {
         path.startsWith("defaultconfigs/") ||
         path.startsWith("kubejs/") ||
         path.startsWith("datapacks/") ||
+        path.startsWith("world/datapacks/") ||
         path.startsWith("scripts/") ||
         path.startsWith("patchouli_books/")
 
@@ -130,8 +131,25 @@ object ModpackImporter {
         return count
     }
 
+    /**
+     * Modrinth manifests may place world datapacks under either datapacks/
+     * or world/datapacks/. Install these into the assigned managed world,
+     * NOT the unrecognized server-root datapacks/ folder.
+     */
+    internal fun worldDatapackPath(raw: String): String? {
+        val path = safePath(raw)
+        val prefix = when {
+            path.startsWith("world/datapacks/") -> "world/datapacks/"
+            path.startsWith("datapacks/") -> "datapacks/"
+            else -> return null
+        }
+        val relative = path.removePrefix(prefix)
+        if (relative.isBlank()) throw IOException("Empty world datapack path")
+        return relative
+    }
+
     /** Keep existing server files untouched; install missing files instead of aborting. */
-    private fun apply(stage:File,root:File):Pair<Int,Int> {
+    private fun apply(context:Context,stage:File,root:File):Pair<Int,Int> {
         val files=stage.walkTopDown().filter{it.isFile}.toList()
         if(files.size>MAX_FILES)throw IOException("Pack contains too many files")
         var already=0
@@ -139,7 +157,14 @@ object ModpackImporter {
         for(file in files) {
             InstallProgress.check()
             val relative=file.relativeTo(stage).invariantSeparatorsPath
-            val target=dest(root,relative)
+            val worldPart=worldDatapackPath(relative)
+            val target=if(worldPart!=null) {
+                val folder=DatapackInstaller.activeDirectory(context).canonicalFile
+                val resolved=File(folder,worldPart).canonicalFile
+                if(!resolved.path.startsWith(folder.path+File.separator))
+                    throw IOException("World datapack attempted to escape world directory")
+                resolved
+            } else dest(root,relative)
             if(target.exists()) {
                 if(!target.isFile) throw IOException("Cannot install over directory: $relative")
                 already++
@@ -263,7 +288,7 @@ object ModpackImporter {
         stageOverrides(zip,stage,"overrides/")
         stageOverrides(zip,stage,"server-overrides/")
         InstallProgress.emit("Applying modpack files…")
-        val (installed,already)=apply(stage,base)
+        val (installed,already)=apply(context,stage,base)
         return Summary(index.optString("name","Modrinth pack"),"Modrinth",version,"Fabric $loader",installed,skipped+already)
     }
 
@@ -305,7 +330,7 @@ object ModpackImporter {
         InstallProgress.emit("Unpacking server overrides…")
         stageOverrides(zip,stage,index.optString("overrides","overrides")+"/")
         InstallProgress.emit("Applying modpack files…")
-        val (installed,already)=apply(stage,base)
+        val (installed,already)=apply(context,stage,base)
         return Summary(index.optString("name","CurseForge pack"),"CurseForge",version,loader,installed,skipped+already)
     }
 }
