@@ -69,6 +69,7 @@ internal object ModrinthVersionPicker {
         root.addView(ui.space(c,8))
         var selectedChannel="all"
         var oldestFirst=false
+        var shownLimit=35
         val filterRow=ui.row(c)
         val buttons=mutableListOf<Pair<String,TextView>>()
         val resultCount=ui.text(c,"",11f,ui.MUTED)
@@ -99,7 +100,7 @@ internal object ModrinthVersionPicker {
                 list.addView(empty)
                 return
             }
-            visible.forEach { version ->
+            visible.take(shownLimit).forEach { version ->
                 val card=ui.column(c).apply {
                     background=ui.pressable(c,ui.shape(c,ui.SURFACE,10,ui.BORDER))
                     setPadding(ui.dp(c,11),ui.dp(c,11),ui.dp(c,11),ui.dp(c,11))
@@ -153,6 +154,13 @@ internal object ModrinthVersionPicker {
                 }
                 list.addView(card,LinearLayout.LayoutParams(-1,-2).apply {
                     bottomMargin=ui.dp(c,8)
+                })
+            }
+            if(visible.size>shownLimit){
+                list.addView(ui.action(c,"LOAD MORE VERSIONS  ("+
+                    (visible.size-shownLimit)+" REMAIN)",true){
+                    shownLimit+=35
+                    render()
                 })
             }
         }
