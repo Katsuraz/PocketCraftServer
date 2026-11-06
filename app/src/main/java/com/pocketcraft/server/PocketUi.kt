@@ -189,7 +189,7 @@ object PocketUi {
     fun card(c: Context): LinearLayout = column(c).apply {
         background = if (homestead()) TimberDrawable(c, false, true)
             else shape(c, PANEL, 22, BORDER)
-        padding(c, 18, 18, 18, 18)
+        padding(c, 14, 14, 14, 14)
     }
 
     fun pill(c: Context, label: String, tint: Int = CYAN): TextView =
@@ -206,13 +206,15 @@ object PocketUi {
         RippleDrawable(ColorStateList.valueOf(0x40FFFFFF),background,null)
 
     fun action(c: Context, label: String, primary: Boolean = false, enabledAction: Boolean = true, click: () -> Unit): TextView =
-        text(c, label, 13f, if (primary) BG else WHITE, true).apply {
+        text(c, label, 12f, if (primary) BG else WHITE, true).apply {
             gravity = Gravity.CENTER
             background = pressable(c,if (homestead()) TimberDrawable(c, primary, false)
                 else if (primary) gradient(c, GREEN, CYAN)
                 else shape(c, SURFACE, 14, BORDER))
-            padding(c, 16, 15, 16, 15)
-            minHeight = dp(c, 52)
+            padding(c, 12, 11, 12, 11)
+            minHeight = dp(c, 48)
+            maxLines = 2
+            ellipsize = android.text.TextUtils.TruncateAt.END
             isEnabled = enabledAction
             alpha = if (enabledAction) 1f else .48f
             isClickable = enabledAction

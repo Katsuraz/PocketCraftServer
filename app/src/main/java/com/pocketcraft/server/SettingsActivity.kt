@@ -61,73 +61,95 @@ class SettingsActivity : Activity() {
     }
 
 
-    private fun heading(label: String, description: String): LinearLayout =
-        ui.column(this).apply {
-            addView(ui.text(this@SettingsActivity, label, 19f, ui.WHITE, true))
-            addView(ui.space(this@SettingsActivity, 5))
-            addView(ui.text(this@SettingsActivity, description, 12f, ui.MUTED))
+    private fun infoButton(title: String, help: String): TextView =
+        ui.text(this,"ⓘ",15f,ui.MUTED,true).apply {
+            gravity=Gravity.CENTER
+            minWidth=ui.dp(this@SettingsActivity,36)
+            minHeight=ui.dp(this@SettingsActivity,40)
+            isClickable=true
+            isFocusable=true
+            contentDescription="Help: $title"
+            setOnClickListener {
+                AlertDialog.Builder(this@SettingsActivity).setTitle(title)
+                    .setMessage(help).setPositiveButton("OK",null).show()
+            }
         }
+
+    private fun heading(label: String, description: String): LinearLayout =
+        HomesteadComponents.sectionHeading(this,label,description)
 
     private fun input(
         parent: LinearLayout, key: String, title: String, default: String,
         help: String = "", numeric: Boolean = false
     ) {
-        val row = ui.column(this)
-        row.addView(ui.text(this, title, 14f, ui.WHITE, true))
-        if (help.isNotBlank()) {
-            row.addView(ui.space(this, 4))
-            row.addView(ui.text(this, help, 11f, ui.MUTED))
-        }
-        row.addView(ui.space(this, 9))
-        val edit = EditText(this).apply {
+        val container=ui.column(this)
+        val row=ui.row(this)
+        row.addView(ui.text(this,title,13f,ui.WHITE,true),
+            LinearLayout.LayoutParams(0,-2,1f))
+        if(help.isNotBlank()) row.addView(infoButton(title,help))
+        container.addView(row)
+        container.addView(ui.space(this,4))
+        val edit=EditText(this).apply {
             setSingleLine(true)
-            textSize = 15f
+            textSize=14f
             setTextColor(ui.WHITE)
             setHintTextColor(ui.MUTED)
-            setText(props.getProperty(key, default))
-            if (numeric) inputType = InputType.TYPE_CLASS_NUMBER
-            if (key=="level-name") { isEnabled = false; alpha = 0.72f }
-            background = ui.shape(this@SettingsActivity, ui.SURFACE, 12, ui.BORDER)
-            setPadding(ui.dp(this@SettingsActivity,14),ui.dp(this@SettingsActivity,13),
-                ui.dp(this@SettingsActivity,14),ui.dp(this@SettingsActivity,13))
+            setText(props.getProperty(key,default))
+            if(numeric)inputType=InputType.TYPE_CLASS_NUMBER
+            if(key=="level-name"){isEnabled=false;alpha=.72f}
+            background=ui.shape(this@SettingsActivity,ui.SURFACE,10,ui.BORDER)
+            setPadding(ui.dp(this@SettingsActivity,12),ui.dp(this@SettingsActivity,8),
+                ui.dp(this@SettingsActivity,12),ui.dp(this@SettingsActivity,8))
         }
-        editors[key] = edit
-        row.addView(edit, LinearLayout.LayoutParams(-1,-2))
-        parent.addView(row)
-        parent.addView(ui.space(this, 18))
+        editors[key]=edit
+        container.addView(edit,LinearLayout.LayoutParams(-1,-2))
+        parent.addView(container)
+        parent.addView(ui.space(this,12))
     }
 
-    private fun toggle(parent: LinearLayout, key: String, title: String, help: String, default: Boolean) {
+    private fun toggle(parent: LinearLayout,key: String,title: String,help: String,default: Boolean) {
         val row=ui.row(this)
-        val labels=ui.column(this)
-        labels.addView(ui.text(this,title,14f,ui.WHITE,true))
-        labels.addView(ui.space(this,5))
-        labels.addView(ui.text(this,help,11f,ui.MUTED))
-        row.addView(labels,LinearLayout.LayoutParams(0,-2,1f))
+        row.addView(ui.text(this,title,13f,ui.WHITE,true),
+            LinearLayout.LayoutParams(0,-2,1f))
+        if(help.isNotBlank())row.addView(infoButton(title,help))
         val control=Switch(this).apply {
-            isChecked = props.getProperty(key,default.toString()).equals("true",true)
-            thumbTintList = android.content.res.ColorStateList.valueOf(ui.GREEN)
+            isChecked=props.getProperty(key,default.toString()).equals("true",true)
+            thumbTintList=android.content.res.ColorStateList.valueOf(ui.GREEN)
+            contentDescription=title
         }
         toggles[key]=control
         row.addView(control)
         parent.addView(row)
-        parent.addView(ui.space(this,18))
+        parent.addView(ui.space(this,12))
     }
 
     private fun select(parent:LinearLayout,key:String,title:String,default:String,choices:List<String>) {
-        parent.addView(ui.text(this,title,14f,ui.WHITE,true))
-        parent.addView(ui.space(this,9))
+        val row=ui.row(this)
+        row.addView(ui.text(this,title,13f,ui.WHITE,true),
+            LinearLayout.LayoutParams(0,-2,1f))
         val current=props.getProperty(key,default).takeIf { it in choices } ?: default
         selected[key]=current
-        val button=ui.action(this,current.uppercase()+"   ▾") {
-            AlertDialog.Builder(this).setTitle(title).setItems(choices.toTypedArray()) { _, index ->
+        val button=ui.text(this,current.uppercase()+"  ▾",13f,ui.GREEN,true).apply {
+            gravity=Gravity.CENTER
+            setPadding(ui.dp(this@SettingsActivity,11),ui.dp(this@SettingsActivity,10),
+                ui.dp(this@SettingsActivity,11),ui.dp(this@SettingsActivity,10))
+            background=ui.pressable(this@SettingsActivity,
+                ui.shape(this@SettingsActivity,ui.SURFACE,10,ui.BORDER))
+            isClickable=true
+            isFocusable=true
+            contentDescription="$title: $current"
+        }
+        button.setOnClickListener {
+            AlertDialog.Builder(this).setTitle(title).setItems(choices.toTypedArray()) { _,index ->
                 selected[key]=choices[index]
-                selectors[key]?.text=choices[index].uppercase()+"   ▾"
+                selectors[key]?.text=choices[index].uppercase()+"  ▾"
+                selectors[key]?.contentDescription="$title: "+choices[index]
             }.setNegativeButton("CANCEL",null).show()
         }
         selectors[key]=button
-        parent.addView(button)
-        parent.addView(ui.space(this,18))
+        row.addView(button)
+        parent.addView(row)
+        parent.addView(ui.space(this,12))
     }
 
     private fun section(body:LinearLayout,title:String,subtitle:String,fill:(LinearLayout)->Unit) {
@@ -157,25 +179,12 @@ class SettingsActivity : Activity() {
 
         val screen=ui.column(this).apply { setBackgroundColor(ui.BG) }
         screen.addView(HomesteadComponents.subpageHeader(this,
-            "Settings","Homestead control room") { finish() })
+            "Settings","Server controls") { finish() })
         val scroll=ScrollView(this).apply { isVerticalScrollBarEnabled=false; isFillViewport=true }
         val body=ui.column(this).apply {
             setPadding(ui.dp(this@SettingsActivity,18),0,ui.dp(this@SettingsActivity,18),ui.dp(this@SettingsActivity,30))
         }
-        val hero=ui.column(this).apply {
-            background=ui.shape(this@SettingsActivity,ui.PANEL,16,ui.BORDER)
-            setPadding(ui.dp(this@SettingsActivity,20),ui.dp(this@SettingsActivity,22),
-                ui.dp(this@SettingsActivity,20),ui.dp(this@SettingsActivity,22))
-        }
-        hero.addView(ui.pill(this,"SERVER PROFILE",ui.GREEN))
-        hero.addView(ui.space(this,13))
-        hero.addView(ui.text(this,"Your control room",23f,ui.WHITE,true))
-        hero.addView(ui.space(this,7))
-        hero.addView(ui.text(this,
-            "Choose one area to manage. World-specific preferences live inside Worlds.",
-            12f,ui.MUTED))
-        body.addView(hero)
-        body.addView(ui.space(this,15))
+        body.addView(ui.space(this,8))
         val categories=HorizontalScrollView(this).apply {
             isHorizontalScrollBarEnabled=false
         }
@@ -196,7 +205,7 @@ class SettingsActivity : Activity() {
         section(body,"Appearance","Theme") { card ->
             card.addView(ui.text(this,"Homestead",16f,ui.WHITE,true))
             card.addView(ui.space(this,6))
-            card.addView(ui.text(this,"Warm oak, parchment accents, and clean Minecraft-style typography.",12f,ui.MUTED))
+            card.addView(ui.text(this,"Woodland theme",12f,ui.MUTED))
             card.addView(ui.space(this,13))
             card.addView(ui.action(this,
                 if(ui.homestead()) "✓ HOMESTEAD • ACTIVE" else "🌿  USE HOMESTEAD",true) {
@@ -214,7 +223,7 @@ class SettingsActivity : Activity() {
                 }
             })
             card.addView(ui.space(this,8))
-            card.addView(ui.text(this,"Theme changes apply immediately and never modify Minecraft server files.",11f,ui.MUTED))
+            card.addView(ui.text(this,"Changes apply instantly.",11f,ui.MUTED))
         }
         section(body,"Mojangles font","Real Minecraft-style lettering across the interface") { card ->
             card.addView(ui.text(this,
@@ -250,11 +259,11 @@ class SettingsActivity : Activity() {
                 if (ui.pixelFont()) { ui.setFontStyle(this,false); recreate() }
             })
         }
-        section(body,"Sound effects","Minecraft-style menu ticks and server cues") { card ->
+        section(body,"Sound effects","") { card ->
             card.addView(ui.text(this,"PocketCraft soundscape",16f,ui.WHITE,true))
             card.addView(ui.space(this,7))
             card.addView(ui.text(this,
-                "Crisp, Minecraft-style menu clicks. Your existing server start, ready, stop and error cues stay unchanged. All effects are original audio.",
+                "Menu and server sounds.",
                 12f,ui.MUTED))
             card.addView(ui.space(this,14))
             val soundRow = ui.row(this)
@@ -346,11 +355,11 @@ class SettingsActivity : Activity() {
         }
 
         section(body,"Server connections","Share address and Java capacity") { card ->
-            card.addView(ui.text(this,"World-specific MOTD and gameplay options now live inside Worlds → your world → World settings.",12f,ui.MUTED))
+            card.addView(ui.text(this,"World options are under Worlds.",12f,ui.MUTED))
             card.addView(ui.space(this,13))
             card.addView(ui.text(this,"SHARE ADDRESS",14f,ui.WHITE,true))
             card.addView(ui.space(this,5))
-            card.addView(ui.text(this,"Optional domain, tunnel hostname or public address. For sharing only — this cannot create or change your public IP or DNS.",11f,ui.MUTED))
+            card.addView(ui.text(this,"Display name only. Does not configure DNS.",11f,ui.MUTED))
             card.addView(ui.space(this,10))
             advertised=EditText(this).apply {
                 setSingleLine(true);textSize=15f
@@ -376,13 +385,13 @@ class SettingsActivity : Activity() {
         }
 
         section(body,"Bedrock & Geyser","Simple local and Playit networking configuration") { card ->
-            card.addView(ui.text(this,"Configure Bedrock ports, signaling and NXS without editing YAML.",12f,ui.MUTED))
+            card.addView(ui.text(this,"Crossplay settings",12f,ui.MUTED))
             card.addView(ui.space(this,12))
             card.addView(ui.action(this,"OPEN GEYSER SETTINGS",true) {
                 startActivity(Intent(this,GeyserSettingsActivity::class.java))
             })
             card.addView(ui.space(this,7))
-            card.addView(ui.text(this,"Includes config.yml import, private backup and restore. Stop the server before saving.",11f,ui.MUTED))
+            card.addView(ui.text(this,"Stop server to edit.",11f,ui.MUTED))
         }
 
         section(body,"Who can join?","Accounts, whitelist and access safety") { card ->
@@ -437,7 +446,7 @@ class SettingsActivity : Activity() {
             })
             card.addView(limits)
             card.addView(ui.space(this,6))
-            card.addView(ui.text(this,"Tap Save to apply on the next server start.",11f,ui.MUTED))
+            card.addView(ui.text(this,"Changes apply after restart.",11f,ui.MUTED))
         }
 
         scroll.addView(body)
