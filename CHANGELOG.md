@@ -1,5 +1,25 @@
 # PocketCraft changelog
 
+## v0.9.0-beta.2 (versionCode 63) — Reliability, Backup Safety & Management QoL
+
+**Official public beta; stable users remain on v0.8.39 unless they opt in.**
+
+- **Verify ZIP**: added read-only integrity checking for uploaded server backup archives before restoration, with CRC, path traversal, duplicate entry, and expanded-size limits.
+- **Safer restores**: preflight backups before touching server data, restore through staging, reject collisions with existing files, and remove partially restored files if an operation fails. Stop/starting/stopping guard prevents unsafe backup operations during server lifecycle changes.
+- **Mod dependency review**: inspect Fabric mod IDs, required dependencies, and provided aliases from installed JAR metadata, then flag possible missing or duplicate IDs in a compact on-demand review. These are advisory, not compatibility guarantees, and never modify installed mods automatically.
+- **Safer console sharing**: add an optional redacted log-copy action that masks recognizable NXS tokens and labeled credentials. The original raw-log option remains available with its security warning; always review shared logs.
+- **Device storage monitoring**: display actual Android app-storage free capacity and a low-storage warning alongside phone RAM, battery, thermal status and uptime.
+- Add unit tests covering archive validation, restore rollback/collisions, mod dependency advisories and log redaction.
+- Preserve theme selection, Java/Fabric hosting, Playit agent, Geyser/Floodgate, user worlds, installed mods, signatures and beta/stable update channels.
+
+### Beta limitations
+
+- On-device, real-play, and live networking verification remains outstanding; CI compilation cannot certify a physical Bedrock join.
+- Complete mod dependency **version constraint resolution**, automatic scheduling, unrestricted large backups, full server profiler, and the remaining v0.9.0 redesign roadmap are not implemented in this beta.
+- ZIP verification checks integrity and bounded structure, not whether each mod or Minecraft world will run successfully.
+- Redaction is best effort; never share logs without reviewing the output first.
+
+
 ## v0.9.0-beta.1 (versionCode 62) — Official public beta: Appearance Studio and update channels
 
 **Experimental prerelease:** Core Minecraft hosting is preserved; visual and updater changes require physical-device beta testing.
