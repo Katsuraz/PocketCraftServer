@@ -57,58 +57,84 @@ class WorldSettingsActivity : Activity() {
         render()
     }
 
-    private fun addInput(parent: LinearLayout, title: String, description: String,
-                         value: String, numeric: Boolean = false): EditText {
-        parent.addView(ui.text(this,title,14f,ui.WHITE,true))
+    private fun help(title: String, message: String): TextView =
+        ui.text(this,"ⓘ",15f,ui.MUTED,true).apply {
+            gravity=android.view.Gravity.CENTER
+            minWidth=ui.dp(this@WorldSettingsActivity,36)
+            minHeight=ui.dp(this@WorldSettingsActivity,38)
+            isClickable=true
+            isFocusable=true
+            contentDescription="Help: $title"
+            setOnClickListener {
+                AlertDialog.Builder(this@WorldSettingsActivity).setTitle(title)
+                    .setMessage(message).setPositiveButton("OK",null).show()
+            }
+        }
+
+    private fun addInput(parent: LinearLayout,title: String,description: String,
+                         value: String,numeric: Boolean = false): EditText {
+        val label=ui.row(this)
+        label.addView(ui.text(this,title,13f,ui.WHITE,true),
+            LinearLayout.LayoutParams(0,-2,1f))
+        label.addView(help(title,description))
+        parent.addView(label)
         parent.addView(ui.space(this,4))
-        parent.addView(ui.text(this,description,11f,ui.MUTED))
-        parent.addView(ui.space(this,7))
-        val field = EditText(this).apply {
+        val field=EditText(this).apply {
             setSingleLine(true)
-            textSize = 15f
+            textSize=14f
             setTextColor(ui.WHITE)
             setHintTextColor(ui.MUTED)
             setText(value)
-            if (numeric) inputType = InputType.TYPE_CLASS_NUMBER
-            background = ui.shape(this@WorldSettingsActivity,ui.SURFACE,12,ui.BORDER)
-            setPadding(ui.dp(this@WorldSettingsActivity,13),ui.dp(this@WorldSettingsActivity,11),
-                ui.dp(this@WorldSettingsActivity,13),ui.dp(this@WorldSettingsActivity,11))
+            if(numeric)inputType=InputType.TYPE_CLASS_NUMBER
+            background=ui.shape(this@WorldSettingsActivity,ui.SURFACE,10,ui.BORDER)
+            setPadding(ui.dp(this@WorldSettingsActivity,12),ui.dp(this@WorldSettingsActivity,8),
+                ui.dp(this@WorldSettingsActivity,12),ui.dp(this@WorldSettingsActivity,8))
         }
         parent.addView(field,LinearLayout.LayoutParams(-1,-2))
-        parent.addView(ui.space(this,16))
+        parent.addView(ui.space(this,12))
         return field
     }
 
-    private fun addSelector(parent: LinearLayout, title: String, current: String,
-                            choices: List<String>, onSelected: (String) -> Unit) {
-        parent.addView(ui.text(this,title,14f,ui.WHITE,true))
-        parent.addView(ui.space(this,8))
-        val label = ui.action(this,current.uppercase() + "  ▾") {}
-        label.setOnClickListener {
+    private fun addSelector(parent: LinearLayout,title: String,current: String,
+                            choices: List<String>,onSelected: (String) -> Unit) {
+        val row=ui.row(this)
+        row.addView(ui.text(this,title,13f,ui.WHITE,true),
+            LinearLayout.LayoutParams(0,-2,1f))
+        val button=ui.text(this,current.uppercase()+"  ▾",13f,ui.GREEN,true).apply {
+            gravity=android.view.Gravity.CENTER
+            background=ui.pressable(this@WorldSettingsActivity,
+                ui.shape(this@WorldSettingsActivity,ui.SURFACE,10,ui.BORDER))
+            setPadding(ui.dp(this@WorldSettingsActivity,10),ui.dp(this@WorldSettingsActivity,10),
+                ui.dp(this@WorldSettingsActivity,10),ui.dp(this@WorldSettingsActivity,10))
+            isClickable=true
+            isFocusable=true
+            contentDescription="$title: $current"
+        }
+        button.setOnClickListener {
             PocketSounds.play(this,PocketSounds.Event.CLICK)
             AlertDialog.Builder(this).setTitle(title)
-                .setItems(choices.toTypedArray()) { _, index ->
+                .setItems(choices.toTypedArray()) { _,index ->
                     onSelected(choices[index])
-                    label.text = choices[index].uppercase() + "  ▾"
+                    button.text=choices[index].uppercase()+"  ▾"
+                    button.contentDescription="$title: "+choices[index]
                 }.setNegativeButton("CANCEL",null).show()
         }
-        parent.addView(label)
-        parent.addView(ui.space(this,17))
+        row.addView(button)
+        parent.addView(row)
+        parent.addView(ui.space(this,12))
     }
 
-    private fun addToggle(parent: LinearLayout, title: String,
-                          description: String, checked: Boolean): Switch {
-        val row = ui.row(this)
-        row.addView(ui.column(this).apply {
-            addView(ui.text(this@WorldSettingsActivity,title,14f,ui.WHITE,true))
-            addView(ui.space(this@WorldSettingsActivity,4))
-            addView(ui.text(this@WorldSettingsActivity,description,11f,ui.MUTED))
-        },LinearLayout.LayoutParams(0,-2,1f))
-        val toggle = Switch(this).apply { isChecked = checked }
-        row.addView(toggle)
+    private fun addToggle(parent: LinearLayout,title: String,description: String,
+                          checked: Boolean): Switch {
+        val row=ui.row(this)
+        row.addView(ui.text(this,title,13f,ui.WHITE,true),
+            LinearLayout.LayoutParams(0,-2,1f))
+        row.addView(help(title,description))
+        val control=Switch(this).apply { isChecked=checked; contentDescription=title }
+        row.addView(control)
         parent.addView(row)
-        parent.addView(ui.space(this,16))
-        return toggle
+        parent.addView(ui.space(this,12))
+        return control
     }
 
     private fun render() {
@@ -133,11 +159,7 @@ class WorldSettingsActivity : Activity() {
         val intro=ui.card(this)
         intro.addView(ui.pill(this,if(active)"ACTIVE WORLD" else "SAVED PROFILE",ui.GREEN))
         intro.addView(ui.space(this,12))
-        intro.addView(ui.text(this,"World preferences",20f,ui.WHITE,true))
-        intro.addView(ui.space(this,7))
-        intro.addView(ui.text(this,
-            "Each world keeps its own gameplay, performance, and generation options. No level.dat edits.",
-            12f,ui.MUTED))
+        intro.addView(ui.text(this,"World settings",20f,ui.WHITE,true))
         if(!stopped()) {
             intro.addView(ui.space(this,10))
             intro.addView(ui.text(this,
@@ -192,12 +214,12 @@ class WorldSettingsActivity : Activity() {
         addSelector(gameplay,"Difficulty",difficulty,
             listOf("peaceful","easy","normal","hard")) { difficulty=it }
         val pvpRow=ui.row(this)
-        pvpRow.addView(ui.column(this).apply {
-            addView(ui.text(this@WorldSettingsActivity,"Player versus player",14f,ui.WHITE,true))
-            addView(ui.space(this@WorldSettingsActivity,4))
-            addView(ui.text(this@WorldSettingsActivity,"Allow players to damage each other",11f,ui.MUTED))
-        },LinearLayout.LayoutParams(0,-2,1f))
-        pvp=Switch(this).apply { isChecked=values.getProperty("pvp","true")=="true" }
+        pvpRow.addView(ui.text(this,"PvP",13f,ui.WHITE,true),LinearLayout.LayoutParams(0,-2,1f))
+        pvpRow.addView(help("PvP","Allow players to damage each other."))
+        pvp=Switch(this).apply {
+            isChecked=values.getProperty("pvp","true")=="true"
+            contentDescription="PvP"
+        }
         pvpRow.addView(pvp)
         gameplay.addView(pvpRow)
         panels["Gameplay"]=gameplay
@@ -257,7 +279,7 @@ class WorldSettingsActivity : Activity() {
             setPadding(ui.dp(this@WorldSettingsActivity,16),ui.dp(this@WorldSettingsActivity,10),
                 ui.dp(this@WorldSettingsActivity,16),ui.dp(this@WorldSettingsActivity,14))
         }
-        footer.addView(ui.action(this,"SAVE WORLD SETTINGS",true,stopped()) { save() })
+        footer.addView(ui.action(this,"SAVE CHANGES",true,stopped()) { save() })
         screen.addView(footer)
         ui.styleFormInputs(screen)
         setContentView(screen)
