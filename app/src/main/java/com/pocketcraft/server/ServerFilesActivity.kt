@@ -123,17 +123,24 @@ class ServerFilesActivity : Activity() {
             val shortcuts=ui.card(this)
             shortcuts.addView(ui.text(this,"QUICK ACCESS",11f,ui.CYAN,true))
             shortcuts.addView(ui.space(this,11))
-            for((label,path) in listOf(
-                "GEYSER CONFIG" to "config/Geyser-Fabric/config.yml",
-                "SERVER PROPERTIES" to "server.properties",
-                "MODS" to "mods",
-                "DATAPACKS" to (WorldStore.active(this@ServerFilesActivity) + "/datapacks"),
-                "CONSOLE LOG" to "console.log"
+            for((title,path) in listOf(
+                "Geyser config" to "config/Geyser-Fabric/config.yml",
+                "Server properties" to "server.properties",
+                "Mods folder" to "mods",
+                "Datapacks" to (WorldStore.active(this@ServerFilesActivity)+"/datapacks"),
+                "Console log" to "console.log"
             )) {
-                shortcuts.addView(ui.action(this,label){openPath(File(serverRoot,path))})
+                shortcuts.addView(HomesteadComponents.menuRow(this,"▤",title,
+                    if(path.endsWith(".yml") || path.endsWith(".properties"))
+                        "View or edit this configuration"
+                    else if(path.endsWith(".log")) "Read diagnostic output"
+                    else "Browse the folder") { openPath(File(serverRoot,path)) })
                 shortcuts.addView(ui.space(this,7))
             }
-            shortcuts.addView(ui.action(this,"DIAGNOSE BEDROCK",true){diagnoseBedrock()})
+            shortcuts.addView(HomesteadComponents.menuRow(this,"✓",
+                "Diagnose Bedrock","Review crossplay logs and connection details") {
+                diagnoseBedrock()
+            })
             body.addView(shortcuts)
             body.addView(ui.space(this,13))
             val access=ui.card(this)
