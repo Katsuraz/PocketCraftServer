@@ -277,9 +277,21 @@ object WebsiteModInstaller {
                                 pinnedVersionId: String? = null,
                                 selectedOptional: Set<String> = emptySet(),
                                 allowVersionMismatch: Boolean = false,
-                                allowPinnedDependencyRecovery: Boolean = false): String {
+                                allowPinnedDependencyRecovery: Boolean = false,
+                                preferCompatibleDependencyProjects: Set<String> = emptySet(),
+                                selectedDependencyVersions: Map<String,String> = emptyMap(),
+                                allowSelectedDependencyMismatchProjects: Set<String> = emptySet()): String {
         if (ServerService.running) throw IOException("Stop Minecraft before installing mods")
         val current = installedVersion(context)
+        val safeId = Regex("[A-Za-z0-9_-]{1,120}")
+        require(preferCompatibleDependencyProjects.all { safeId.matches(it) } &&
+            selectedDependencyVersions.all { (id,version) ->
+                safeId.matches(id) && safeId.matches(version)
+            } && allowSelectedDependencyMismatchProjects.all {
+                safeId.matches(it) && it in selectedDependencyVersions
+            } && preferCompatibleDependencyProjects.none {
+                it in selectedDependencyVersions
+            }) { "Invalid or conflicting dependency version choices" }
         require(slug.matches(Regex("[A-Za-z0-9_-]{1,120}"))) { "Invalid Modrinth project" }
         if (pinnedVersionId != null &&
             !pinnedVersionId.matches(Regex("[A-Za-z0-9_-]{1,120}")))
@@ -295,7 +307,8 @@ object WebsiteModInstaller {
                 e.message?.contains("HTTP 410") == true)
         fun installProject(projectSlug: String, preferredVersionId: String? = null,
                            depth: Int = 0, recovered: Boolean = false,
-                           excludeVersionId: String? = null) {
+                           excludeVersionId: String? = null,
+                           explicitlyAllowMismatch: Boolean = false) {
             if (depth > 12 || completed.size > 30) throw IOException("Too many nested dependencies")
             val project = json("https://api.modrinth.com/v2/project/" + encode(projectSlug))
             val id = project.getString("id")
@@ -309,8 +322,9 @@ object WebsiteModInstaller {
             try {
                 // Confirmation applies only to the explicitly selected
                 // root mod. Dependencies must still be compatible by default.
-                val overrideThisProject = allowVersionMismatch &&
-                    depth == 0 && preferredVersionId != null
+                val overrideThisProject = preferredVersionId != null &&
+                    ((allowVersionMismatch && depth == 0) ||
+                        (explicitlyAllowMismatch && depth > 0))
                 if (project.optString("server_side") == "unsupported" &&
                     !overrideThisProject)
                     throw IOException(project.optString("title") + " is client-only")
@@ -380,23 +394,49 @@ object WebsiteModInstaller {
                                     json("https://api.modrinth.com/v2/version/" +
                                         encode(depVersion)).getString("project_id")
                                 } else throw IOException("A required dependency has no Modrinth project")
-                                ModrinthDependencyRecovery.attempt(
-                                    pinnedVersionId = depVersion,
-                                    userApproved = allowPinnedDependencyRecovery,
-                                    first = {
-                                        installProject(dependencyProjectId,depVersion,depth+1)
-                                    },
-                                    compatible = {
-                                        installProject(dependencyProjectId,null,depth+1,
-                                            recovered=true,excludeVersionId=depVersion)
-                                    },
-                                    onRecover = {
-                                        InstallProgress.emit("Pinned dependency " + dependencyProjectId +
-                                            " unavailable (404/410); trying current Fabric " +
-                                            current + " versions of the SAME project…")
-                                    },
-                                    isNestedDependencyError = { it is DependencyInstallFailure }
+                                // Applies to EVERY declared Modrinth dependency,
+                                // regardless of parent project or nesting depth.
+                                // Exact choices take priority; auto-compatible
+                                // intentionally bypasses an unavailable pin.
+                                val selectedVersion =
+                                    selectedDependencyVersions[dependencyProjectId]
+                                val useCompatible =
+                                    dependencyProjectId in preferCompatibleDependencyProjects
+                                val resolved = ModrinthDependencySelection.choose(
+                                    dependencyProjectId,depVersion,
+                                    selectedDependencyVersions,
+                                    preferCompatibleDependencyProjects
                                 )
+                                if (selectedVersion != null || useCompatible) {
+                                    InstallProgress.emit("Installing selected dependency " +
+                                        dependencyProjectId +
+                                        (if (selectedVersion != null)
+                                            " version " + selectedVersion
+                                        else " compatible Fabric " + current))
+                                    installProject(dependencyProjectId,resolved,depth+1,
+                                        explicitlyAllowMismatch =
+                                            dependencyProjectId in
+                                                allowSelectedDependencyMismatchProjects)
+                                } else {
+                                    ModrinthDependencyRecovery.attempt(
+                                        pinnedVersionId = depVersion,
+                                        userApproved = allowPinnedDependencyRecovery,
+                                        first = {
+                                            installProject(dependencyProjectId,depVersion,depth+1)
+                                        },
+                                        compatible = {
+                                            installProject(dependencyProjectId,null,depth+1,
+                                                recovered=true,excludeVersionId=depVersion)
+                                        },
+                                        onRecover = {
+                                            InstallProgress.emit("Pinned dependency " +
+                                                dependencyProjectId +
+                                                " unavailable; trying verified compatible Fabric " +
+                                                current + " release…")
+                                        },
+                                        isNestedDependencyError = { it is DependencyInstallFailure }
+                                    )
+                                }
                             } catch (e: IOException) {
                                 throw DependencyInstallFailure(
                                     title + " needs a dependency (" +
