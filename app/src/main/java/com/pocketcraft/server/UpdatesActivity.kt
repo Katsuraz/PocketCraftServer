@@ -33,16 +33,16 @@ class UpdatesActivity : Activity() {
         window.statusBarColor = ui.BG
         window.navigationBarColor = ui.BG
         val screen = ui.column(this).apply { setBackgroundColor(ui.BG) }
+        screen.addView(HomesteadComponents.subpageHeader(this,
+            "App updates","Verified GitHub releases") { finish() })
         val scroll = ScrollView(this).apply { isFillViewport = true }
         val body = ui.column(this).apply {
             setPadding(ui.dp(this@UpdatesActivity,18),ui.dp(this@UpdatesActivity,24),
                 ui.dp(this@UpdatesActivity,18),ui.dp(this@UpdatesActivity,28))
         }
-        body.addView(ui.action(this,"‹  BACK TO SETTINGS") { finish() })
-        body.addView(ui.space(this,22))
-        body.addView(ui.text(this,"POCKETCRAFT UPDATES",20f,ui.WHITE,true))
-        body.addView(ui.space(this,5))
-        body.addView(ui.text(this,"Your woodland workshop, always improving.",12f,ui.MUTED))
+        body.addView(HomesteadComponents.pageIntro(this,
+            "RELEASES","Keep PocketCraft updated",
+            "Verified updates, changelogs and installation controls."))
         body.addView(ui.space(this,18))
         val card = ui.card(this)
         card.addView(ui.pill(this,"APP VERSION",ui.GREEN))
