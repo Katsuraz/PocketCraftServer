@@ -2351,7 +2351,7 @@ class MainActivity : Activity() {
                 .setMessage("Use 'USE THIS WORLD' to assign "+world.name+
                     ". Then open Datapacks to install safely into the correct world.")
                 .setPositiveButton("OK",null).show()
-        }
+        })
         body.addView(ui.space(this,8))
         body.addView(HomesteadComponents.menuRow(this,"▧","Snapshots & backups",
             "Review saved snapshots of this world") { showSnapshotManager(world) })
