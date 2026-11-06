@@ -46,10 +46,11 @@ internal object GeyserConfigEditor {
         entries(text.lines()).lastOrNull { it.path == path }?.raw
             ?.substringBefore(" #")?.trim()?.trim('\'', '"')
 
-    private fun addressList(text: String): String {
+    private fun addressList(text: String, path: List<String> =
+        listOf("bedrock", "signaling", "advertise-addresses")): String {
         val lines = text.lines()
         val entry = entries(lines).lastOrNull {
-            it.path == listOf("bedrock", "signaling", "advertise-addresses")
+            it.path == path
         } ?: return ""
         val inline = entry.raw.trim()
         if (inline.startsWith("[") && inline.endsWith("]")) {
@@ -173,6 +174,81 @@ internal object GeyserConfigEditor {
             }
             for (i in (end - 1) downTo entry.line) lines.removeAt(i)
         }
+    }
+
+    /**
+     * Imports ONLY Playit's Geyser network fields into a generated config.
+     * Existing worlds, Java settings, comments and unrelated Geyser options
+     * survive. No imported credential is logged, displayed or returned in
+     * an error message. The caller must persist atomically while stopped.
+     */
+    fun mergePlayitSnippet(original: String, pasted: String): String {
+        require(pasted.length in 20..32768) {
+            "Paste the full Playit Configuration help > Geyser settings."
+        }
+        val snippet = pasted.replace("\r\n", "\n")
+        val parsed = entries(snippet.lines())
+        val top = parsed.filter { it.indent == 0 }.map { it.key }
+        require(top.contains("bedrock") && top.all { it in setOf("bedrock", "java") }) {
+            "Only the bedrock: and java: sections from Playit's Geyser help can be pasted."
+        }
+        validateImportedStructure(snippet)?.let { throw IllegalArgumentException(it) }
+        for (dotted in listOf("bedrock.clone-remote-port", "java.auth-type",
+            "bedrock.advertise-addresses")) {
+            require(parsed.count { it.path == dotted.split('.') } <= 1) {
+                "Duplicate Playit setting: $dotted"
+            }
+        }
+        val has: (String) -> Boolean = { key ->
+            parsed.any { it.path == key.split('.') }
+        }
+        require(has("bedrock.signaling.mode") && has("bedrock.signaling.nxs.endpoint")) {
+            "Playit signaling mode or NXS endpoint is missing. Copy the complete Geyser snippet."
+        }
+        val current = read(original)
+        val imported = read(snippet)
+        val suppliedToken = scalar(snippet, listOf("bedrock", "signaling", "nxs", "token"))
+            ?.takeIf { it.isNotBlank() }
+        require(suppliedToken != null || current.hasSavedNxsToken) {
+            "No NXS token found. Copy the full private Geyser configuration from Playit."
+        }
+        val incomingAddress = when {
+            has("bedrock.signaling.advertise-addresses") -> imported.advertiseAddresses
+            has("bedrock.advertise-addresses") ->
+                addressList(snippet, listOf("bedrock", "advertise-addresses"))
+            else -> current.advertiseAddresses
+        }
+        fun <T> use(key: String, new: T, old: T): T = if (has(key)) new else old
+        val values = current.copy(
+            address = use("bedrock.address", imported.address, current.address),
+            port = use("bedrock.port", imported.port, current.port),
+            webRtcPort = use("bedrock.webrtc-port", imported.webRtcPort, current.webRtcPort),
+            transport = use("bedrock.transport", imported.transport, current.transport),
+            signalingMode = imported.signalingMode,
+            nxsEndpoint = imported.nxsEndpoint,
+            advertiseAddresses = incomingAddress,
+            stunDiscovery = use("bedrock.signaling.stun-discovery",
+                imported.stunDiscovery, current.stunDiscovery),
+            assistedJoins = use("advanced.nxs.assisted-joins",
+                imported.assistedJoins, current.assistedJoins)
+        )
+        val patched = patch(original, values, suppliedToken)
+        val lines = patched.lines().toMutableList()
+        if (has("bedrock.clone-remote-port")) {
+            val clone = scalar(snippet, listOf("bedrock", "clone-remote-port"))
+            require(clone in setOf("true", "false")) {
+                "Invalid clone-remote-port value in Playit settings."
+            }
+            set(lines, listOf("bedrock", "clone-remote-port"), clone!!)
+        }
+        if (has("java.auth-type")) {
+            val auth = scalar(snippet, listOf("java", "auth-type"))
+            require(auth in setOf("floodgate", "online", "offline")) {
+                "Unsupported java.auth-type value in Playit settings."
+            }
+            set(lines, listOf("java", "auth-type"), auth!!)
+        }
+        return lines.joinToString("\n").trimEnd('\n') + "\n"
     }
 
     fun patch(original: String, values: Values, replacementToken: String? = null): String {
