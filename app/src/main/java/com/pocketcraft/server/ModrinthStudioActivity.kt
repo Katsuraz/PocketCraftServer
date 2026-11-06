@@ -413,8 +413,9 @@ class ModrinthStudioActivity : Activity() {
                 ui.dp(this@ModrinthStudioActivity,16),ui.dp(this@ModrinthStudioActivity,12))
         }
         panel.addView(ui.text(this,"Required dependencies cannot be disabled. " +
-            "Optional dependencies can be selected. Exact pinned version and SHA-512 verified; " +
-            "existing JARs are not overwritten." +
+            "Optional dependencies can be selected. Your selected parent mod stays pinned; " +
+            "every downloaded JAR must pass SHA-512 verification; existing JARs " +
+            "are not overwritten." +
             (if(allowMismatch)"\n\n⚠ You chose an incompatible version. " +
                 "Dependencies might not resolve and Minecraft may crash on startup." else ""),
             12f,ui.MUTED))
