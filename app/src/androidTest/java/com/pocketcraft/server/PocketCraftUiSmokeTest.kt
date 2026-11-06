@@ -2,7 +2,6 @@ package com.pocketcraft.server
 
 import android.app.Activity
 import android.content.Intent
-import android.os.Environment
 import android.util.Log
 import android.widget.EditText
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -113,7 +112,6 @@ class PocketCraftUiSmokeTest {
         assertVisible(By.textContains("Modrinth Workshop"), "Modrinth browser")
         val field = assertVisible(By.clazz(EditText::class.java), "Modrinth search field")
         field.text = "Fabric API"
-        device.pressBack() // close the soft keyboard, keep the activity open
         assertVisible(By.textContains("SEARCH"), "Modrinth search button").click()
         val chooseVersion = device.wait(
             Until.findObject(By.textContains("CHOOSE VERSION")), 25_000L)
