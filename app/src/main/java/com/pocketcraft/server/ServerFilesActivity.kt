@@ -30,6 +30,7 @@ class ServerFilesActivity : Activity() {
         private const val EXPORT_FILE = 81
         private const val EXPORT_ALL = 82
         private const val IMPORT_ALL = 83
+        private const val VERIFY_BACKUP = 84
     }
 
     override fun onCreate(state:Bundle?) {
@@ -166,6 +167,8 @@ class ServerFilesActivity : Activity() {
             backupCard.addView(ui.action(this,"EXPORT ZIP",true){startExportAll()})
             backupCard.addView(ui.space(this,8))
             backupCard.addView(ui.action(this,"RESTORE ZIP"){startImportAll()})
+        backupCard.addView(ui.space(this,8))
+        backupCard.addView(ui.action(this,"VERIFY ZIP"){startVerifyBackup()})
             body.addView(backupCard)
             body.addView(ui.space(this,13))
         }
@@ -324,6 +327,14 @@ class ServerFilesActivity : Activity() {
             }.show()
     }
 
+    private fun startVerifyBackup(){
+        startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type="application/zip"
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        },VERIFY_BACKUP)
+    }
+
     private fun startImportAll(){
         if(ServerService.running){toast("Stop Minecraft before restoring");return}
         AlertDialog.Builder(this).setTitle("Restore server backup?")
@@ -343,7 +354,7 @@ class ServerFilesActivity : Activity() {
         super.onActivityResult(requestCode,resultCode,data)
         if(resultCode!=RESULT_OK)return
         val uri=data?.data ?: return
-        if(requestCode !in listOf(EXPORT_FILE,EXPORT_ALL,IMPORT_ALL))return
+        if(requestCode !in listOf(EXPORT_FILE,EXPORT_ALL,IMPORT_ALL,VERIFY_BACKUP))return
         val file=pendingExport
         pendingExport=null
         Thread{
@@ -358,6 +369,13 @@ class ServerFilesActivity : Activity() {
                         "File exported"
                     }
                     EXPORT_ALL -> "Saved "+ServerDataTransfer.backup(this,uri)+" server files to ZIP"
+                    VERIFY_BACKUP -> {
+                        val verified=contentResolver.openInputStream(uri)?.use {
+                            BackupArchiveVerifier.verify(it)
+                        } ?: throw IOException("Cannot read selected backup")
+                        "ZIP verified: "+verified.files+" files · "+
+                            (verified.expandedBytes/1048576L)+" MB unpacked"
+                    }
                     else -> "Restored "+ServerDataTransfer.restore(this,uri)+" ZIP entries"
                 }
             }
