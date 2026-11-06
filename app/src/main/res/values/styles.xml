@@ -1,11 +1,112 @@
 <resources>
     <style name="PocketCraftTheme" parent="android:style/Theme.Material.NoActionBar">
         <item name="android:fontFamily">sans</item>
+        <item name="android:alertDialogTheme">@style/PocketCraftAlert_homestead</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowLightNavigationBar">false</item>
         <item name="android:statusBarColor">#1C1814</item>
         <item name="android:navigationBarColor">#080E18</item>
         <item name="android:windowBackground">#080E18</item>
         <item name="android:colorAccent">#D6B47D</item>
+    </style>
+    <style name="PocketCraftAlert_homestead" parent="@android:style/Theme.Material.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/pc_dialog_bg_homestead</item>
+        <item name="android:textColorPrimary">#F1E5CA</item>
+        <item name="android:textColorSecondary">#C9BA9E</item>
+        <item name="android:colorAccent">#D6B47D</item>
+        <item name="android:fontFamily">sans</item>
+    </style>
+    <style name="PocketCraftDialogs_homestead">
+        <item name="android:alertDialogTheme">@style/PocketCraftAlert_homestead</item>
+    </style>
+    <style name="PocketCraftAlert_classic" parent="@android:style/Theme.Material.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/pc_dialog_bg_classic</item>
+        <item name="android:textColorPrimary">#F6F9FD</item>
+        <item name="android:textColorSecondary">#ACBED1</item>
+        <item name="android:colorAccent">#70E9B4</item>
+        <item name="android:fontFamily">sans</item>
+    </style>
+    <style name="PocketCraftDialogs_classic">
+        <item name="android:alertDialogTheme">@style/PocketCraftAlert_classic</item>
+    </style>
+    <style name="PocketCraftAlert_obsidian" parent="@android:style/Theme.Material.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/pc_dialog_bg_obsidian</item>
+        <item name="android:textColorPrimary">#F5F5F6</item>
+        <item name="android:textColorSecondary">#B8BBC5</item>
+        <item name="android:colorAccent">#D6D7DB</item>
+        <item name="android:fontFamily">sans</item>
+    </style>
+    <style name="PocketCraftDialogs_obsidian">
+        <item name="android:alertDialogTheme">@style/PocketCraftAlert_obsidian</item>
+    </style>
+    <style name="PocketCraftAlert_aurora" parent="@android:style/Theme.Material.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/pc_dialog_bg_aurora</item>
+        <item name="android:textColorPrimary">#F2FBFF</item>
+        <item name="android:textColorSecondary">#B7CCD8</item>
+        <item name="android:colorAccent">#84E9D5</item>
+        <item name="android:fontFamily">sans</item>
+    </style>
+    <style name="PocketCraftDialogs_aurora">
+        <item name="android:alertDialogTheme">@style/PocketCraftAlert_aurora</item>
+    </style>
+    <style name="PocketCraftAlert_nether" parent="@android:style/Theme.Material.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/pc_dialog_bg_nether</item>
+        <item name="android:textColorPrimary">#FFF3E9</item>
+        <item name="android:textColorSecondary">#DAC0BC</item>
+        <item name="android:colorAccent">#FFB193</item>
+        <item name="android:fontFamily">sans</item>
+    </style>
+    <style name="PocketCraftDialogs_nether">
+        <item name="android:alertDialogTheme">@style/PocketCraftAlert_nether</item>
+    </style>
+    <style name="PocketCraftAlert_ender" parent="@android:style/Theme.Material.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/pc_dialog_bg_ender</item>
+        <item name="android:textColorPrimary">#F8F1FF</item>
+        <item name="android:textColorSecondary">#C9BED9</item>
+        <item name="android:colorAccent">#C6A5FF</item>
+        <item name="android:fontFamily">sans</item>
+    </style>
+    <style name="PocketCraftDialogs_ender">
+        <item name="android:alertDialogTheme">@style/PocketCraftAlert_ender</item>
+    </style>
+    <style name="PocketCraftAlert_oceanic" parent="@android:style/Theme.Material.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/pc_dialog_bg_oceanic</item>
+        <item name="android:textColorPrimary">#F0FCFD</item>
+        <item name="android:textColorSecondary">#ADD2DC</item>
+        <item name="android:colorAccent">#75E9CE</item>
+        <item name="android:fontFamily">sans</item>
+    </style>
+    <style name="PocketCraftDialogs_oceanic">
+        <item name="android:alertDialogTheme">@style/PocketCraftAlert_oceanic</item>
+    </style>
+    <style name="PocketCraftAlert_minecraft" parent="@android:style/Theme.Material.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/pc_dialog_bg_minecraft</item>
+        <item name="android:textColorPrimary">#FFFFFF</item>
+        <item name="android:textColorSecondary">#D0D0D0</item>
+        <item name="android:colorAccent">#B9E8A3</item>
+        <item name="android:fontFamily">sans</item>
+    </style>
+    <style name="PocketCraftDialogs_minecraft">
+        <item name="android:alertDialogTheme">@style/PocketCraftAlert_minecraft</item>
+    </style>
+    <style name="PocketCraftAlert_material" parent="@android:style/Theme.Material.Light.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/pc_dialog_bg_material</item>
+        <item name="android:textColorPrimary">#19202A</item>
+        <item name="android:textColorSecondary">#505765</item>
+        <item name="android:colorAccent">#355A91</item>
+        <item name="android:fontFamily">sans</item>
+    </style>
+    <style name="PocketCraftDialogs_material">
+        <item name="android:alertDialogTheme">@style/PocketCraftAlert_material</item>
+    </style>
+    <style name="PocketCraftAlert_minimal" parent="@android:style/Theme.Material.Light.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/pc_dialog_bg_minimal</item>
+        <item name="android:textColorPrimary">#1D232B</item>
+        <item name="android:textColorSecondary">#555B64</item>
+        <item name="android:colorAccent">#334D69</item>
+        <item name="android:fontFamily">sans</item>
+    </style>
+    <style name="PocketCraftDialogs_minimal">
+        <item name="android:alertDialogTheme">@style/PocketCraftAlert_minimal</item>
     </style>
 </resources>
