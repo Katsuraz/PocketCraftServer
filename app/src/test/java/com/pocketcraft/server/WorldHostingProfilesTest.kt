@@ -34,6 +34,49 @@ class WorldHostingProfilesTest {
         assertTrue(rejected.isFailure)
     }
 
+    @Test fun aWorldWithoutAProfileInheritsExistingServerSettings() {
+        val runningConfig = java.util.Properties().apply {
+            setProperty("difficulty", "hard")
+            setProperty("gamemode", "creative")
+            setProperty("pvp", "false")
+            setProperty("view-distance", "12")
+            setProperty("online-mode", "true")
+            setProperty("level-name", "new-world")
+        }
+        WorldHostingProfiles.applySavedProfile(runningConfig, null)
+        assertEquals("hard", runningConfig.getProperty("difficulty"))
+        assertEquals("creative", runningConfig.getProperty("gamemode"))
+        assertEquals("false", runningConfig.getProperty("pvp"))
+        assertEquals("12", runningConfig.getProperty("view-distance"))
+        assertEquals("true", runningConfig.getProperty("online-mode"))
+    }
+
+    @Test fun aWorldWithAnExplicitProfileOverridesOnlyWorldSpecificKeys() {
+        val runningConfig = java.util.Properties().apply {
+            setProperty("difficulty", "hard")
+            setProperty("gamemode", "creative")
+            setProperty("online-mode", "true")
+            setProperty("max-players", "8")
+        }
+        val saved = WorldHostingProfiles.update(WorldHostingProfiles.defaults(),
+            mapOf("difficulty" to "peaceful", "gamemode" to "survival", "pvp" to "false"))
+        WorldHostingProfiles.applySavedProfile(runningConfig, saved)
+        assertEquals("peaceful", runningConfig.getProperty("difficulty"))
+        assertEquals("survival", runningConfig.getProperty("gamemode"))
+        assertEquals("false", runningConfig.getProperty("pvp"))
+        assertEquals("true", runningConfig.getProperty("online-mode"))
+        assertEquals("8", runningConfig.getProperty("max-players"))
+    }
+
+    @Test fun anInvalidSavedProfileCannotChangeServerSettings() {
+        val runningConfig = java.util.Properties().apply { setProperty("difficulty", "hard") }
+        val saved = WorldHostingProfiles.defaults().apply { setProperty("view-distance", "0") }
+        assertTrue(runCatching {
+            WorldHostingProfiles.applySavedProfile(runningConfig, saved)
+        }.isFailure)
+        assertEquals("hard", runningConfig.getProperty("difficulty"))
+    }
+
     @Test fun newlineAndUnauthorizedPropertiesAreRejected() {
         val profile = WorldHostingProfiles.defaults()
         profile.setProperty("level-seed","bad\nseed")

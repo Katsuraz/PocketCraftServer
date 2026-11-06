@@ -25,6 +25,9 @@ class GeyserSettingsActivity : Activity() {
     private val ui = PocketUi
     private val config by lazy { File(WorldStore.root(this), "config/Geyser-Fabric/config.yml") }
     private val backup by lazy { File(config.parentFile, "config.yml.pocketcraft.bak") }
+    private fun serverBusy(): Boolean =
+        ServerService.running || ServerService.status in setOf("STARTING", "STOPPING")
+
 
     private lateinit var address: EditText
     private lateinit var port: EditText
@@ -149,7 +152,7 @@ class GeyserSettingsActivity : Activity() {
             card.addView(ui.text(this, "⚠ " + warning, 11f, ui.RED))
             card.addView(ui.space(this, 6))
         }
-        if (ServerService.running) {
+        if (serverBusy()) {
             card.addView(ui.text(this,
                 "Server is running. Stop Minecraft before saving or importing Geyser settings.",
                 12f, ui.RED))
@@ -189,16 +192,16 @@ class GeyserSettingsActivity : Activity() {
             "Allow NXS to assist connections where direct peer-to-peer access is unavailable.",
             values.assistedJoins)
 
-        card.addView(ui.action(this, "SAVE GEYSER SETTINGS", true, loaded.isNotBlank() && !ServerService.running) {
+        card.addView(ui.action(this, "SAVE GEYSER SETTINGS", true, loaded.isNotBlank() && !serverBusy()) {
             save()
         })
         card.addView(ui.space(this, 9))
-        card.addView(ui.action(this, "IMPORT / REPLACE CONFIG.YML", false, !ServerService.running) {
+        card.addView(ui.action(this, "IMPORT / REPLACE CONFIG.YML", false, !serverBusy()) {
             selectConfig()
         })
         card.addView(ui.space(this, 9))
         card.addView(ui.action(this, "RESTORE PREVIOUS CONFIG", false,
-            backup.isFile && !ServerService.running) { restoreBackup() })
+            backup.isFile && !serverBusy()) { restoreBackup() })
         card.addView(ui.space(this, 10))
         card.addView(ui.text(this,
             "Saving makes a private backup first. Restart Minecraft for changes to apply. No token is shown or copied into diagnostic logs.",
@@ -231,7 +234,7 @@ class GeyserSettingsActivity : Activity() {
     }
 
     private fun save() {
-        if (ServerService.running) { toast("Stop the server first"); return }
+        if (serverBusy()) { toast("Stop the server first"); return }
         val values = values() ?: return
         val replacement = token.text.toString().trim().takeIf { it.isNotEmpty() }
         GeyserConfigEditor.validate(values, replacement)?.let { toast(it); return }
@@ -245,7 +248,7 @@ class GeyserSettingsActivity : Activity() {
     }
 
     private fun saveValidated(values: GeyserConfigEditor.Values, replacementToken: String?) {
-        if (ServerService.running) { toast("Stop the server first"); return }
+        if (serverBusy()) { toast("Stop the server first"); return }
         try {
             val original = config.readText(Charsets.UTF_8)
             val patched = GeyserConfigEditor.patch(original, values, replacementToken)
@@ -257,7 +260,7 @@ class GeyserSettingsActivity : Activity() {
     }
 
     private fun writeSafely(newText: String, keepBackup: Boolean) {
-        if (ServerService.running) throw IllegalStateException("Stop the server first")
+        if (serverBusy()) throw IllegalStateException("Stop the server first")
         config.parentFile?.mkdirs()
         if (keepBackup && config.isFile) config.copyTo(backup, overwrite = true)
         val file = AtomicFile(config)
@@ -283,7 +286,7 @@ class GeyserSettingsActivity : Activity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode != REQUEST_IMPORT || resultCode != RESULT_OK) return
         val uri: Uri = data?.data ?: return
-        if (ServerService.running) { toast("Stop the server first"); return }
+        if (serverBusy()) { toast("Stop the server first"); return }
         val name = runCatching {
             contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
                 if (it.moveToFirst()) it.getString(0) else ""
@@ -306,8 +309,11 @@ class GeyserSettingsActivity : Activity() {
             } ?: throw IllegalArgumentException("Cannot open selected file")
             val imported = bytes.toString("UTF-8")
             val check = GeyserNetworkSettings.parse(imported)
-            if (!check.configured || check.warnings.any { it.startsWith("Duplicate ") })
-                throw IllegalArgumentException("Not a valid Geyser config or contains duplicate keys")
+            if (!check.configured)
+                throw IllegalArgumentException("Not a valid Geyser config")
+            GeyserConfigEditor.validateImportedStructure(imported)?.let {
+                throw IllegalArgumentException(it)
+            }
             val bad = GeyserConfigEditor.validate(GeyserConfigEditor.read(imported))
             if (bad != null) throw IllegalArgumentException(bad)
             AlertDialog.Builder(this).setTitle("Replace Geyser config.yml?")
@@ -322,7 +328,7 @@ class GeyserSettingsActivity : Activity() {
     }
 
     private fun restoreBackup() {
-        if (ServerService.running) { toast("Stop the server first"); return }
+        if (serverBusy()) { toast("Stop the server first"); return }
         AlertDialog.Builder(this).setTitle("Restore previous Geyser settings?")
             .setMessage("The current configuration will be replaced with the last PocketCraft backup.")
             .setNegativeButton("CANCEL", null)

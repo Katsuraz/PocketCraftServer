@@ -74,6 +74,31 @@ class GeyserConfigEditorTest {
         assertEquals("mc.example.com:19133, 198.51.100.1:19133", read.advertiseAddresses)
     }
 
+    @Test fun importRejectsDuplicateBedrockPortsAndNxsTokens() {
+        val duplicatePort = sample.replace("  port: 19132",
+            "  port: 19132\n  port: 19133")
+        // Sample already has two signaling modes, but duplicate port is also independently rejected.
+        assertTrue(duplicatePort.contains("port: 19133"))
+        assertTrue(GeyserConfigEditor.validateImportedStructure(duplicatePort)!!.contains("bedrock.port"))
+
+        val duplicateToken = """
+            bedrock:
+              signaling:
+                mode: hybrid
+                nxs:
+                  token: first-secret
+                  token: second-secret
+        """.trimIndent()
+        assertTrue(GeyserConfigEditor.validateImportedStructure(duplicateToken)!!.contains("nxs.token"))
+    }
+
+    @Test fun importAcceptsWellFormedSingleModeAndStillKeepsTokenPrivate() {
+        val corrected = GeyserConfigEditor.patch(sample,
+            GeyserConfigEditor.read(sample).copy(signalingMode = "hybrid"))
+        assertEquals(null, GeyserConfigEditor.validateImportedStructure(corrected))
+        assertTrue(corrected.contains("token: confidential-token-keep"))
+    }
+
     @Test fun missingGeyserConfigCannotBeSilentlyReplacedWithPartialYaml() {
         val invalid = runCatching { GeyserConfigEditor.patch("java:\n  auth-type: floodgate", GeyserConfigEditor.Values()) }
         assertTrue(invalid.isFailure)

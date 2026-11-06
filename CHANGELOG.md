@@ -1,5 +1,21 @@
 # PocketCraft changelog
 
+## v0.8.35 (versionCode 57) — Safe world switching and Geyser imports
+
+- Fix world switching to preserve existing Minecraft settings when the destination world has no saved PocketCraft profile; avoid silently resetting difficulty, gamemode, PvP, view/simulation distance, and other server properties.
+- An unconfigured world's settings screen now previews inherited server values before its first dedicated profile is saved.
+- Tighten full Geyser `config.yml` imports to reject duplicate critical YAML keys, including the Bedrock port and private NXS token path, instead of silently choosing a conflicting value. No secret values are included in diagnostics.
+- Prevent Geyser config save, import and restore while the server is starting or stopping, not only after it reaches RUNNING.
+- Add focused regression tests for world inheritance, explicit world profiles, and ambiguous Geyser imports.
+- Preserve existing worlds, Playit credentials, server engine, and all Minecraft modpacks. On-device crossplay testing is still required.
+
+## v0.8.34 (versionCode 56) — World folders and guided configuration
+
+- Add a simplified Home menu and individual world folder pages for settings, files, datapacks, backups, and world actions.
+- Introduce per-world hosting preferences and a guided Geyser/NetherNet settings editor with `config.yml` import/restore and private backups.
+- Remove duplicate Settings navigation controls.
+
+
 ## v0.8.33 (versionCode 55) — Crossplay diagnostics and first-run guide
 
 - Add a first-run installation guide after a fresh app-data install and a permanent Home action to reopen it. Show the existing core setup checklist immediately when prerequisites are missing.

@@ -79,6 +79,30 @@ internal object GeyserConfigEditor {
         )
     }
 
+    /**
+     * A full file replacement must not accept ambiguous keys. Import does not
+     * pass through patch(), so it cannot rely on the editor's deduplication.
+     * Report key names only, never token contents or supplied credentials.
+     */
+    internal fun validateImportedStructure(config: String): String? {
+        if (config.length !in 1..128_000) return "Geyser config is empty or too large"
+        val parsed = entries(config.lines())
+        val managed = listOf(
+            "bedrock", "bedrock.address", "bedrock.port", "bedrock.webrtc-port",
+            "bedrock.transport", "bedrock.signaling", "bedrock.signaling.mode",
+            "bedrock.signaling.advertise-addresses",
+            "bedrock.signaling.stun-discovery",
+            "bedrock.signaling.nxs", "bedrock.signaling.nxs.token",
+            "bedrock.signaling.nxs.endpoint", "advanced", "advanced.nxs",
+            "advanced.nxs.assisted-joins"
+        )
+        val duplicate = managed.firstOrNull { dotted ->
+            val path = dotted.split('.')
+            parsed.count { it.path == path } > 1
+        }
+        return duplicate?.let { "Duplicate Geyser YAML key: $it. Choose an unambiguous file or use the settings editor." }
+    }
+
     /** Returns only non-secret validation results. */
     fun validate(value: Values, replacementToken: String? = null): String? {
         if (value.address.isBlank() || value.address.length > 253 ||
