@@ -23,6 +23,9 @@ object PlayitManager {
         private set
     @Volatile var bedrockAddress: String? = null
         private set
+    /** API endpoint, if different from the Bedrock NetherNet join address. */
+    @Volatile var bedrockReportedEndpoint: String? = null
+        private set
     @Volatile var accountConnected = false
         private set
     @Volatile var creationNeedsHelp = false
@@ -73,6 +76,7 @@ object PlayitManager {
         claimUrl = null
         javaAddress = null
         bedrockAddress = null
+        bedrockReportedEndpoint = null
         status = "OFFLINE"
         detail = "Existing Playit agent imported locally. Stop the agent on its old device, then tap Use Playit."
         // Deliberately do not log agent ID, secret or source configuration.
@@ -176,6 +180,7 @@ object PlayitManager {
         detail = "Starting Playit in PocketCraft..."
         javaAddress = null
         bedrockAddress = null
+        bedrockReportedEndpoint = null
         accountConnected = false
         claimUrl = null
         val dir = root(c)
@@ -283,6 +288,7 @@ object PlayitManager {
                 if (accountBlocked) return@Thread
                 javaAddress = state.javaAddress
                 bedrockAddress = state.bedrockAddress
+                bedrockReportedEndpoint = state.bedrockReportedEndpoint
                 creationNeedsHelp = javaAddress == null && state.pendingJavaCount == 0
                 status = when {
                     javaAddress != null && bedrockAddress != null -> "ADDRESSES ASSIGNED"
@@ -336,6 +342,7 @@ object PlayitManager {
         daemon = null
         javaAddress = null
         bedrockAddress = null
+        bedrockReportedEndpoint = null
         accountConnected = false
         claimUrl = null
         autoCreateRequested = false
