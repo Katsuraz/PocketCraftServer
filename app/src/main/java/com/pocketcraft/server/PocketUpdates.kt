@@ -134,7 +134,9 @@ object PocketUpdates {
                 !UpdateChannels.accepts(normalized,json.optBoolean("prerelease"))) continue
             // Skip older third-party or incomplete releases from the beta listing,
             // but never accept an unverified artifact.
-            val candidate = runCatching { parseVerifiedRelease(json) }.getOrNull()
+            val candidate = if(normalized==UpdateChannels.STABLE) {
+                parseVerifiedRelease(json)
+            } else runCatching { parseVerifiedRelease(json) }.getOrNull()
                 ?: continue
             if (best==null || candidate.versionCode > best.versionCode)
                 best=candidate
