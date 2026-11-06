@@ -1,11 +1,13 @@
 package com.pocketcraft.server
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.ContentValues
 import android.content.Intent
 import android.os.Environment
 import android.provider.MediaStore
 import android.util.Log
+import android.util.TypedValue
 import android.widget.EditText
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -15,6 +17,7 @@ import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.UiObject2
 import androidx.test.uiautomator.Until
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -190,6 +193,47 @@ class PocketCraftUiSmokeTest {
         assertVisible(By.textContains("ORDER"),"Sort toggle").click()
         assertVisible(By.textContains("oldest first"),"Oldest-first feedback")
         capture("12-version-picker-sorted")
+    }
+
+    /** Verifies dark, accent and light dialog palettes on actual Android. */
+    @Test
+    fun nativeAlertsFollowSelectedPocketCraftTheme() {
+        val prefs=context.getSharedPreferences("pocketcraft",0)
+        val original=prefs.getString("uiTheme",null)
+        try {
+            val samples=listOf(
+                "homestead" to R.style.PocketCraftAlert_homestead,
+                "nether" to R.style.PocketCraftAlert_nether,
+                "material" to R.style.PocketCraftAlert_material
+            )
+            for((theme,expected) in samples) {
+                assertTrue(prefs.edit().putString("uiTheme",theme).commit())
+                val screen=instrumentation.startActivitySync(
+                    Intent(context,SettingsActivity::class.java).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                    }
+                )
+                val resolved=TypedValue()
+                instrumentation.runOnMainSync {
+                    assertTrue("Missing native dialog theme for " + theme,
+                        screen.theme.resolveAttribute(
+                            android.R.attr.alertDialogTheme,resolved,true))
+                    assertEquals("Wrong dialog palette for " + theme,
+                        expected,resolved.resourceId)
+                    AlertDialog.Builder(screen)
+                        .setTitle("Palette preview: " + theme)
+                        .setMessage("Native dialog contrast and accent verification.")
+                        .setPositiveButton("OK",null).show()
+                }
+                assertVisible(By.textContains("Palette preview: " + theme),
+                    "Dialog overlay for " + theme)
+                capture("14-dialog-palette-" + theme)
+                device.pressBack()
+                instrumentation.runOnMainSync { screen.finish() }
+            }
+        } finally {
+            prefs.edit().putString("uiTheme",original).commit()
+        }
     }
 
     /**
