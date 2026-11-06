@@ -160,7 +160,31 @@ object ModpackImporter {
         return created.size to already
     }
 
-    fun install(context:Context,uri:Uri,apiKey:String?=null):Summary {
+    /** Optional .mrpack entries are opt-in; required files always install. */
+    fun optionalFiles(context: Context, uri: Uri): List<String> {
+        val source = File(uri.path ?: "")
+        if (!source.isFile || !source.name.endsWith(".mrpack",true) ||
+            source.length() > PACK_LIMIT) throw IOException("Select a downloaded .mrpack")
+        ZipFile(source).use { zip ->
+            val entry = zip.getEntry("modrinth.index.json")
+                ?: throw IOException("Not a Modrinth modpack")
+            if (entry.size > 2_000_000L) throw IOException("Modpack manifest too large")
+            val index = JSONObject(zip.getInputStream(entry).bufferedReader().use {
+                it.readText().take(2_000_000)
+            })
+            val files = index.getJSONArray("files")
+            if (files.length() > MAX_FILES) throw IOException("Too many modpack files")
+            return (0 until files.length()).mapNotNull { indexOfFile ->
+                val file = files.optJSONObject(indexOfFile) ?: return@mapNotNull null
+                val path = safePath(file.optString("path"))
+                val server = file.optJSONObject("env")?.optString("server","required")
+                path.takeIf { server == "optional" && allowed(it) }
+            }.distinct().take(100)
+        }
+    }
+
+    fun install(context:Context,uri:Uri,apiKey:String?=null,
+                selectedOptional:Set<String> = emptySet()):Summary {
         if(ServerService.running)throw IOException("Stop the server before importing a modpack")
         val base=WorldStore.root(context)
         val staging=File(context.cacheDir,"pocketcraft-pack-"+System.currentTimeMillis())
@@ -187,7 +211,7 @@ object ModpackImporter {
                 val mr=zip.getEntry("modrinth.index.json")
                 val cf=zip.getEntry("manifest.json")
                 return when {
-                    mr!=null -> installMrpack(context,zip,mr,extracted,base)
+                    mr!=null -> installMrpack(context,zip,mr,extracted,base,selectedOptional)
                     cf!=null -> installCurse(context,zip,cf,extracted,base,apiKey)
                     else -> throw IOException("No modrinth.index.json or CurseForge manifest.json found")
                 }
@@ -201,7 +225,7 @@ object ModpackImporter {
         if(current!=required)throw IOException("Modpack requires Minecraft $required, but the current Fabric server is $current. Switch versions before importing.")
     }
 
-    private fun installMrpack(context:Context,zip:ZipFile,manifest:java.util.zip.ZipEntry,stage:File,base:File):Summary {
+    private fun installMrpack(context:Context,zip:ZipFile,manifest:java.util.zip.ZipEntry,stage:File,base:File,selectedOptional:Set<String>):Summary {
         val index=JSONObject(zip.getInputStream(manifest).bufferedReader().use{it.readText()})
         if(index.optString("game")!="minecraft")throw IOException("Only Minecraft modpacks are supported")
         val deps=index.getJSONObject("dependencies")
@@ -217,7 +241,7 @@ object ModpackImporter {
             val item=files.getJSONObject(i)
             val path=safePath(item.getString("path"))
             val side=item.optJSONObject("env")?.optString("server","required") ?: "required"
-            if(side=="unsupported" || side=="optional" || !allowed(path)){skipped++;continue}
+            if(side=="unsupported" || (side=="optional" && path !in selectedOptional) || !allowed(path)){skipped++;continue}
             val urls=item.getJSONArray("downloads")
             if(urls.length()==0)throw IOException("No download URL for $path")
             val output=dest(stage,path)
