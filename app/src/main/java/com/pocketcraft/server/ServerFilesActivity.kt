@@ -24,6 +24,7 @@ class ServerFilesActivity : Activity() {
     private var directory: File? = null
     private var pendingExport: File? = null
     private var filter = ""
+    private var sortMode = ServerFileSort.Mode.NAME
 
     companion object {
         const val EXTRA_PATH = "server_path"
@@ -39,6 +40,8 @@ class ServerFilesActivity : Activity() {
         window.statusBarColor=ui.BG
         window.navigationBarColor=ui.BG
         directory=serverRoot
+        sortMode = ServerFileSort.fromPreference(
+            getSharedPreferences("pocketcraft",0).getString("fileSortMode",null))
         showFolder()
         intent.getStringExtra(EXTRA_PATH)?.let { path ->
             window.decorView.post { openPath(File(serverRoot,path)) }
@@ -183,13 +186,25 @@ class ServerFilesActivity : Activity() {
                 .setPositiveButton("SEARCH"){_,_->filter=field.text.toString().trim();showFolder()}
                 .show()
         },ui.weight(this))
-        controls.addView(ui.action(this,"REFRESH"){showFolder()},LinearLayout.LayoutParams(0,-2,1f))
+        controls.addView(ui.action(this,"SORT: " + sortMode.shortLabel) {
+            val modes = ServerFileSort.Mode.values()
+            AlertDialog.Builder(this).setTitle("Sort files")
+                .setSingleChoiceItems(modes.map { it.label }.toTypedArray(),
+                    modes.indexOf(sortMode)) { dialog,index ->
+                    sortMode = modes[index]
+                    getSharedPreferences("pocketcraft",0).edit()
+                        .putString("fileSortMode",sortMode.name).apply()
+                    dialog.dismiss()
+                    showFolder()
+                }.setNegativeButton("CANCEL",null).show()
+        },ui.weight(this))
+        controls.addView(ui.action(this,"REFRESH"){showFolder()},ui.weight(this))
         body.addView(controls)
         body.addView(ui.space(this,13))
         val files=current.listFiles()?.filter {
             runCatching{safe(it);true}.getOrDefault(false) &&
                 (filter.isBlank()||it.name.contains(filter,true))
-        }?.sortedWith(compareBy<File>{!it.isDirectory}.thenBy{it.name.lowercase()}) ?: emptyList()
+        }?.sortedWith(ServerFileSort.comparator(sortMode)) ?: emptyList()
         if(files.isEmpty()){
             body.addView(ui.text(this,"No files",12f,ui.MUTED))
         }
