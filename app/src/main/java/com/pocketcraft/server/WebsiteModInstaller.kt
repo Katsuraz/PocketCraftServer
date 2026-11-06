@@ -304,8 +304,10 @@ object WebsiteModInstaller {
             }
             if (!visiting.add(id)) throw IOException("Dependency cycle: " + project.optString("title"))
             try {
+                // Confirmation applies only to the explicitly selected
+                // root mod. Dependencies must still be compatible by default.
                 val overrideThisProject = allowVersionMismatch &&
-                    preferredVersionId != null
+                    depth == 0 && preferredVersionId != null
                 if (project.optString("server_side") == "unsupported" &&
                     !overrideThisProject)
                     throw IOException(project.optString("title") + " is client-only")
