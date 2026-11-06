@@ -139,6 +139,9 @@ class PocketCraftUiSmokeTest {
         launch(ServerFilesActivity::class.java)
         assertVisible(By.textContains("Server files"), "Server files page")
         capture("08-files")
+        assertVisible(By.text("SORT"),"Server file sort control").click()
+        assertVisible(By.textContains("Sort server files"),"Themed file sorting dialog")
+        capture("08b-files-sort-dialog")
     }
 
     /**
