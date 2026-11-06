@@ -137,7 +137,7 @@ internal object ModrinthVersionPicker {
                 val warnings=ModrinthCatalog.compatibilityWarnings(version,gameVersion)
                 card.addView(ui.space(c,5))
                 if(warnings.isNotEmpty()){
-                    card.addView(ui.text(c,"⚠ MAY NOT WORK WITH YOUR SERVER",11f,ui.GOLD,true))
+                    card.addView(ui.text(c,"⚠ MAY NOT WORK WITH YOUR SERVER",11f,ui.CYAN,true))
                 } else {
                     card.addView(ui.text(c,"✓ Matches your Fabric server",11f,ui.GREEN,true))
                 }
