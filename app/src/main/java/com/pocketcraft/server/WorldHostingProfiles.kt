@@ -58,15 +58,19 @@ internal object WorldHostingProfiles {
         return result
     }
 
-    /** Active world may have freshly edited server.properties not yet captured on a switch. */
+    /**
+     * The current server.properties are the effective settings for the active world.
+     * A world without a saved profile will inherit those values on first activation,
+     * so its editor must preview that same configuration instead of hard-coded defaults.
+     */
     fun readForEditor(context: Context, world: String): Properties {
         val profile = read(context,world)
-        if (world == WorldStore.active(context)) {
+        if (world == WorldStore.active(context) || !file(context,world).isFile) {
             val global = File(WorldStore.root(context),"server.properties")
             val server = Properties()
             if (global.isFile) global.inputStream().use { server.load(it) }
             for (key in keys) server.getProperty(key)?.let { profile.setProperty(key,it) }
-            validate(profile)?.let { throw IOException("Invalid active-world setting: $it") }
+            validate(profile)?.let { throw IOException("Invalid world settings: $it") }
         }
         return profile
     }
@@ -133,9 +137,22 @@ internal object WorldHostingProfiles {
         writeProperties(file(context,world),profile)
     }
 
+    /**
+     * Only explicitly saved profiles override the active server configuration.
+     * Without a profile, the world inherits current settings on its first switch.
+     * This also preserves unrelated server.properties keys such as online-mode.
+     */
+    internal fun applySavedProfile(serverProperties: Properties, savedProfile: Properties?) {
+        if (savedProfile == null) return
+        validate(savedProfile)?.let { throw IOException("Invalid world profile: $it") }
+        for (key in keys) savedProfile.getProperty(key)?.let {
+            serverProperties.setProperty(key,it)
+        }
+    }
+
     fun applyProfile(context: Context, world: String, serverProperties: Properties) {
-        val profile = read(context,world)
-        for (key in keys) serverProperties.setProperty(key,profile.getProperty(key))
+        if (!file(context,world).isFile) return
+        applySavedProfile(serverProperties, read(context,world))
     }
 
     fun save(context: Context, world: String, profile: Properties) {
