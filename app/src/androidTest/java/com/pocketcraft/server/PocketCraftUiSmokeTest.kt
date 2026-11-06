@@ -276,6 +276,42 @@ class PocketCraftUiSmokeTest {
     }
 
     /**
+     * Proves dependency version controls apply to arbitrary mods, not just
+     * Terralith. No network requests or install operations are performed.
+     */
+    @Test
+    fun dependencyVersionChooserWorksForAnyParentMod() {
+        val screen=instrumentation.startActivitySync(Intent(context,
+            ModrinthStudioActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+            }) as ModrinthStudioActivity
+        val hit=ModrinthCatalog.Hit("genericParent","generic-parent","Example Addon",
+            "Any Modrinth project","Community",500L,null,"Review version")
+        val release=ModrinthCatalog.Version(
+            "genericRelease","genericParent","Example Addon","1.0+26.3",
+            "release","2026-11-06",100L,1,0,0,"addon.jar",
+            "https://cdn.modrinth.com/data/genericParent/versions/addon.jar",
+            "a".repeat(128),listOf("26.3"),"server_only",listOf("fabric"))
+        val dependency=WebsiteModInstaller.DependencyChoice(
+            "genericLibrary","Library Alpha",true,false,"unavailablePin","required")
+        instrumentation.runOnMainSync {
+            screen.showChoices(hit,release,listOf(dependency),false)
+        }
+        assertVisible(By.textContains("CHOOSE LIBRARY ALPHA VERSION"),
+            "Generic required dependency must have a version selector")
+        capture("16-all-mods-dependency-version-chooser")
+        assertVisible(By.textContains("CHOOSE LIBRARY ALPHA VERSION"),
+            "Dependency version selector button").click()
+        assertVisible(By.textContains("Use newest compatible Fabric release"),
+            "Explicit bypass for broken pin").click()
+        assertVisible(By.textContains("pin intentionally bypassed"),
+            "Chosen compatible release status must update")
+        capture("17-all-mods-compatible-dependency-selected")
+        assertVisible(By.textContains("INSTALL WITH DEPENDENCIES"),
+            "Installation awaits user's final approval")
+    }
+
+    /**
      * Live Modrinth API is not a test dependency. Capture the actual version
      * selector when connectivity works; never treat a temporary API outage as
      * a PocketCraft build or UI defect.
