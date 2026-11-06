@@ -27,7 +27,9 @@ internal object ModrinthVersionPicker {
             (channel=="all" || version.releaseType.equals(channel,true)) &&
                 (needle.isEmpty() || version.number.contains(needle,true) ||
                     version.title.contains(needle,true) ||
-                    version.published.contains(needle,true))
+                    version.published.contains(needle,true) ||
+                    version.gameVersions.any { it.contains(needle,true) } ||
+                    version.loaders.any { it.contains(needle,true) })
         }
         return if(oldestFirst)visible.reversed() else visible
     }
@@ -46,14 +48,14 @@ internal object ModrinthVersionPicker {
         }
         root.addView(ui.text(c,"Choose "+projectName+" version",17f,ui.WHITE,true))
         root.addView(ui.space(c,5))
-        root.addView(ui.text(c,"Fabric · Minecraft "+gameVersion,12f,ui.CYAN,true))
+        root.addView(ui.text(c,"YOUR SERVER  ·  FABRIC "+gameVersion,12f,ui.CYAN,true))
         root.addView(ui.space(c,7))
-        root.addView(ui.text(c,"Select the exact release to review before installing.",
+        root.addView(ui.text(c,"All Minecraft versions and loaders are visible. Incompatible releases require confirmation.",
             12f,ui.MUTED))
         root.addView(ui.space(c,12))
 
         val query=EditText(c).apply {
-            hint="Find a version or date"
+            hint="Find version, Minecraft, loader, date"
             setSingleLine(true)
             textSize=13f
             setTextColor(ui.WHITE)
@@ -124,8 +126,21 @@ internal object ModrinthVersionPicker {
                 top.addView(ui.pill(c,channel.uppercase(Locale.ROOT),tint))
                 card.addView(top)
                 card.addView(ui.space(c,5))
-                card.addView(ui.text(c,"Published "+version.published+"  ·  "+
-                    version.downloads+" downloads",11f,ui.MUTED))
+                card.addView(ui.text(c,"Minecraft: " +
+                    version.gameVersions.take(3).joinToString(", ").ifBlank { "unspecified" } +
+                    (if(version.gameVersions.size>3) " +"+(version.gameVersions.size-3) else ""),
+                    11f,ui.MUTED))
+                card.addView(ui.space(c,3))
+                card.addView(ui.text(c,"Loader: "+
+                    version.loaders.joinToString(", ").ifBlank { "unspecified" } +
+                    "  ·  "+version.published,11f,ui.MUTED))
+                val warnings=ModrinthCatalog.compatibilityWarnings(version,gameVersion)
+                card.addView(ui.space(c,5))
+                if(warnings.isNotEmpty()){
+                    card.addView(ui.text(c,"⚠ MAY NOT WORK WITH YOUR SERVER",11f,ui.GOLD,true))
+                } else {
+                    card.addView(ui.text(c,"✓ Matches your Fabric server",11f,ui.GREEN,true))
+                }
                 if(version.requiredCount>0 || version.optionalCount>0 ||
                     version.incompatibleCount>0) {
                     card.addView(ui.space(c,5))
