@@ -34,6 +34,7 @@ class WoodlandSetupActivity : Activity() {
         Choice("FerriteCore", "ferrite-core", "Reduce RAM usage", "mod", true),
         Choice("Krypton", "krypton", "Network optimizations", "mod", true),
         Choice("Alternate Current", "alternate-current", "Reduce redstone overhead", "mod", true),
+        Choice("ServerCore", "servercore", "Reduce server lag spikes; vanilla defaults", "mod", true),
         Choice("spark", "spark", "Diagnose TPS, CPU and lag", "mod", true),
         Choice("Moonrise", "moonrise-opt", "Optional chunk/tick optimization; NEVER with C2ME", "mod", false),
         Choice("Terralith", "terralith", "Vanilla-block biomes; new world strongly recommended", "datapack", true),
