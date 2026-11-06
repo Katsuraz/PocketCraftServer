@@ -119,22 +119,8 @@ class WorldSettingsActivity : Activity() {
         val active = WorldStore.active(this) == worldName
 
         val screen = ui.column(this).apply { setBackgroundColor(ui.BG) }
-        val toolbar = ui.row(this).apply {
-            setPadding(ui.dp(this@WorldSettingsActivity,18),ui.dp(this@WorldSettingsActivity,17),
-                ui.dp(this@WorldSettingsActivity,18),ui.dp(this@WorldSettingsActivity,15))
-        }
-        toolbar.addView(ui.text(this,"‹",32f,ui.GREEN,true).apply {
-            contentDescription = "Back to world"
-            setPadding(0,0,ui.dp(this@WorldSettingsActivity,16),0)
-            setOnClickListener { finish() }
-        })
-        toolbar.addView(ui.column(this).apply {
-            addView(ui.text(this@WorldSettingsActivity,worldName,20f,ui.WHITE,true))
-            addView(ui.text(this@WorldSettingsActivity,
-                if (active) "ACTIVE WORLD SETTINGS" else "WORLD PROFILE • INACTIVE",
-                10f,ui.MUTED,true))
-        })
-        screen.addView(toolbar)
+        screen.addView(HomesteadComponents.subpageHeader(this, worldName,
+            if (active) "Active world settings" else "Saved world profile") { finish() })
         val scroll = ScrollView(this).apply { isFillViewport = true }
         val body = ui.column(this).apply {
             setPadding(ui.dp(this@WorldSettingsActivity,18),0,
