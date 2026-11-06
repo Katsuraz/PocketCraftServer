@@ -550,7 +550,7 @@ class MainActivity : Activity() {
         val blockers = HostingHealth.startBlockers(healthSnapshot())
         body.addView(HomesteadComponents.pageIntro(this,
             "YOUR SERVER", "Home",
-            "One place to start Minecraft and check how it is running."))
+            ""))
         body.addView(ui.space(this,17))
 
         val hero = ui.card(this)
@@ -574,8 +574,8 @@ class MainActivity : Activity() {
         hero.addView(ui.text(this,WorldStore.active(this),22f,ui.WHITE,true))
         hero.addView(ui.space(this,6))
         hero.addView(ui.text(this,
-            if(ServerService.running) "Minecraft is running on this phone"
-            else "Your world is ready when you are",
+            if(ServerService.running) "Running on this phone"
+            else "Ready to start",
             12f,ui.MUTED))
         hero.addView(ui.space(this,9))
         hero.addView(ui.text(this,"Checking server state…",11f,ui.CYAN)
@@ -602,7 +602,7 @@ class MainActivity : Activity() {
         body.addView(ui.space(this,17))
 
         body.addView(HomesteadComponents.sectionHeading(this,"Quick access",
-            "Jump straight to the part you want to manage"))
+            ""))
         body.addView(ui.space(this,11))
         body.addView(HomesteadComponents.tileRow(this,
             HomesteadComponents.shortcut(this,"▧","Worlds",
@@ -635,7 +635,7 @@ class MainActivity : Activity() {
 
         val vitals=ui.card(this)
         vitals.addView(HomesteadComponents.sectionHeading(this,"Phone & performance",
-            "A lightweight status snapshot"))
+            ""))
         vitals.addView(ui.space(this,10))
         vitals.addView(ui.text(this,runCatching { ServerVitals.device(this) }
             .getOrDefault("Device metrics unavailable"),12f,ui.WHITE).also { vitalsText=it })
@@ -688,7 +688,7 @@ class MainActivity : Activity() {
 
         val toolbox=ui.card(this)
         toolbox.addView(HomesteadComponents.sectionHeading(this,"Tools & diagnostics",
-            "Advanced controls live here, away from the Home shortcuts"))
+            ""))
         toolbox.addView(ui.space(this,12))
         val advancedActions=listOf(
             Triple("◎","First-time setup","Check the installation guide"),
@@ -1057,15 +1057,19 @@ class MainActivity : Activity() {
             else -> "○  BEDROCK JOIN NOT YET OBSERVED"
         }, if (connected) ui.GREEN else ui.MUTED))
         card.addView(ui.space(this, 7))
-        card.addView(ui.text(this, when {
+        val bedrockDetails=when {
             connected -> "Evidence: " + ServerService.bedrockEvidence
-            bridgeStarted -> "Geyser reported startup/signaling: " + ServerService.bedrockEvidence +
-                ". A successful Bedrock player login has not been observed. Test with a second device."
+            bridgeStarted -> "Geyser reported: " + ServerService.bedrockEvidence +
+                ". Test a Bedrock join on another device to verify."
             geyserInstalled && ServerService.javaReady ->
-                "Try joining from Bedrock. If you are already playing, confirm the connection below; a missing Geyser startup line does not mean the bridge is offline."
-            geyserInstalled -> "Start the Java server, then test connecting from Bedrock."
+                "Try joining from Bedrock. Startup logs alone do not prove connectivity."
+            geyserInstalled -> "Start the Java server, then connect from Bedrock."
             else -> "Install Geyser-Fabric to enable Bedrock players."
-        }, 11f, ui.MUTED))
+        }
+        card.addView(ui.action(this,"ⓘ  CONNECTION DETAILS") {
+            AlertDialog.Builder(this).setTitle("Bedrock status")
+                .setMessage(bedrockDetails).setPositiveButton("OK",null).show()
+        })
         if (geyserInstalled && ServerService.javaReady && !connected) {
             card.addView(ui.space(this, 9))
             card.addView(ui.action(this, "✓  I JOINED FROM BEDROCK", false) {
@@ -1307,33 +1311,34 @@ class MainActivity : Activity() {
         val bedrockPort = geyserNetworkSettings().bedrockPort
         val javaPort = serverProperty("server-port","25565")
         val approval = PlayitManager.claimUrl
-        card.addView(ui.text(this,"OPTIONAL INTERNET TUNNEL",11f,ui.CYAN,true))
+        card.addView(ui.text(this,"REMOTE ACCESS",11f,ui.CYAN,true))
         card.addView(ui.space(this,8))
-        card.addView(ui.text(this,"Playit for remote connections",18f,ui.WHITE,true))
+        card.addView(ui.text(this,"Playit",18f,ui.WHITE,true))
         card.addView(ui.space(this,8))
-        card.addView(ui.text(this,
-            if(ServerService.nethernetReady) "✓ " + ServerService.nethernetMode
-            else "NetherNet startup message not captured. RakNet may still be working.",
-            12f,if(ServerService.nethernetReady)ui.GREEN else ui.MUTED))
+        card.addView(ui.pill(this,
+            if(ServerService.nethernetReady) "✓  NETHERNET" else "○  SIGNALING UNVERIFIED",
+            if(ServerService.nethernetReady)ui.GREEN else ui.MUTED))
         card.addView(ui.space(this,8))
         val blocked = PlayitManager.status == "ACCOUNT LIMIT" || PlayitManager.status == "ACCOUNT ACTION"
         card.addView(ui.pill(this,
-            if(blocked) "●  PLAYIT ACCOUNT ISSUE" else if(PlayitManager.status=="ERROR") "●  ERROR"
+            if(blocked) "●  ACCOUNT ISSUE" else if(PlayitManager.status=="ERROR") "●  ERROR"
             else if(!active) "●  OFFLINE"
-            else if(javaAddress!=null || bedrockAddress!=null) "●  ADDRESS ASSIGNED" else "●  SETTING UP",
+            else if(javaAddress!=null || bedrockAddress!=null) "●  ADDRESS READY" else "●  SETTING UP",
             if(blocked || PlayitManager.status=="ERROR")ui.RED
             else if(javaAddress!=null || bedrockAddress!=null)ui.GREEN
             else if(active)ui.CYAN else ui.MUTED))
         card.addView(ui.space(this,9))
-        card.addView(ui.text(this,PlayitManager.detail,12f,if(blocked)ui.RED else ui.MUTED))
+        if(blocked || PlayitManager.status=="ERROR") {
+            card.addView(ui.text(this,PlayitManager.detail,12f,ui.RED))
+        }
         card.addView(ui.space(this,12))
         if (blocked) {
-            card.addView(ui.action(this,"OPEN PLAYIT AGENT MANAGEMENT",true) {
+            card.addView(ui.action(this,"MANAGE ACCOUNT",true) {
                 startActivity(Intent(Intent.ACTION_VIEW,
                     android.net.Uri.parse("https://playit.gg/account/agents")))
             })
             card.addView(ui.space(this,9))
-            card.addView(ui.action(this,"RETRY AFTER FIXING PLAYIT ACCOUNT") {
+            card.addView(ui.action(this,"RETRY") {
                 if (active) PlayitManager.retryTunnel(this)
                 else startForegroundService(Intent(this,ServerService::class.java)
                     .setAction(ServerService.ACTION_TUNNEL_START))
@@ -1342,29 +1347,29 @@ class MainActivity : Activity() {
             card.addView(ui.space(this,11))
         }
         if(!active) {
-            card.addView(ui.action(this,"▶  USE PLAYIT FOR REMOTE FRIENDS",true) {
+            card.addView(ui.action(this,"▶  CONNECT PLAYIT",true) {
                 startForegroundService(Intent(this,ServerService::class.java)
                     .setAction(ServerService.ACTION_TUNNEL_START))
                 toast("Starting Playit and checking your Minecraft server. See status below.")
             })
             card.addView(ui.space(this,8))
-            card.addView(ui.text(this,"Approve PocketCraft in Playit once. For remote access, assign Minecraft Java (and Bedrock if supported) tunnels in your Playit dashboard. This avoids rejected automatic API requests.",11f,ui.MUTED))
+            card.addView(ui.text(this,"Connect once in Playit.",11f,ui.MUTED))
         } else {
             if(!PlayitManager.accountConnected) {
                 card.addView(ui.action(this,
-                    if(approval!=null)"①  CONNECT PLAYIT ACCOUNT" else "①  PREPARING ACCOUNT LINK...",true,approval!=null) {
+                    if(approval!=null)"CONNECT ACCOUNT" else "PREPARING LINK…",true,approval!=null) {
                     startActivity(Intent(Intent.ACTION_VIEW,android.net.Uri.parse(approval)))
                 })
                 card.addView(ui.space(this,8))
-                card.addView(ui.text(this,"Approve the one-time connection in your browser; then come back here. You do not need to share a password with PocketCraft.",11f,ui.MUTED))
+                card.addView(ui.text(this,"Approve in your browser.",11f,ui.MUTED))
             } else {
-                card.addView(ui.text(this,"✓  PLAYIT ACCOUNT CONNECTED",12f,ui.GREEN,true))
+                card.addView(ui.text(this,"✓  ACCOUNT CONNECTED",12f,ui.GREEN,true))
                 card.addView(ui.space(this,10))
                 card.addView(ui.text(this,"JAVA EDITION",11f,ui.MUTED,true))
                 card.addView(ui.text(this,javaAddress ?: "Requesting Java address...",15f,ui.WHITE,true))
                 if(javaAddress!=null) {
                     card.addView(ui.space(this,6))
-                    card.addView(ui.action(this,"COPY JAVA ADDRESS",true) {
+                    card.addView(ui.action(this,"COPY JAVA",true) {
                         (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
                             .setPrimaryClip(ClipData.newPlainText("Java server",javaAddress))
                         toast("Java address copied")
@@ -1375,15 +1380,16 @@ class MainActivity : Activity() {
                 card.addView(ui.text(this,bedrockAddress ?: "Requesting Bedrock address...",15f,ui.WHITE,true))
                 if (PlayitManager.bedrockReportedEndpoint != null) {
                     card.addView(ui.space(this,6))
-                    card.addView(ui.text(this,
-                        "NetherNet players join the hostname on port 19132. Playit also reports " +
-                            PlayitManager.bedrockReportedEndpoint + " as a separate tunnel endpoint; " +
-                            "do not use that port as the Bedrock join port.",
-                        11f,ui.MUTED))
+                    card.addView(ui.action(this,"ⓘ  UDP ENDPOINT") {
+                        AlertDialog.Builder(this).setTitle("NetherNet ports")
+                            .setMessage("Join using the Bedrock hostname on port 19132. " +
+                                "Playit UDP endpoint: " + PlayitManager.bedrockReportedEndpoint)
+                            .setPositiveButton("OK",null).show()
+                    })
                 }
                 if(bedrockAddress!=null) {
                     card.addView(ui.space(this,6))
-                    card.addView(ui.action(this,"COPY BEDROCK ADDRESS",true) {
+                    card.addView(ui.action(this,"COPY BEDROCK",true) {
                         (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
                             .setPrimaryClip(ClipData.newPlainText("Bedrock server",bedrockAddress))
                         toast("Bedrock address copied")
@@ -1391,23 +1397,21 @@ class MainActivity : Activity() {
                 }
                 if(javaAddress==null || bedrockAddress==null) {
                     card.addView(ui.space(this,9))
-                    card.addView(ui.text(this,
-                        "Use the Playit dashboard to assign tunnels to THIS phone's running agent. Java: 127.0.0.1:$javaPort. Bedrock: 127.0.0.1:$bedrockPort where supported.",
-                        11f,ui.MUTED))
+                    card.addView(ui.text(this,"Assign a tunnel in Playit.",11f,ui.MUTED))
                     card.addView(ui.space(this,8))
-                    card.addView(ui.action(this,"OPEN PLAYIT TUNNELS",true) {
+                    card.addView(ui.action(this,"MANAGE TUNNELS",true) {
                         startActivity(Intent(Intent.ACTION_VIEW,
                             android.net.Uri.parse("https://playit.gg/account/tunnels")))
                     })
                 }
             }
             card.addView(ui.space(this,9))
-            card.addView(ui.action(this,"↻  REFRESH STATUS") {
+            card.addView(ui.action(this,"↻  REFRESH") {
                 PlayitManager.refreshAsync(this)
                 render()
             })
             card.addView(ui.space(this,8))
-            card.addView(ui.action(this,"■  GO OFFLINE") {
+            card.addView(ui.action(this,"■  DISCONNECT") {
                 startService(Intent(this,ServerService::class.java)
                     .setAction(ServerService.ACTION_TUNNEL_STOP))
                 toast("Stopping internet tunnel")
@@ -1415,11 +1419,11 @@ class MainActivity : Activity() {
             })
         }
         card.addView(ui.space(this,10))
-        card.addView(ui.action(this,"USE AN EXISTING PLAYIT AGENT") {
+        card.addView(ui.action(this,"SWITCH AGENT") {
             existingPlayitAgentPrompt()
         })
         card.addView(ui.space(this,9))
-        card.addView(ui.action(this,"ADVANCED SETUP / DIAGNOSTICS") {
+        card.addView(ui.action(this,"DIAGNOSTICS") {
             AlertDialog.Builder(this)
                 .setTitle("Internet hosting diagnostics")
                 .setMessage(PlayitManager.recentLog(this).takeLast(4500))
@@ -1430,7 +1434,14 @@ class MainActivity : Activity() {
                 .show()
         })
         card.addView(ui.space(this,8))
-        card.addView(ui.text(this,"Internet access is confirmed only by a successful remote connection. Playit may require additional account approval or manual setup, especially for Bedrock.",11f,ui.MUTED))
+        card.addView(ui.action(this,"ⓘ  SETUP HELP") {
+            AlertDialog.Builder(this).setTitle("Remote access")
+                .setMessage("Assign tunnels to this phone's Playit agent. " +
+                    "Java: 127.0.0.1:$javaPort. Bedrock: 127.0.0.1:$bedrockPort. " +
+                    "For NetherNet, configure Geyser NXS using Playit's Geyser help. " +
+                    "A public address is not proof of a successful remote join.")
+                .setPositiveButton("OK",null).show()
+        })
         return card
     }
 
@@ -1490,7 +1501,7 @@ class MainActivity : Activity() {
         box.addView(ui.space(this,9))
         box.addView(ui.text(this,if(ServerService.javaReady)"Minecraft server ready" else if(ServerService.running)"Minecraft is starting" else "Your server is offline",18f,ui.WHITE,true).also { readyText = it })
         box.addView(ui.space(this,5))
-        box.addView(ui.text(this,"Process status: $state. Java readiness requires the Minecraft Done message; Bedrock needs Geyser listener confirmation.",12f,ui.MUTED))
+        box.addView(ui.text(this,"Status: $state",12f,ui.MUTED))
         if(ServerService.failure.isNotBlank()) {
             box.addView(ui.space(this,7))
             box.addView(ui.text(this,"Last error: "+ServerService.failure,12f,ui.RED))
@@ -1516,9 +1527,7 @@ class MainActivity : Activity() {
             })
         }
         box.addView(ui.space(this,12))
-        box.addView(ui.text(this,
-            "Manage local and remote addresses in the hosting panels below. Stop the server before changing mods, worlds, or JVM settings.",
-            11f,ui.MUTED))
+        box.addView(ui.text(this,"Stop Minecraft before editing server files.",11f,ui.MUTED))
         return box
     }
 
@@ -1824,15 +1833,15 @@ class MainActivity : Activity() {
 
         val crossplay=ui.card(this)
         crossplay.addView(HomesteadComponents.sectionHeading(this,"Bedrock compatibility",
-            "Manage Geyser and Floodgate separately from your mod library"))
+            ""))
         crossplay.addView(ui.space(this,11))
         crossplay.addView(HomesteadComponents.menuRow(this,"⚙","Geyser & network settings",
-            "Ports, signaling, NXS and safe config.yml replacement") {
+            "") {
             startActivity(Intent(this,GeyserSettingsActivity::class.java))
         })
         crossplay.addView(ui.space(this,8))
         crossplay.addView(HomesteadComponents.menuRow(this,"↔","Install crossplay files",
-            "Check Geyser, Floodgate and Fabric API dependencies") {
+            "") {
             AlertDialog.Builder(this).setTitle("Install crossplay?")
                 .setMessage("Install matching Geyser, Floodgate and Fabric API files where supported.")
                 .setNegativeButton("CANCEL",null)
@@ -1844,7 +1853,7 @@ class MainActivity : Activity() {
         body.addView(ui.space(this,17))
 
         body.addView(HomesteadComponents.sectionHeading(this,"Installed mods",
-            "Disable or delete mods when the server is stopped"))
+            ""))
         body.addView(ui.space(this,10))
         if(files.isEmpty()) {
             body.addView(empty("⬡","No mods installed",
