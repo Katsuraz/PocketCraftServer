@@ -320,7 +320,8 @@ class ModrinthStudioActivity : Activity() {
         pendingDownload=null
         if(resultCode!=RESULT_OK || data?.data==null || selected==null)return
         val destination=data.data!!
-        install("Downloading verified "+selected.filename){
+        install("Downloading verified "+selected.filename,
+            showRestartMessage=false,successTitle="✓ Download saved"){
             val cached=ModrinthCatalog.downloadVersionFile(this,selected)
             try {
                 val stream=contentResolver.openOutputStream(destination,"w")
@@ -377,7 +378,10 @@ class ModrinthStudioActivity : Activity() {
         }
         panel.addView(ui.text(this,"Required dependencies cannot be disabled. " +
             "Optional dependencies can be selected. Exact pinned version and SHA-512 verified; " +
-            "existing JARs are not overwritten.",12f,ui.MUTED))
+            "existing JARs are not overwritten." +
+            (if(allowMismatch)"\n\n⚠ You chose an incompatible version. " +
+                "Dependencies might not resolve and Minecraft may crash on startup." else ""),
+            12f,ui.MUTED))
         panel.addView(ui.space(this,10))
         if(conflict) {
             panel.addView(ui.text(this,"A conflicting mod is installed. Resolve it first.",
@@ -479,7 +483,9 @@ class ModrinthStudioActivity : Activity() {
             }
         }.start()
     }
-    private fun install(label:String,work:()->String){
+    private fun install(label:String,showRestartMessage:Boolean=true,
+                        successTitle:String="✓ Installation complete",
+                        work:()->String){
         val cancel=AtomicBoolean(false)
         val statusView=ui.text(this,"Preparing…",13f,ui.WHITE)
         val panel=ui.column(this).apply {
@@ -504,8 +510,9 @@ class ModrinthStudioActivity : Activity() {
                 if(isFinishing||isDestroyed)return@runOnUiThread
                 wait.dismiss()
                 result.onSuccess {
-                    AlertDialog.Builder(this).setTitle("✓ Installation complete")
-                        .setMessage(it+"\n\nRestart Minecraft to load the changes.")
+                    AlertDialog.Builder(this).setTitle(successTitle)
+                        .setMessage(it+
+                            (if(showRestartMessage)"\n\nRestart Minecraft to load the changes." else ""))
                         .setPositiveButton("OK",null).show()
                 }.onFailure {
                     AlertDialog.Builder(this)
