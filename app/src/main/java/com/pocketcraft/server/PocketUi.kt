@@ -132,6 +132,24 @@ object PocketUi {
             .takeIf { it in setOf("comfortable","compact","minimal") } ?: "comfortable"
         pixelFonts = prefs.getBoolean("pixelFonts",true)
         if (pixelFonts) initFonts(c)
+        // Native dialog colors follow the currently selected PocketCraft palette.
+        // This also fixes default gray Android dialogs in Mods, Worlds and Settings.
+        if (c is android.app.Activity) {
+            val overlay = when (currentTheme) {
+                "homestead" -> R.style.PocketCraftDialogs_homestead
+                "classic" -> R.style.PocketCraftDialogs_classic
+                "obsidian" -> R.style.PocketCraftDialogs_obsidian
+                "aurora" -> R.style.PocketCraftDialogs_aurora
+                "nether" -> R.style.PocketCraftDialogs_nether
+                "ender" -> R.style.PocketCraftDialogs_ender
+                "oceanic" -> R.style.PocketCraftDialogs_oceanic
+                "minecraft" -> R.style.PocketCraftDialogs_minecraft
+                "material" -> R.style.PocketCraftDialogs_material
+                "minimal" -> R.style.PocketCraftDialogs_minimal
+                else -> R.style.PocketCraftDialogs_homestead
+            }
+            c.theme.applyStyle(overlay, true)
+        }
     }
 
     fun setTheme(c: Context, theme: String) {
