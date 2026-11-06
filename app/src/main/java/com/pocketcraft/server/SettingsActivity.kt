@@ -184,17 +184,7 @@ class SettingsActivity : Activity() {
         val body=ui.column(this).apply {
             setPadding(ui.dp(this@SettingsActivity,18),0,ui.dp(this@SettingsActivity,18),ui.dp(this@SettingsActivity,30))
         }
-        val hero=ui.column(this).apply {
-            background=ui.shape(this@SettingsActivity,ui.PANEL,16,ui.BORDER)
-            setPadding(ui.dp(this@SettingsActivity,20),ui.dp(this@SettingsActivity,22),
-                ui.dp(this@SettingsActivity,20),ui.dp(this@SettingsActivity,22))
-        }
-
-        hero.addView(ui.text(this,"Settings",23f,ui.WHITE,true))
-        hero.addView(ui.space(this,7))
-
-        body.addView(hero)
-        body.addView(ui.space(this,15))
+        body.addView(ui.space(this,8))
         val categories=HorizontalScrollView(this).apply {
             isHorizontalScrollBarEnabled=false
         }
