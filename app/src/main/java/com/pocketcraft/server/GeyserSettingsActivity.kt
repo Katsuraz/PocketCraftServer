@@ -306,8 +306,11 @@ class GeyserSettingsActivity : Activity() {
             } ?: throw IllegalArgumentException("Cannot open selected file")
             val imported = bytes.toString("UTF-8")
             val check = GeyserNetworkSettings.parse(imported)
-            if (!check.configured || check.warnings.any { it.startsWith("Duplicate ") })
-                throw IllegalArgumentException("Not a valid Geyser config or contains duplicate keys")
+            if (!check.configured)
+                throw IllegalArgumentException("Not a valid Geyser config")
+            GeyserConfigEditor.validateImportedStructure(imported)?.let {
+                throw IllegalArgumentException(it)
+            }
             val bad = GeyserConfigEditor.validate(GeyserConfigEditor.read(imported))
             if (bad != null) throw IllegalArgumentException(bad)
             AlertDialog.Builder(this).setTitle("Replace Geyser config.yml?")
