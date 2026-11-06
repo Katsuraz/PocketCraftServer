@@ -424,6 +424,13 @@ class ModrinthStudioActivity : Activity() {
             panel.addView(ui.text(this,"A conflicting mod is installed. Resolve it first.",
                 12f,ui.RED,true))
         }
+        // Each Modrinth mod receives the SAME per-dependency choices:
+        // declared pin, newest compatible Fabric release, or an exact release.
+        // Choices are keyed by immutable project ID and apply throughout the
+        // dependency graph, not special-cased for any modpack or mod name.
+        val chosenVersions=mutableMapOf<String,String>()
+        val compatibleProjects=mutableSetOf<String>()
+        val approvedMismatchProjects=mutableSetOf<String>()
         deps.forEachIndexed { index, dep ->
             panel.addView(CheckBox(this).apply {
                 text=labels[index]
@@ -434,6 +441,109 @@ class ModrinthStudioActivity : Activity() {
                 setOnCheckedChangeListener { _, checked -> selected[index]=checked }
                 minHeight=ui.dp(this@ModrinthStudioActivity,44)
             })
+            if(dep.kind !in setOf("required","optional") || dep.installed) return@forEachIndexed
+            val selectionStatus=ui.text(this,
+                if(dep.versionId==null)"Version: newest compatible Fabric release"
+                else "Version: author's pinned Modrinth release",
+                11f,ui.CYAN)
+            selectionStatus.setPadding(ui.dp(this,9),0,ui.dp(this,9),0)
+            panel.addView(selectionStatus)
+            panel.addView(ui.space(this,4))
+            panel.addView(ui.action(this,"CHOOSE " + dep.title.take(23).uppercase(Locale.ROOT) +
+                " VERSION") {
+                val options=arrayOf(
+                    if(dep.versionId!=null)"Use author's exact pinned release"
+                    else "Use default compatible Fabric release",
+                    "Use newest compatible Fabric release (ignore pin)",
+                    "Choose a specific version from Modrinth"
+                )
+                AlertDialog.Builder(this).setTitle(dep.title+" · dependency version")
+                    .setItems(options){_,mode ->
+                        when(mode){
+                            0 -> {
+                                chosenVersions.remove(dep.projectId)
+                                compatibleProjects.remove(dep.projectId)
+                                approvedMismatchProjects.remove(dep.projectId)
+                                selectionStatus.text=if(dep.versionId==null)
+                                    "Version: default compatible Fabric"
+                                else "Version: author's pinned release ("+dep.versionId+")"
+                            }
+                            1 -> {
+                                chosenVersions.remove(dep.projectId)
+                                approvedMismatchProjects.remove(dep.projectId)
+                                compatibleProjects.add(dep.projectId)
+                                selectionStatus.text="Version: newest compatible Fabric "+minecraft+
+                                    " (pin intentionally bypassed)"
+                            }
+                            2 -> {
+                                val wait=AlertDialog.Builder(this)
+                                    .setTitle("Finding "+dep.title+" releases")
+                                    .setMessage("Loading verified Fabric releases from Modrinth…")
+                                    .setCancelable(false).create()
+                                wait.show()
+                                Thread {
+                                    val result=runCatching {
+                                        ModrinthCatalog.versions(dep.projectId,"mod",minecraft)
+                                            .filter { version ->
+                                                "fabric" in version.loaders &&
+                                                    version.filename.endsWith(".jar",true)
+                                            }
+                                    }
+                                    runOnUiThread {
+                                        if(isFinishing||isDestroyed) return@runOnUiThread
+                                        wait.dismiss()
+                                        result.onFailure { failure ->
+                                            AlertDialog.Builder(this)
+                                                .setTitle("Versions unavailable")
+                                                .setMessage(failure.message?:"Modrinth request failed")
+                                                .setPositiveButton("OK",null).show()
+                                        }
+                                        result.onSuccess { versions ->
+                                            if(versions.isEmpty()) {
+                                                AlertDialog.Builder(this)
+                                                    .setTitle("No Fabric release")
+                                                    .setMessage("No verified Fabric JAR releases " +
+                                                        "were found for "+dep.title+".")
+                                                    .setPositiveButton("OK",null).show()
+                                            } else {
+                                                ModrinthVersionPicker.show(this,dep.title,
+                                                    minecraft,versions){ picked ->
+                                                    val warnings=ModrinthCatalog
+                                                        .compatibilityWarnings(picked,minecraft)
+                                                    val applyChoice={
+                                                        chosenVersions[dep.projectId]=picked.id
+                                                        compatibleProjects.remove(dep.projectId)
+                                                        if(warnings.isNotEmpty())
+                                                            approvedMismatchProjects.add(dep.projectId)
+                                                        else approvedMismatchProjects.remove(dep.projectId)
+                                                        selectionStatus.text="Version: "+picked.number+
+                                                            (if(warnings.isNotEmpty())
+                                                                "  ⚠ incompatible, user approved"
+                                                            else "  ✓ compatible")
+                                                    }
+                                                    if(warnings.isEmpty()) applyChoice()
+                                                    else AlertDialog.Builder(this)
+                                                        .setTitle("⚠ Dependency compatibility")
+                                                        .setMessage(dep.title+" "+picked.number+
+                                                            "\n\n"+warnings.joinToString("\n")+
+                                                            "\n\nA mismatched dependency may " +
+                                                            "prevent your Minecraft server from starting. " +
+                                                            "Only this explicitly selected dependency " +
+                                                            "will bypass its version check.")
+                                                        .setNegativeButton("CANCEL",null)
+                                                        .setPositiveButton("USE THIS VERSION"){
+                                                            _,_-> applyChoice()
+                                                        }.show()
+                                                }
+                                            }
+                                        }
+                                    }
+                                }.start()
+                            }
+                        }
+                    }.setNegativeButton("CANCEL",null).show()
+            })
+            panel.addView(ui.space(this,8))
         }
         if(deps.isEmpty())panel.addView(ui.text(this,
             "This release declares no Modrinth dependencies.",12f,ui.MUTED))
@@ -473,11 +583,23 @@ class ModrinthStudioActivity : Activity() {
             val options=deps.indices.filter {
                 deps[it].kind=="optional" && selected[it] && !deps[it].installed
             }.map {deps[it].projectId}.toSet()
+            val enabledIds=deps.indices.filter { i ->
+                !deps[i].installed && (deps[i].kind=="required" ||
+                    (deps[i].kind=="optional" && selected[i]))
+            }.map { deps[it].projectId }.toSet()
+            val selectedVersions=chosenVersions.filterKeys { it in enabledIds }
+            val autoVersions=compatibleProjects.filter { it in enabledIds }.toSet()
+            val unsafeVersions=approvedMismatchProjects.filter {
+                it in enabledIds
+            }.toSet()
             install("Installing "+hit.title){
                 WebsiteModInstaller.installWithDependencies(this,hit.id,v.id,options,
                     allowVersionMismatch=allowMismatch,
                     allowPinnedDependencyRecovery =
-                        pinnedDependencies.isNotEmpty() && allowRecovery[0])
+                        pinnedDependencies.isNotEmpty() && allowRecovery[0],
+                    preferCompatibleDependencyProjects=autoVersions,
+                    selectedDependencyVersions=selectedVersions,
+                    allowSelectedDependencyMismatchProjects=unsafeVersions)
             }
         }
         builder.show()
