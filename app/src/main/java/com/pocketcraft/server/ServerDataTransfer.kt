@@ -18,7 +18,8 @@ internal object ServerDataTransfer {
     private const val MAX_EXPANDED_BYTES = 2L * 1024 * 1024 * 1024
 
     fun backup(context: Context, uri: Uri): Int {
-        if (ServerService.running) throw IOException("Stop Minecraft before creating a backup")
+        if (ServerService.running || ServerService.status in setOf("STARTING","STOPPING"))
+            throw IOException("Stop Minecraft before creating a backup")
         val root = WorldStore.root(context).canonicalFile
         val files = root.walkTopDown().filter { it.isFile }.toList()
         if (files.size > MAX_FILES) throw IOException("Too many server files to export")
@@ -43,7 +44,8 @@ internal object ServerDataTransfer {
     }
 
     fun restore(context: Context, uri: Uri): Int {
-        if (ServerService.running) throw IOException("Stop Minecraft before restoring")
+        if (ServerService.running || ServerService.status in setOf("STARTING","STOPPING"))
+            throw IOException("Stop Minecraft before restoring")
         val root = WorldStore.root(context).canonicalFile
         // Never silently overwrite an existing world, modpack, or config.
         // PocketCraft creates an empty mods/ directory on first launch;
@@ -51,6 +53,11 @@ internal object ServerDataTransfer {
         if (root.walkTopDown().any { it.isFile }) {
             throw IOException("Restore requires a new server without existing files. Export the current server first; no files will be overwritten.")
         }
+        // Verify all CRCs, declared paths and size limits without altering the server.
+        // The document is opened again for staging after this read-only check.
+        val info = context.contentResolver.openInputStream(uri)?.use {
+            BackupArchiveVerifier.verify(it)
+        } ?: throw IOException("Cannot open selected backup ZIP")
         var count = 0
         var expanded = 0L
         val staged = File(context.cacheDir, "pocketcraft-import-" + System.nanoTime())
@@ -93,30 +100,9 @@ internal object ServerDataTransfer {
                 }
             }
             if (count==0) throw IOException("ZIP contains no server data")
-            // Preflight all collisions before moving even one file.
-            val stagedFiles=staged.walkTopDown().filter { it.isFile }.toList()
-            if(stagedFiles.isEmpty()) throw IOException("ZIP has no server files")
-            for (source in stagedFiles) {
-                val relative=source.relativeTo(staged).invariantSeparatorsPath
-                val target=ServerFileOps.checked(root,File(root,relative))
-                if(target.exists()) {
-                    throw IOException("Restore would overwrite existing file: " + relative)
-                }
-            }
-            var moved=0
-            for (source in stagedFiles) {
-                val relative=source.relativeTo(staged).invariantSeparatorsPath
-                val target=ServerFileOps.checked(root,File(root,relative))
-                if(!target.parentFile.mkdirs() && !target.parentFile.isDirectory)
-                    throw IOException("Cannot create destination folder: " + relative)
-                if (!source.renameTo(target)) {
-                    throw IOException("Restore transferred "+moved+
-                        " files, but failed on: "+relative+
-                        ". The original backup ZIP can be used to recover missing items.")
-                }
-                moved++
-            }
-            return count
+            if (count != info.files + info.folders)
+                throw IOException("Backup changed during verification")
+            return ServerRestoreCommit.apply(staged,root)
         } finally {
             staged.deleteRecursively()
         }

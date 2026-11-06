@@ -1961,6 +1961,10 @@ class MainActivity : Activity() {
     private fun modsPage(body:LinearLayout) {
         val version=getSharedPreferences("pocketcraft",0).getString("gameVersion",null)
         val files=modFiles()
+        val inspections=files.associateWith { ModInspector.inspect(it) }
+        val enabledInfo=inspections.filterKeys { it.name.endsWith(".jar") }.values.toList()
+        val missingDeps=ModDependencyAdvisor.missing(enabledInfo)
+        val duplicateIds=ModDependencyAdvisor.duplicateIds(enabledInfo)
         val installed=files.count { it.name.endsWith(".jar") }
         val disabled=files.count { it.name.endsWith(".disabled") }
 
@@ -2020,13 +2024,35 @@ class MainActivity : Activity() {
         body.addView(HomesteadComponents.sectionHeading(this,"Installed mods",
             ""))
         body.addView(ui.space(this,10))
+        if(missingDeps.isNotEmpty() || duplicateIds.isNotEmpty()) {
+            body.addView(ui.action(this,"⚠  REVIEW DEPENDENCIES") {
+                val details=buildString {
+                    append("Advisory metadata check only. Bundled dependencies may not be listed. ")
+                    append("No mods were changed.\n\n")
+                    missingDeps.take(20).forEach { finding ->
+                        append(finding.modName)
+                        append(": ")
+                        append(finding.missing.joinToString(", "))
+                        append('\n')
+                    }
+                    if(duplicateIds.isNotEmpty()) {
+                        append("\nDuplicate enabled Fabric IDs: ")
+                        append(duplicateIds.sorted().joinToString(", "))
+                    }
+                }
+                AlertDialog.Builder(this).setTitle("Dependency review")
+                    .setMessage(details)
+                    .setPositiveButton("OK",null).show()
+            })
+            body.addView(ui.space(this,10))
+        }
         if(files.isEmpty()) {
             body.addView(empty("⬡","No mods installed",
                 "Browse Modrinth or import a Fabric JAR to get started."))
         }
         files.forEach { file ->
             val enabled=file.name.endsWith(".jar")
-            val meta=ModInspector.inspect(file)
+            val meta=inspections.getValue(file)
             val card=ui.card(this)
             val heading=ui.row(this)
             val titles=ui.column(this)
@@ -3023,6 +3049,20 @@ class MainActivity : Activity() {
                 }.show()
         },LinearLayout.LayoutParams(0,-2,1f))
         advanced.addView(tools)
+        advanced.addView(ui.space(this,8))
+        advanced.addView(ui.action(this,"COPY REDACTED LOG") {
+            AlertDialog.Builder(this)
+                .setTitle("Copy a safer log?")
+                .setMessage("Known tokens and passwords will be masked. Automated redaction " +
+                    "cannot guarantee privacy; review the copied text before sharing.")
+                .setNegativeButton("CANCEL",null)
+                .setPositiveButton("COPY") { _,_ ->
+                    val safe=PrivateLogRedactor.redact(consoleCachedTail)
+                    (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
+                        .setPrimaryClip(ClipData.newPlainText("PocketCraft redacted log",safe))
+                    toast("Copied redacted log. Review before sharing.")
+                }.show()
+        })
         advanced.addView(ui.space(this,8))
         val filters=ui.row(this)
         listOf("CLEAN","ERRORS","PLAYERS","ALL").forEach { choice ->
