@@ -3050,6 +3050,20 @@ class MainActivity : Activity() {
         },LinearLayout.LayoutParams(0,-2,1f))
         advanced.addView(tools)
         advanced.addView(ui.space(this,8))
+        advanced.addView(ui.action(this,"COPY REDACTED LOG") {
+            AlertDialog.Builder(this)
+                .setTitle("Copy a safer log?")
+                .setMessage("Known tokens and passwords will be masked. Automated redaction " +
+                    "cannot guarantee privacy; review the copied text before sharing.")
+                .setNegativeButton("CANCEL",null)
+                .setPositiveButton("COPY") { _,_ ->
+                    val safe=PrivateLogRedactor.redact(consoleCachedTail)
+                    (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
+                        .setPrimaryClip(ClipData.newPlainText("PocketCraft redacted log",safe))
+                    toast("Copied redacted log. Review before sharing.")
+                }.show()
+        })
+        advanced.addView(ui.space(this,8))
         val filters=ui.row(this)
         listOf("CLEAN","ERRORS","PLAYERS","ALL").forEach { choice ->
             filters.addView(ui.action(this,choice,consoleLogFilter==choice) {
