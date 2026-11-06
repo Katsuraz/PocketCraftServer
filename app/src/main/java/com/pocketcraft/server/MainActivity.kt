@@ -200,6 +200,7 @@ class MainActivity : Activity() {
     private var pendingBackup: File? = null
     private var currentScroller: ScrollView? = null
     private var renderedTab = -1
+    private var resetWorldScroll = false
     private var scrollOffsets = IntArray(4)
     private val serverJar get() = File(base, "fabric-server-launch.jar")
 
@@ -233,6 +234,7 @@ class MainActivity : Activity() {
     override fun onBackPressed() {
         if(tab == 2 && openedWorldFolder != null) {
             openedWorldFolder = null
+            resetWorldScroll=true
             render()
         } else super.onBackPressed()
     }
@@ -360,9 +362,10 @@ class MainActivity : Activity() {
             consoleAvailabilityView = null
             consoleSuggestionHost = null
         }
-        if (renderedTab in 0..3) {
+        if (renderedTab in 0..3 && !(renderedTab == 2 && resetWorldScroll)) {
             scrollOffsets[renderedTab] = currentScroller?.scrollY ?: scrollOffsets[renderedTab]
         }
+        if (resetWorldScroll) scrollOffsets[2] = 0
         val screen = ui.column(this).apply { setBackgroundColor(ui.BG) }
         screen.addView(HomesteadComponents.masthead(this,
             if (tab == 2 && openedWorldFolder != null) "World folder"
@@ -421,6 +424,7 @@ class MainActivity : Activity() {
         currentScroller = scroller
         renderedTab = tab
         val restoreY = if (tab == 3 && !consoleLogExpanded) 0 else scrollOffsets[tab]
+        resetWorldScroll = false
         scroller.post { scroller.scrollTo(0,restoreY) }
     }
     private fun healthSnapshot(): HostingHealth.Snapshot = HostingHealth.Snapshot(
@@ -2050,7 +2054,7 @@ class MainActivity : Activity() {
                 else "Settings  •  Files  •  Backups",
                 if(file.name==active)"ACTIVE" else "") {
                 openedWorldFolder=file.name
-                scrollOffsets[2]=0
+                resetWorldScroll=true
                 render()
             })
             body.addView(ui.space(this,10))
@@ -2066,6 +2070,7 @@ class MainActivity : Activity() {
             ServerService.status !in listOf("STARTING","STOPPING")
         body.addView(ui.action(this,"‹  ALL WORLDS") {
             openedWorldFolder = null
+            resetWorldScroll=true
             render()
         })
         body.addView(ui.space(this,13))
@@ -2692,7 +2697,9 @@ class MainActivity : Activity() {
 
     private fun consolePage(body:LinearLayout) {
         consoleViewVersion++
-        body.addView(h("Server console","A simple command panel; full logs are optional"))
+        body.addView(HomesteadComponents.pageIntro(this,
+            "COMMAND CENTER","Console",
+            "Send server commands and inspect activity without losing your place."))
         body.addView(ui.space(this,12))
 
         val composer=ui.card(this)
