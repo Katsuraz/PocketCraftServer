@@ -72,7 +72,17 @@ class PocketCraftUiSmokeTest {
         val output = File(folder,name + ".png")
         assertTrue("Failed to capture " + name, device.takeScreenshot(output))
         assertTrue("Empty screenshot " + name, output.length() > 1000L)
-        Log.i("PocketCraftUISmoke", "Saved " + output.absolutePath)
+        // Gradle connectedAndroidTest may uninstall the target APK after tests.
+        // Persist a second copy to the emulator's public Download directory
+        // using the UI Automator shell identity so ADB can retrieve it later.
+        val publicDir = "/sdcard/Download/pocketcraft-ui-smoke"
+        val publicFile = "$publicDir/$name.png"
+        val proof = device.executeShellCommand(
+            "mkdir -p $publicDir && screencap -p $publicFile && stat -c %s $publicFile"
+        ).trim()
+        val size = proof.substringBefore(' ').toLongOrNull() ?: 0L
+        assertTrue("Could not preserve emulator screenshot $name: $proof", size > 1000L)
+        Log.i("PocketCraftUISmoke", "Saved screenshot " + publicFile + " (" + size + " bytes)")
     }
 
     @Test
