@@ -2028,15 +2028,15 @@ class MainActivity : Activity() {
             body.addView(ui.action(this,"⚠  REVIEW DEPENDENCIES") {
                 val details=buildString {
                     append("Advisory metadata check only. Bundled dependencies may not be listed. ")
-                    append("No mods were changed.\\n\\n")
+                    append("No mods were changed.\n\n")
                     missingDeps.take(20).forEach { finding ->
                         append(finding.modName)
                         append(": ")
                         append(finding.missing.joinToString(", "))
-                        append('\\n')
+                        append('\n')
                     }
                     if(duplicateIds.isNotEmpty()) {
-                        append("\\nDuplicate enabled Fabric IDs: ")
+                        append("\nDuplicate enabled Fabric IDs: ")
                         append(duplicateIds.sorted().joinToString(", "))
                     }
                 }
