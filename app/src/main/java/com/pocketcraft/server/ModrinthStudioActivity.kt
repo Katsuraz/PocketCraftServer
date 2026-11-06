@@ -402,7 +402,11 @@ class ModrinthStudioActivity : Activity() {
                 it.required -> "REQUIRED"
                 else -> "OPTIONAL"
             }
-            label+" · "+it.title
+            label+" · "+it.title+
+                (if(it.kind=="required")
+                    if(it.versionId==null)" · auto-select matching Fabric release"
+                    else " · pinned Modrinth release"
+                 else "")
         }.toTypedArray()
         val panel=ui.column(this).apply {
             setPadding(ui.dp(this@ModrinthStudioActivity,16),ui.dp(this@ModrinthStudioActivity,10),
@@ -546,12 +550,23 @@ class ModrinthStudioActivity : Activity() {
                         .setMessage(it+
                             (if(showRestartMessage)"\n\nRestart Minecraft to load the changes." else ""))
                         .setPositiveButton("OK",null).show()
-                }.onFailure {
-                    AlertDialog.Builder(this)
+                }.onFailure { error ->
+                    val failureMessage=error.message?:"Unknown error"
+                    val depId=Regex("dependency \\(([A-Za-z0-9_-]{1,120})\\)")
+                        .find(failureMessage)?.groupValues?.getOrNull(1)
+                    val builder=AlertDialog.Builder(this)
                         .setTitle(if(cancel.get())"Installation cancelled" else "Installation failed")
-                        .setMessage((it.message?:"Unknown error")+
-                            "\nExisting files should remain unchanged. Review compatibility before retrying.")
-                        .setPositiveButton("OK",null).show()
+                        .setMessage(failureMessage+
+                            "\n\nNewly added JARs are rolled back. You can also install " +
+                            "the required Fabric dependency manually, then retry.")
+                        .setPositiveButton("OK",null)
+                    if(depId!=null) {
+                        builder.setNeutralButton("VIEW REQUIRED MOD"){_,_->
+                            startActivity(Intent(Intent.ACTION_VIEW,Uri.parse(
+                                "https://modrinth.com/project/"+depId)))
+                        }
+                    }
+                    builder.show()
                 }
             }
         }.start()
