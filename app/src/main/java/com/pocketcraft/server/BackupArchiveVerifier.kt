@@ -17,15 +17,17 @@ internal object BackupArchiveVerifier {
         val names = hashSetOf<String>()
         val files = hashSetOf<String>()
         var fileCount=0
+        var entryCount=0
         var folders=0
         var total=0L
         val bytes=ByteArray(32*1024)
         ZipInputStream(source.buffered()).use { zip ->
             while(true) {
                 val entry=zip.nextEntry ?: break
-                val path=entry.name.replace('\\','/')
-                if(path.startsWith("/") || path.contains('\u0000') ||
-                    path.contains('\\') ||
+                val path=entry.name
+                if(++entryCount > MAX_FILES || path.length > 2048 ||
+                    path.startsWith("/") || path.contains('\u0000') ||
+                    path.contains('\\') || path.contains("//") ||
                     path.split('/').any { it=="." || it==".." } ||
                     Regex("^[A-Za-z]:").containsMatchIn(path)) {
                     throw IOException("Unsafe path in backup ZIP")
