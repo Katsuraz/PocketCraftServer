@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.provider.OpenableColumns
 import android.text.InputType
 import android.util.AtomicFile
+import android.view.View
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -39,6 +40,8 @@ class GeyserSettingsActivity : Activity() {
     private lateinit var assisted: Switch
     private var transport = "nethernet"
     private var signaling = "hybrid"
+    private var selectedPane = "Local"
+    private var saveFooter: View? = null
 
     private fun addInput(parent: LinearLayout, label: String, help: String, value: String,
                          numeric: Boolean = false, password: Boolean = false): EditText {
@@ -97,6 +100,8 @@ class GeyserSettingsActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        selectedPane=savedInstanceState?.getString("geyserPane")
+            ?.takeIf { it in listOf("Local","Internet","Files") } ?: "Local"
         ui.loadTheme(this)
         PocketSounds.prepare(this)
         window.statusBarColor = ui.BG
@@ -121,84 +126,158 @@ class GeyserSettingsActivity : Activity() {
             setPadding(ui.dp(this@GeyserSettingsActivity, 18), 0,
                 ui.dp(this@GeyserSettingsActivity, 18), ui.dp(this@GeyserSettingsActivity, 20))
         }
-        val card = ui.card(this)
-        card.addView(ui.text(this, "Connect Bedrock players", 19f, ui.WHITE, true))
-        card.addView(ui.space(this, 6))
-        card.addView(ui.text(this,
-            "Edit only the network settings you need. All other config.yml options stay unchanged.",
-            12f, ui.MUTED))
-        card.addView(ui.space(this, 17))
-
-        if (loaded.isBlank()) {
-            card.addView(ui.text(this,
-                "No Geyser config.yml found. Start Geyser once to generate it, or import a config file below.",
-                12f, ui.RED))
-            card.addView(ui.space(this, 13))
+        val intro=ui.card(this)
+        intro.addView(ui.text(this,"Connect Bedrock players",19f,ui.WHITE,true))
+        intro.addView(ui.space(this,6))
+        intro.addView(ui.text(this,
+            "Simple local, internet and file settings. Your saved NXS token stays hidden.",
+            12f,ui.MUTED))
+        intro.addView(ui.space(this,12))
+        if(loaded.isBlank()) {
+            intro.addView(ui.text(this,
+                "No Geyser config.yml found. Start Geyser once or import a config in Files.",
+                12f,ui.RED))
+            intro.addView(ui.space(this,9))
         }
-        val health = if (loaded.isNotBlank()) GeyserNetworkSettings.parse(loaded) else null
+        if(serverBusy()) {
+            intro.addView(ui.text(this,
+                "Stop Minecraft before editing or importing settings.",
+                12f,ui.RED))
+            intro.addView(ui.space(this,9))
+        }
+        val health=if(loaded.isNotBlank()) GeyserNetworkSettings.parse(loaded) else null
         health?.warnings?.forEach { warning ->
-            card.addView(ui.text(this, "⚠ " + warning, 11f, ui.RED))
-            card.addView(ui.space(this, 6))
+            intro.addView(ui.text(this,"⚠ "+warning,11f,ui.RED))
+            intro.addView(ui.space(this,6))
         }
-        if (serverBusy()) {
-            card.addView(ui.text(this,
-                "Server is running. Stop Minecraft before saving or importing Geyser settings.",
-                12f, ui.RED))
-            card.addView(ui.space(this, 12))
-        }
+        body.addView(intro)
+        body.addView(ui.space(this,15))
 
-        address = addInput(card, "Local bind IP",
-            "Normally 0.0.0.0. This is not the Playit public address.", values.address)
-        port = addInput(card, "Bedrock port",
-            "Local signaling or RakNet port, normally 19132.", values.port.toString(), numeric = true)
-        webRtcPort = addInput(card, "NetherNet UDP port",
-            "0 shares the Bedrock port. Use a separate UDP port if transport is BOTH.",
-            values.webRtcPort.toString(), numeric = true)
-        addSelector(card, "Bedrock transport", listOf("nethernet", "raknet", "both"), transport) {
-            transport = it
+        val panels=linkedMapOf<String,LinearLayout>()
+        val buttons=linkedMapOf<String,TextView>()
+        val nav=ui.row(this)
+        listOf("Local","Internet","Files").forEachIndexed { i,name ->
+            val button=ui.text(this,name,12f,ui.MUTED,true).apply {
+                minHeight=ui.dp(this@GeyserSettingsActivity,48)
+                gravity=android.view.Gravity.CENTER
+                isClickable=true
+                isFocusable=true
+                contentDescription="$name Geyser settings"
+                setOnClickListener {
+                    selectedPane=name
+                    PocketSounds.play(this@GeyserSettingsActivity,PocketSounds.Event.SELECT)
+                    panels.forEach { (section,panel) ->
+                        panel.visibility=if(section==name)View.VISIBLE else View.GONE
+                    }
+                    buttons.forEach { (section,button) ->
+                        val chosen=section==name
+                        button.background=ui.pressable(this@GeyserSettingsActivity,
+                            ui.shape(this@GeyserSettingsActivity,
+                                if(chosen)ui.SURFACE else ui.PANEL,12,
+                                if(chosen)ui.BORDER else null))
+                        button.setTextColor(if(chosen)ui.GREEN else ui.MUTED)
+                    }
+                    saveFooter?.visibility=if(name=="Files")View.GONE else View.VISIBLE
+                }
+            }
+            buttons[name]=button
+            nav.addView(button,LinearLayout.LayoutParams(0,ui.dp(this,48),1f).apply {
+                if(i!=2)marginEnd=ui.dp(this@GeyserSettingsActivity,5)
+            })
         }
-        addSelector(card, "NetherNet signaling", listOf("hybrid", "builtin", "nxs", "none"), signaling) {
-            signaling = it
+        body.addView(nav)
+        body.addView(ui.space(this,13))
+
+        val local=ui.card(this)
+        local.addView(HomesteadComponents.sectionHeading(this,"Local connectivity",
+            "The address and ports on this Android phone"))
+        local.addView(ui.space(this,15))
+        address=addInput(local,"Bind IP",
+            "Normally 0.0.0.0. This is not a Playit public address.",values.address)
+        port=addInput(local,"Bedrock port",
+            "Local signaling or RakNet port; commonly 19132.",values.port.toString(),numeric=true)
+        webRtcPort=addInput(local,"WebRTC UDP port",
+            "0 shares the Bedrock port; use another UDP port for BOTH.",
+            values.webRtcPort.toString(),numeric=true)
+        addSelector(local,"Transport",listOf("nethernet","raknet","both"),transport) {
+            transport=it
         }
-        card.addView(ui.text(this,
-            "HYBRID runs local built-in signaling and external NXS together. NXS alone may not allow local-IP joining. Playit still requires a valid token and reachable networking.",
-            11f, ui.CYAN))
-        card.addView(ui.space(this, 16))
-        advertised = addInput(card, "Advertised addresses (optional)",
-            "Comma-separated public hosts or IPs. Leave blank for automatic discovery; never put the Java tunnel address here.",
+        panels["Local"]=local
+
+        val internet=ui.card(this)
+        internet.addView(HomesteadComponents.sectionHeading(this,"Playit & NXS",
+            "External NetherNet signaling and connection hints"))
+        internet.addView(ui.space(this,15))
+        addSelector(internet,"Signaling mode",
+            listOf("hybrid","builtin","nxs","none"),signaling) { signaling=it }
+        internet.addView(ui.text(this,
+            "HYBRID supports local built-in signaling and external NXS together. Your remote connection still needs a registered token and working networking.",
+            11f,ui.CYAN))
+        internet.addView(ui.space(this,14))
+        endpoint=addInput(internet,"NXS service URL",
+            "For Playit, use https://nethernet.playit.gg",values.nxsEndpoint)
+        token=addInput(internet,"Replace NXS token (optional)",
+            if(values.hasSavedNxsToken)
+                "Token saved. Leave blank to keep it, or enter a new value to replace."
+            else "Paste your private NXS token. Never share or screenshot it.",
+            "",password=true)
+        advertised=addInput(internet,"Advertised addresses (optional)",
+            "Comma-separated hosts/IPs. Leave blank for automatic discovery.",
             values.advertiseAddresses)
-        stun = addSwitch(card, "STUN discovery",
-            "Discover your external address when no addresses are advertised.", values.stunDiscovery)
-        endpoint = addInput(card, "NXS service URL",
-            "For Playit, use https://nethernet.playit.gg", values.nxsEndpoint)
-        token = addInput(card, "Replace NXS token (optional)",
-            if (values.hasSavedNxsToken)
-                "A token is already saved. Leave blank to keep it; enter a new token only to replace."
-            else "Paste the private token from Playit Configuration help. Never share or screenshot it.",
-            "", password = true)
-        assisted = addSwitch(card, "Assisted joins",
-            "Allow NXS to assist connections where direct peer-to-peer access is unavailable.",
-            values.assistedJoins)
+        stun=addSwitch(internet,"STUN discovery",
+            "Find your external address automatically.",values.stunDiscovery)
+        assisted=addSwitch(internet,"Assisted joins",
+            "Allow NXS to assist difficult direct connections.",values.assistedJoins)
+        panels["Internet"]=internet
 
-        card.addView(ui.action(this, "SAVE GEYSER SETTINGS", true, loaded.isNotBlank() && !serverBusy()) {
-            save()
-        })
-        card.addView(ui.space(this, 9))
-        card.addView(ui.action(this, "IMPORT / REPLACE CONFIG.YML", false, !serverBusy()) {
-            selectConfig()
-        })
-        card.addView(ui.space(this, 9))
-        card.addView(ui.action(this, "RESTORE PREVIOUS CONFIG", false,
-            backup.isFile && !serverBusy()) { restoreBackup() })
-        card.addView(ui.space(this, 10))
-        card.addView(ui.text(this,
-            "Saving makes a private backup first. Restart Minecraft for changes to apply. No token is shown or copied into diagnostic logs.",
-            11f, ui.MUTED))
-        body.addView(card)
+        val filesPane=ui.card(this)
+        filesPane.addView(HomesteadComponents.sectionHeading(this,"Configuration file",
+            "Import, replace and restore Geyser settings safely"))
+        filesPane.addView(ui.space(this,12))
+        filesPane.addView(ui.text(this,
+            "Save in Local or Internet updates only the managed fields. Importing replaces the entire file after confirmation, so keep a backup.",
+            12f,ui.MUTED))
+        filesPane.addView(ui.space(this,14))
+        filesPane.addView(ui.action(this,"IMPORT / REPLACE CONFIG.YML",
+            true,!serverBusy()) { selectConfig() })
+        filesPane.addView(ui.space(this,9))
+        filesPane.addView(ui.action(this,"RESTORE PREVIOUS CONFIG",
+            false,backup.isFile && !serverBusy()) { restoreBackup() })
+        filesPane.addView(ui.space(this,10))
+        filesPane.addView(ui.text(this,
+            "PocketCraft saves a private backup before replacement. Restart Minecraft to apply changes.",
+            11f,ui.MUTED))
+        panels["Files"]=filesPane
+
+        panels.forEach { (name,panel) ->
+            panel.visibility=if(name==selectedPane)View.VISIBLE else View.GONE
+            body.addView(panel)
+        }
+        buttons.forEach { (name,button) ->
+            val selected=name==selectedPane
+            button.background=ui.pressable(this,
+                ui.shape(this,if(selected)ui.SURFACE else ui.PANEL,12,
+                    if(selected)ui.BORDER else null))
+            button.setTextColor(if(selected)ui.GREEN else ui.MUTED)
+        }
         scroll.addView(body)
         screen.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        val footer=ui.column(this).apply {
+            setPadding(ui.dp(this@GeyserSettingsActivity,16),ui.dp(this@GeyserSettingsActivity,10),
+                ui.dp(this@GeyserSettingsActivity,16),ui.dp(this@GeyserSettingsActivity,14))
+        }
+        footer.addView(ui.action(this,"SAVE GEYSER SETTINGS",
+            true,loaded.isNotBlank() && !serverBusy()) { save() })
+        footer.visibility=if(selectedPane=="Files")View.GONE else View.VISIBLE
+        saveFooter=footer
+        screen.addView(footer)
         ui.styleFormInputs(screen)
         setContentView(screen)
+    }
+
+    override fun onSaveInstanceState(outState:Bundle) {
+        outState.putString("geyserPane",selectedPane)
+        super.onSaveInstanceState(outState)
     }
 
     private fun values(): GeyserConfigEditor.Values? {
