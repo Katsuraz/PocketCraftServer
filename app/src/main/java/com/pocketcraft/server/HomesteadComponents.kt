@@ -28,9 +28,14 @@ internal object HomesteadNavigation {
         R.drawable.pc_home, R.drawable.pc_worlds,
         R.drawable.pc_mods, R.drawable.pc_console
     )
-    fun label(tab: Int): String = labels.getOrElse(tab) { "Home" }
-    fun subtitle(tab: Int): String = subtitles.getOrElse(tab) { subtitles.first() }
-    fun validTab(tab: Int): Int = tab.coerceIn(0, labels.lastIndex)
+    // MainActivity keeps its existing page IDs (0=Home, 1=Mods, 2=Worlds,
+    // 3=Console), so the redesign never breaks deep links or existing handlers.
+    private val pagesBySlot = listOf(0, 2, 1, 3)
+    fun pageForSlot(slot: Int): Int = pagesBySlot.getOrElse(slot) { 0 }
+    fun slotForPage(page: Int): Int = pagesBySlot.indexOf(page).takeIf { it >= 0 } ?: 0
+    fun label(page: Int): String = labels[slotForPage(page)]
+    fun subtitle(page: Int): String = subtitles[slotForPage(page)]
+    fun validTab(page: Int): Int = page.coerceIn(0, labels.lastIndex)
 }
 
 internal object HomesteadComponents {
@@ -84,7 +89,7 @@ internal object HomesteadComponents {
             minimumHeight = d(c, 75)
         }
         HomesteadNavigation.labels.forEachIndexed { index, name ->
-            val active = selectedTab == index
+            val active = HomesteadNavigation.slotForPage(selectedTab) == index
             val tint = if (active) ui.GREEN else ui.MUTED
             val button = ui.column(c).apply {
                 gravity = Gravity.CENTER
@@ -98,7 +103,7 @@ internal object HomesteadComponents {
                 setOnClickListener {
                     if (!active) {
                         PocketSounds.play(c, PocketSounds.Event.SELECT)
-                        onNavigate(index)
+                        onNavigate(HomesteadNavigation.pageForSlot(index))
                     }
                 }
             }
