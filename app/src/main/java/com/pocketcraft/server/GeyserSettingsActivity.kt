@@ -168,8 +168,6 @@ class GeyserSettingsActivity : Activity() {
                 ui.dp(this@GeyserSettingsActivity, 18), ui.dp(this@GeyserSettingsActivity, 20))
         }
         val intro=ui.card(this)
-        intro.addView(ui.text(this,"Crossplay",20f,ui.WHITE,true))
-        intro.addView(ui.space(this,8))
         intro.addView(ui.pill(this,when {
             loaded.isBlank() -> "NOT SET UP"
             serverBusy() -> "SERVER ACTIVE • READ ONLY"
