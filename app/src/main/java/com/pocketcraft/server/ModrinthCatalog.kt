@@ -175,7 +175,7 @@ internal object ModrinthCatalog {
         }
         val sha512 = selected.optJSONObject("hashes")?.optString("sha512")?.takeIf {
             it.matches(Regex("[0-9a-fA-F]{128}"))
-        }
+        } ?: return null // Never offer an unverifiable mod or modpack download.
         return Version(raw.optString("id"), projectId,raw.optString("name"),
             raw.optString("version_number"),raw.optString("version_type"),
             raw.optString("date_published").take(10),raw.optLong("downloads"),
