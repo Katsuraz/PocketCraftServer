@@ -67,13 +67,12 @@ internal object ModrinthCatalog {
         require(category in categories) { "Unknown Modrinth category" }
         require(sort in sorts) { "Unknown Modrinth sort" }
         require(offset in 0..2000 && offset % PAGE_SIZE == 0) { "Invalid search page" }
-        val facets = JSONArray()
-            .put(JSONArray().put("project_type:" + type))
-            .put(JSONArray().put("categories:fabric"))
-            .put(JSONArray().put("versions:" + gameVersion))
-        if (category != "all") facets.put(JSONArray().put("categories:" + category))
+        val facets = mutableListOf("project_type:" + type,
+            "categories:fabric", "versions:" + gameVersion)
+        if (category != "all") facets.add("categories:" + category)
+        val facetJson = facets.joinToString(",", "[", "]") { "[\"" + it + "\"]" }
         return API + "/search?query=" + encode(query.trim().take(100)) +
-            "&facets=" + encode(facets.toString()) +
+            "&facets=" + encode(facetJson) +
             "&index=" + encode(sort) + "&offset=" + offset + "&limit=" + PAGE_SIZE
     }
     private fun encode(text: String) = URLEncoder.encode(text, "UTF-8")
