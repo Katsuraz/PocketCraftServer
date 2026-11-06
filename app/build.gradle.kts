@@ -9,6 +9,7 @@ android {
         applicationId = "com.pocketcraft.server"
         minSdk = 26
         targetSdk = 34
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         versionCode = 65
         versionName = "0.8.40"
     }
@@ -36,6 +37,11 @@ android {
             // Executables masquerading as native libraries must be extracted
             // and remain unstripped; Android 10+ forbids executing app-data ELF.
             useLegacyPackaging = true
+            // Emulator CI uses an x86_64 Android image. Real releases retain all ARM64 JNI.
+            // This build flag is exclusive to the instrumented UI smoke-test job.
+            if (providers.gradleProperty("pocketcraft.uiSmokeOnly").orNull == "true") {
+                excludes.add("**/arm64-v8a/**")
+            }
             keepDebugSymbols.add("**/libpocketjava.so")
             keepDebugSymbols.add("**/libpocketplayitcli.so")
             keepDebugSymbols.add("**/libpocketplayitd.so")
@@ -54,4 +60,7 @@ dependencies {
     implementation("org.tukaani:xz:1.10")
     implementation("androidx.core:core:1.13.1")
     testImplementation("junit:junit:4.13.2")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test.uiautomator:uiautomator:2.3.0")
 }
