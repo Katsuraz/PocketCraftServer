@@ -1,5 +1,18 @@
 # PocketCraft changelog
 
+## v0.8.42 (versionCode 67) — Stable: palette-aware native dialogs
+
+- Resolved a visual inconsistency not addressed by v0.8.41: Android's native confirmation, warning, list and configuration dialogs now follow the **actual selected PocketCraft theme**, instead of using the same dark-brown dialog everywhere.
+- The ten supported themes (Homestead, Midnight, Obsidian, Aurora, Nether, Ender, Oceanic, Classic Minecraft, Material You and Minimal) each have matching popup background, border, text, secondary text and accent. Light themes use light-dialog contrast rather than dark-theme labels.
+- Preserve v0.8.41's improved Modrinth release picker with search, release channel selection and oldest/newest ordering, and its accessible top-of-screen Files sort and search controls. These features are not replaced or rewritten.
+- Add Android 14 emulator UI checks that verify the actual resolved dialog theme and capture Home­stead, Nether and Material You confirmation-dialog screenshots, in addition to the existing Modrinth/Files UI suite.
+- Preserve application ID, signing setup, Java runtime, world paths, Geyser, Floodgate, Playit, installed mods and settings.
+
+### Verification limits
+
+Native emulator UI validation is separate from live ARM64 Minecraft hosting, real-world Bedrock joins and OEM-specific device testing. The overall PocketCraft v0.9.0 Ultimate Hosting master roadmap remains in progress; this is a scoped, non-beta stable update.
+
+
 ## v0.8.41 (versionCode 66) — Stable: Homestead UI & File Browser Polish
 
 - Replaced Modrinth's giant default-Android **version popup** with a bounded, scrollable, Homestead-styled release picker. Compact cards show exact version numbers, release/beta/alpha status, publication date and downloads. Zero-dependency lines are omitted, while nonzero required/optional/incompatible counts remain visible.
