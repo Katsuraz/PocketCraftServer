@@ -1992,6 +1992,10 @@ class MainActivity : Activity() {
                 putExtra(ModrinthStudioActivity.EXTRA_TYPE,"modpack")
             })
         })
+        discovery.addView(ui.space(this,8))
+        discovery.addView(ui.action(this,"✦  WOODLAND+ 26.3 QUICK SETUP",true) {
+            startActivity(Intent(this,WoodlandSetupActivity::class.java))
+        })
         body.addView(discovery)
         body.addView(ui.space(this,16))
 
@@ -2261,6 +2265,12 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams(0,-2,1f))
         body.addView(actions)
         body.addView(ui.space(this,8))
+        body.addView(ui.action(this,"✦  CREATE WOODLAND+ WORLD",true,
+            !ServerService.running && ServerService.status !in listOf("STARTING","STOPPING")) {
+            startActivity(Intent(this,WoodlandSetupActivity::class.java).apply {
+                putExtra(WoodlandSetupActivity.EXTRA_NEW_WORLD,true)
+            })
+        })
         body.addView(ui.space(this,13))
         val worlds=WorldStore.worlds(this)
         if(worlds.isEmpty())body.addView(empty("▧","No generated worlds yet",
@@ -2332,13 +2342,16 @@ class MainActivity : Activity() {
             "Explore region files, datapacks and level data") {
             openServerFiles(world.name)
         })
-        if(!WorldStore.isPending(world)) {
-            body.addView(ui.space(this,8))
-            body.addView(HomesteadComponents.menuRow(this,"◈","Datapacks",
-                "Manage datapacks for this world") {
-                if(active)showDatapacks() else openServerFiles(world.name+"/datapacks")
-            })
-        }
+        body.addView(ui.space(this,8))
+        body.addView(HomesteadComponents.menuRow(this,"◈","Datapacks",
+            if(WorldStore.isPending(world)) "Install before the world generates"
+            else "Manage datapacks for this world") {
+            if(active) showDatapacks()
+            else AlertDialog.Builder(this).setTitle("Select this world first")
+                .setMessage("Use 'USE THIS WORLD' to assign "+world.name+
+                    ". Then open Datapacks to install safely into the correct world.")
+                .setPositiveButton("OK",null).show()
+        })
         body.addView(ui.space(this,8))
         body.addView(HomesteadComponents.menuRow(this,"▧","Snapshots & backups",
             "Review saved snapshots of this world") { showSnapshotManager(world) })
@@ -2622,7 +2635,10 @@ class MainActivity : Activity() {
         }
         panel.addView(ui.pill(this,"WORLD  •  " + world,ui.GREEN))
         panel.addView(ui.space(this,9))
-        panel.addView(ui.text(this,"Datapacks change this world for Java and Geyser players.",
+        panel.addView(ui.text(this,
+            if(WorldStore.worlds(this).firstOrNull { it.name == world }?.let { WorldStore.isPending(it) } == true)
+                "Install datapacks NOW, before the first server start. Minecraft will generate this world with them."
+            else "Datapacks affect this world for Java and Geyser players. Make a backup before changing existing terrain.",
             12f,ui.MUTED))
         panel.addView(ui.space(this,12))
         lateinit var dialog: AlertDialog
@@ -2744,7 +2760,7 @@ class MainActivity : Activity() {
                 dialog.dismiss()
                 AlertDialog.Builder(this).setTitle("Install "+project.title+"?")
                     .setMessage("Install a Modrinth datapack ZIP for Minecraft "+version+
-                        " into the active world. Existing datapacks will not be overwritten. Java and Bedrock visuals may differ; back up your world first.")
+                        " into the active world, including an ungenerated world. Existing datapacks will not be overwritten. Java and Bedrock visuals may differ; back up existing worlds first.")
                     .setNegativeButton("CANCEL",null)
                     .setPositiveButton("INSTALL"){_,_->
                         downloadAsync("Datapack: "+project.title) {

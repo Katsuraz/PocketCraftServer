@@ -288,8 +288,15 @@ class ModrinthStudioActivity : Activity() {
         panel.addView(ui.space(this,12))
         val holder=arrayOfNulls<AlertDialog>(1)
         if(canInstall){
+            if(type=="modpack" && warnings.isEmpty()) {
+                panel.addView(ui.action(this,"⚡ ONE-TAP SERVER INSTALL",true) {
+                    holder[0]?.dismiss()
+                    quickInstallPack(hit,v)
+                })
+                panel.addView(ui.space(this,7))
+            }
             panel.addView(ui.action(this,
-                if(warnings.isEmpty())"REVIEW INSTALL" else "INSTALL ANYWAY",true){
+                if(warnings.isEmpty())"REVIEW INSTALL" else "INSTALL ANYWAY",type!="modpack"){
                     holder[0]?.dismiss()
                     proceedInstall(hit,v,type,warnings.isNotEmpty())
             })
@@ -604,6 +611,29 @@ class ModrinthStudioActivity : Activity() {
         }
         builder.show()
     }
+    /** One tap, compatible Fabric .mrpack only; required server files, no optional files.
+     * The normal REVIEW INSTALL flow remains available for optional dependencies.
+     */
+    private fun quickInstallPack(hit:ModrinthCatalog.Hit,v:ModrinthCatalog.Version){
+        if(ServerService.running || ServerService.status in setOf("STARTING","STOPPING")){
+            info("Stop Minecraft completely before installing a modpack.")
+            return
+        }
+        if(ModrinthCatalog.compatibilityWarnings(v,minecraft).isNotEmpty() ||
+            "fabric" !in v.loaders){
+            info("This release is not a verified match. Use Review Install instead.")
+            return
+        }
+        install("Installing "+hit.title) {
+            val uri=ModrinthCatalog.downloadPack(this,v)
+            try {
+                ModpackImporter.install(this,uri).description()
+            } finally {
+                uri.path?.let { File(it).delete() }
+            }
+        }
+    }
+
     private fun preparePack(hit:ModrinthCatalog.Hit,v:ModrinthCatalog.Version,
                             allowMismatch:Boolean){
         val cancel=AtomicBoolean(false)

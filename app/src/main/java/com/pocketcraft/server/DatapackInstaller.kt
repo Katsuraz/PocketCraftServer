@@ -22,6 +22,10 @@ object DatapackInstaller {
     private const val MAX_ZIP_BYTES = 64L * 1024 * 1024
     private const val MAX_UNPACKED_BYTES = 512L * 1024 * 1024
 
+    /** Pending worlds accept datapacks before level.dat is generated. */
+    internal fun isEligibleWorld(world: File): Boolean =
+        File(world, "level.dat").isFile || WorldStore.isPending(world)
+
     private fun encoded(s: String) = URLEncoder.encode(s, "UTF-8")
 
     fun activeDirectory(context: Context): File {
@@ -30,8 +34,8 @@ object DatapackInstaller {
         if (!name.matches(Regex("[A-Za-z0-9._-]{1,64}")) || name == "." || name == "..")
             throw IOException("Unsafe world name. Check the active world in Settings.")
         val world = File(root, name).canonicalFile
-        if (world.parentFile != root || !File(world, "level.dat").isFile)
-            throw IOException("Start the server once to create your world, or select an existing world.")
+        if (world.parentFile != root || !isEligibleWorld(world))
+            throw IOException("Create or select a managed world first. Datapacks can be installed before its first launch.")
         val folder = File(world, "datapacks").canonicalFile
         if (folder.parentFile != world)
             throw IOException("Datapacks path points outside the active world.")
@@ -39,7 +43,8 @@ object DatapackInstaller {
     }
 
     private fun destination(context: Context): File {
-        if (ServerService.running) throw IOException("Stop Minecraft before editing datapacks.")
+        if (ServerService.running || ServerService.status in setOf("STARTING","STOPPING"))
+            throw IOException("Stop Minecraft before editing datapacks.")
         val folder = activeDirectory(context)
         if (!folder.isDirectory && !folder.mkdirs())
             throw IOException("Could not create the world datapacks folder.")
@@ -155,11 +160,14 @@ object DatapackInstaller {
             InstallProgress.emit("Verifying datapack contents")
             verifyArchive(staged)
             InstallProgress.check()
-            if (ServerService.running) throw IOException("Stop Minecraft before installing datapacks.")
+            if (ServerService.running || ServerService.status in setOf("STARTING","STOPPING"))
+                throw IOException("Stop Minecraft before installing datapacks.")
             if (target.exists() || !staged.renameTo(target))
                 throw IOException("Cannot install datapack: the destination exists or cannot be written.")
             return "Installed " + name + " into " + WorldStore.active(context) +
-                "/datapacks. Restart Minecraft to activate it. Use 'datapack list' in Console to verify."
+                "/datapacks. " + (if (WorldStore.isPending(File(WorldStore.root(context),
+                    WorldStore.active(context)))) "Start Minecraft to generate this world with the datapack."
+                    else "Restart Minecraft to activate it. Use 'datapack list' in Console to verify.")
         } finally {
             staged.delete()
         }
