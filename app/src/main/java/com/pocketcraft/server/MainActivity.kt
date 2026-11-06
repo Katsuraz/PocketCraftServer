@@ -2905,6 +2905,99 @@ class MainActivity : Activity() {
         dialog.window?.setLayout((resources.displayMetrics.widthPixels * .94).toInt(), -2)
     }
 
+    private fun quickAction(slot: Int): ConsoleQuickActions.Action {
+        val fallback = ConsoleQuickActions.defaults[slot]
+        val settings = getSharedPreferences("pocketcraft", 0)
+        return runCatching {
+            ConsoleQuickActions.validated(
+                settings.getString(ConsoleQuickActions.labelKey(slot), fallback.label) ?: fallback.label,
+                settings.getString(ConsoleQuickActions.commandKey(slot), fallback.command) ?: fallback.command
+            )
+        }.getOrDefault(fallback)
+    }
+
+    /** Edit shortcut labels and commands locally; nothing is executed on save. */
+    private fun showQuickCommandEditor() {
+        val panel = ui.column(this).apply {
+            setPadding(ui.dp(this@MainActivity, 16), ui.dp(this@MainActivity, 10),
+                ui.dp(this@MainActivity, 16), ui.dp(this@MainActivity, 12))
+        }
+        panel.addView(ui.text(this,
+            "Change up to four console shortcuts. Custom commands ask for confirmation before sending. " +
+                "Changes never execute commands automatically.",
+            12f, ui.MUTED))
+        panel.addView(ui.space(this, 9))
+        val labels = mutableListOf<android.widget.EditText>()
+        val commands = mutableListOf<android.widget.EditText>()
+        fun editor(value: String, hintText: String): android.widget.EditText =
+            android.widget.EditText(this).apply {
+                hint = hintText
+                setSingleLine(true)
+                textSize = 14f
+                setTextColor(ui.WHITE)
+                setHintTextColor(ui.MUTED)
+                background = ui.shape(this@MainActivity, ui.SURFACE, 11, ui.BORDER)
+                setPadding(ui.dp(this@MainActivity, 12), ui.dp(this@MainActivity, 10),
+                    ui.dp(this@MainActivity, 12), ui.dp(this@MainActivity, 10))
+                setText(value)
+            }
+        for (slot in 0 until ConsoleQuickActions.COUNT) {
+            val value = quickAction(slot)
+            panel.addView(ui.text(this, "SHORTCUT " + (slot + 1), 12f, ui.CYAN, true))
+            panel.addView(ui.space(this, 5))
+            labels.add(editor(value.label, "Button label").also { panel.addView(it) })
+            panel.addView(ui.space(this, 5))
+            commands.add(editor(value.command, "Minecraft console command").also { panel.addView(it) })
+            panel.addView(ui.space(this, 13))
+        }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Customize quick commands")
+            .setView(ScrollView(this).apply { addView(panel) })
+            .setNegativeButton("CANCEL", null)
+            .setNeutralButton("RESET DEFAULTS", null)
+            .setPositiveButton("SAVE", null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val items = runCatching {
+                    (0 until ConsoleQuickActions.COUNT).map { slot ->
+                        ConsoleQuickActions.validated(
+                            labels[slot].text.toString(), commands[slot].text.toString())
+                    }
+                }
+                if (items.isFailure) {
+                    toast(items.exceptionOrNull()?.message ?: "Invalid shortcut")
+                    return@setOnClickListener
+                }
+                val settings = getSharedPreferences("pocketcraft", 0).edit()
+                items.getOrThrow().forEachIndexed { slot, action ->
+                    settings.putString(ConsoleQuickActions.labelKey(slot), action.label)
+                    settings.putString(ConsoleQuickActions.commandKey(slot), action.command)
+                }
+                settings.apply()
+                dialog.dismiss()
+                render()
+            }
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
+                AlertDialog.Builder(this)
+                    .setTitle("Reset quick commands?")
+                    .setMessage("Restore the four original button labels and commands. Your server and worlds will not change.")
+                    .setNegativeButton("CANCEL", null)
+                    .setPositiveButton("RESET") { _, _ ->
+                        val settings = getSharedPreferences("pocketcraft", 0).edit()
+                        for (slot in 0 until ConsoleQuickActions.COUNT) {
+                            settings.remove(ConsoleQuickActions.labelKey(slot))
+                            settings.remove(ConsoleQuickActions.commandKey(slot))
+                        }
+                        settings.apply()
+                        dialog.dismiss()
+                        render()
+                    }.show()
+            }
+        }
+        dialog.show()
+    }
+
     private fun consolePage(body:LinearLayout) {
         consoleViewVersion++
         body.addView(HomesteadComponents.pageIntro(this,
@@ -2972,20 +3065,35 @@ class MainActivity : Activity() {
         val shortcuts=ui.card(this)
         shortcuts.addView(ui.text(this,"QUICK COMMANDS",11f,ui.CYAN,true))
         shortcuts.addView(ui.space(this,8))
-        fun shortcut(label:String,command:String):TextView =
-            ui.action(this,label,false) {
-                if(issueConsoleCommand(command))
-                    consoleActivityView?.text="Sending "+command+"…"
+        val quickActions = (0 until ConsoleQuickActions.COUNT).map { quickAction(it) }
+        fun shortcut(slot: Int): TextView = ui.action(this, quickActions[slot].label, false) {
+            val action = quickActions[slot]
+            val send = {
+                if (issueConsoleCommand(action.command))
+                    consoleActivityView?.text = "Sending " + action.command + "…"
+                Unit
             }
-        val quick1=ui.row(this)
-        quick1.addView(shortcut("PLAYERS","list"),ui.weight(this))
-        quick1.addView(shortcut("SAVE WORLD","save-all"),LinearLayout.LayoutParams(0,-2,1f))
+            if (ConsoleQuickActions.needsConfirmation(slot, action)) {
+                AlertDialog.Builder(this)
+                    .setTitle("Send /" + action.command.substringBefore(' ') + "?")
+                    .setMessage("Send this custom Minecraft console command?\n\n/" +
+                        action.command + "\n\nSome commands can change server data or permissions.")
+                    .setNegativeButton("CANCEL", null)
+                    .setPositiveButton("SEND") { _, _ -> send() }
+                    .show()
+            } else send()
+        }
+        val quick1 = ui.row(this)
+        quick1.addView(shortcut(0), ui.weight(this))
+        quick1.addView(shortcut(1), LinearLayout.LayoutParams(0, -2, 1f))
         shortcuts.addView(quick1)
-        shortcuts.addView(ui.space(this,7))
-        val quick2=ui.row(this)
-        quick2.addView(shortcut("WORLD SEED","seed"),ui.weight(this))
-        quick2.addView(shortcut("CHUNKY STATUS","chunky progress"),LinearLayout.LayoutParams(0,-2,1f))
+        shortcuts.addView(ui.space(this, 7))
+        val quick2 = ui.row(this)
+        quick2.addView(shortcut(2), ui.weight(this))
+        quick2.addView(shortcut(3), LinearLayout.LayoutParams(0, -2, 1f))
         shortcuts.addView(quick2)
+        shortcuts.addView(ui.space(this, 8))
+        shortcuts.addView(ui.action(this, "CUSTOMIZE QUICK COMMANDS") { showQuickCommandEditor() })
         body.addView(shortcuts)
 
         body.addView(ui.space(this,11))
