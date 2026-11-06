@@ -1,5 +1,21 @@
 # PocketCraft changelog
 
+## v0.8.43 (versionCode 68) — Stable: Browse Every Modrinth Version
+
+- **Removed restrictive Modrinth search filters** for the selected Minecraft release, Fabric loader and server environment. The Workshop now shows all mods and modpacks of the selected project type; category, search and sorting remain available. Client-only projects are labeled rather than hidden.
+- **Choose any available published release**, including older Minecraft versions and client-only/other-loader files. The picker displays each release's Minecraft versions, loaders, channel and compatibility warnings. Extensive catalogs are paginated visually in batches for performance, without discarding older versions. Version search includes loader and supported Minecraft versions.
+- **Risk confirmation before installing mismatched Fabric releases**: users can explicitly proceed with the selected version even when it does not match their Fabric server's Minecraft version. Required dependencies retain their own compatibility checks, file checksums are validated, and an incompatible mod can crash Minecraft.
+- **Download Only**: save a SHA-512 verified original JAR or MRPACK through the Android file picker without altering installed mods or worlds. Files for other loaders remain downloadable but cannot be installed directly into a Fabric server.
+- Preserved server-stopped checks for installation, existing-file protection, safe JAR checks, trusted HTTPS hosts, file size limits, and modpack protections.
+- Expanded JVM tests and Android emulator UI smoke tests for broad discovery, compatibility warnings and selectable older versions. Current app ID, signing identity, Playit, Geyser/Floodgate and worlds are unchanged.
+
+### Known constraints
+
+- A compatibility warning does not imply a mod will run. Incompatible game versions or dependencies may prevent server startup. Back up server files before applying an override.
+- Mods for Forge/NeoForge/Quilt and client-only rendering features cannot function as server-side Fabric mods, although their verified files can be saved separately.
+- The broader v0.9.0 Ultimate Hosting roadmap and device-level crossplay validation remain open.
+
+
 ## v0.8.42 (versionCode 67) — Stable: Modrinth Server Compatibility Fix
 
 - Fixed Modrinth Workshop listing **client-only Minecraft mods** as server-installable search results. The catalog now combines Fabric loader and Minecraft version filters with the official Modrinth v2 **server-capable environment** facets, including valid server-optional and server-only variants. A second check rejects clearly client-only results if the search index returns them anyway.
