@@ -26,6 +26,18 @@ internal object ModrinthCatalog {
     private val identifier = Regex("[A-Za-z0-9_-]{1,120}")
     private val minecraftVersion = Regex("[A-Za-z0-9._+-]{1,45}")
 
+    // Server-side Fabric apps should exclude client-only search hits such as Iris.
+    // These are official Modrinth v2 environment facet values.
+    internal val serverEnvironments = listOf(
+        "client_and_server", "client_only_server_optional", "server_only",
+        "server_only_client_optional", "dedicated_server_only", "client_or_server",
+        "client_or_server_prefers_both", "unknown"
+    )
+    internal fun onlyClientSide(serverSide: String, environments: List<String>): Boolean =
+        serverSide == "unsupported" ||
+            (environments.isNotEmpty() &&
+                environments.all { it == "client_only" || it == "singleplayer_only" })
+
     data class Hit(
         val id: String,
         val slug: String,
@@ -67,10 +79,17 @@ internal object ModrinthCatalog {
         require(category in categories) { "Unknown Modrinth category" }
         require(sort in sorts) { "Unknown Modrinth sort" }
         require(offset in 0..2000 && offset % PAGE_SIZE == 0) { "Invalid search page" }
-        val facets = mutableListOf("project_type:" + type,
-            "categories:fabric", "versions:" + gameVersion)
-        if (category != "all") facets.add("categories:" + category)
-        val facetJson = facets.joinToString(",", "[", "]") { "[\"" + it + "\"]" }
+        // Outer groups are AND; values within the environment group are OR.
+        val facets = mutableListOf(
+            listOf("project_type:" + type),
+            listOf("categories:fabric"),
+            listOf("versions:" + gameVersion),
+            serverEnvironments.map { "environment:" + it }
+        )
+        if (category != "all") facets.add(listOf("categories:" + category))
+        val facetJson = facets.joinToString(",", "[", "]") { group ->
+            group.joinToString(",", "[", "]") { "\"" + it + "\"" }
+        }
         return API + "/search?query=" + encode(query.trim().take(100)) +
             "&facets=" + encode(facetJson) +
             "&index=" + encode(sort) + "&offset=" + offset + "&limit=" + PAGE_SIZE
@@ -85,7 +104,7 @@ internal object ModrinthCatalog {
         conn.connectTimeout = 18000
         conn.readTimeout = 45000
         conn.instanceFollowRedirects = false
-        conn.setRequestProperty("User-Agent", "PocketCraftServer/0.8.41 (Android; Fabric server manager)")
+        conn.setRequestProperty("User-Agent", "PocketCraftServer/0.8.42 (Android; Fabric server manager)")
         conn.setRequestProperty("Accept", "application/json")
         try {
             if (conn.responseCode !in 200..299)
@@ -115,14 +134,13 @@ internal object ModrinthCatalog {
             val id = hit.optString("project_id")
             val slug = hit.optString("slug")
             if (!validIdentifier(id) || !validIdentifier(slug)) return@mapNotNull null
-            val environment = hit.optJSONArray("environment")
-            val serverHint = when {
-                environment != null && (0 until environment.length()).all { index ->
-                    environment.optString(index) in setOf("client_only", "singleplayer_only")
-                } && environment.length() > 0 -> "Client-only project"
-                hit.optString("server_side") == "unsupported" -> "Client-only project"
-                else -> "Check selected release"
-            }
+            val environments = strings(hit.optJSONArray("environment"))
+            // Double-check even if the remote search index ignores environment facets.
+            if (type == "mod" && onlyClientSide(hit.optString("server_side"),environments))
+                return@mapNotNull null
+            val serverHint = if (environments.isEmpty() || "unknown" in environments)
+                "Server suitability: verify release"
+            else "Server-capable project"
             Hit(id, slug, hit.optString("title", slug),
                 hit.optString("description").take(250), hit.optString("author"),
                 hit.optLong("downloads", 0L), hit.optString("icon_url").takeIf {
@@ -166,7 +184,9 @@ internal object ModrinthCatalog {
             strings(raw.optJSONArray("game_versions")),environment)
     }
 
-    fun versions(projectId: String, type: String, gameVersion: String): List<Version> {
+    data class VersionReport(val versions: List<Version>, val unavailableReason: String)
+
+    fun versionReport(projectId: String, type: String, gameVersion: String): VersionReport {
         require(validIdentifier(projectId)) { "Invalid Modrinth project ID" }
         require(type in setOf("mod","modpack")) { "Invalid project type" }
         require(minecraftVersion.matches(gameVersion)) { "Invalid Minecraft version" }
@@ -174,10 +194,34 @@ internal object ModrinthCatalog {
             encode("[\"fabric\"]") + "&game_versions=" + encode("[\"" + gameVersion + "\"]") +
             "&include_changelog=false"
         val data = JSONArray(apiJson(url))
-        return (0 until minOf(data.length(),100)).mapNotNull { idx ->
-            parseVersion(projectId,type,gameVersion,data.optJSONObject(idx) ?: return@mapNotNull null)
+        val releases = (0 until minOf(data.length(),100)).mapNotNull { idx ->
+            data.optJSONObject(idx)
         }
+        val selected = releases.mapNotNull { raw ->
+            parseVersion(projectId,type,gameVersion,raw)
+        }
+        val clientOnly = releases.count {
+            !isServerEligible(it.optString("environment"))
+        }
+        val reason = when {
+            selected.isNotEmpty() -> ""
+            releases.isEmpty() ->
+                "Modrinth has no Fabric $gameVersion releases for this project. " +
+                    "Search for another server-compatible project or check its versions on Modrinth."
+            clientOnly == releases.size ->
+                "Every Fabric $gameVersion release of this mod is client-only. " +
+                    "Shaders and other visual mods belong in the Java player's client, " +
+                    "not the PocketCraft server."
+            else ->
+                "Modrinth returned Fabric $gameVersion releases, but none has a " +
+                    "usable server " + (if (type == "mod") ".jar" else ".mrpack") +
+                    " download. Check the project's files or choose a different project."
+        }
+        return VersionReport(selected,reason)
     }
+
+    fun versions(projectId: String, type: String, gameVersion: String): List<Version> =
+        versionReport(projectId,type,gameVersion).versions
 
     /** Only a pinned, matching .mrpack from Modrinth's API can be imported. */
     fun downloadPack(context: Context, version: Version): Uri {
