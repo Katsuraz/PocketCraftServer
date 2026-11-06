@@ -5,6 +5,7 @@
 - Fix world switching to preserve existing Minecraft settings when the destination world has no saved PocketCraft profile; avoid silently resetting difficulty, gamemode, PvP, view/simulation distance, and other server properties.
 - An unconfigured world's settings screen now previews inherited server values before its first dedicated profile is saved.
 - Tighten full Geyser `config.yml` imports to reject duplicate critical YAML keys, including the Bedrock port and private NXS token path, instead of silently choosing a conflicting value. No secret values are included in diagnostics.
+- Prevent Geyser config save, import and restore while the server is starting or stopping, not only after it reaches RUNNING.
 - Add focused regression tests for world inheritance, explicit world profiles, and ambiguous Geyser imports.
 - Preserve existing worlds, Playit credentials, server engine, and all Minecraft modpacks. On-device crossplay testing is still required.
 
