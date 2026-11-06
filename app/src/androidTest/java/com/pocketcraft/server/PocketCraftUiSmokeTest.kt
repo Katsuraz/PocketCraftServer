@@ -142,6 +142,59 @@ class PocketCraftUiSmokeTest {
     }
 
     /**
+     * Deterministic offline regression for the dialog pictured in the bug report.
+     * Uses realistic sample versions only INSIDE this emulator test, never in
+     * production search results or installers.
+     */
+    @Test
+    fun versionPickerHasThemedScrollableRowsAndWorkingFiltersOffline() {
+        val target = instrumentation.startActivitySync(Intent(context,
+            ModrinthStudioActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+            }) as ModrinthStudioActivity
+        instrumentation.waitForIdleSync()
+        val sample = (0 until 24).map { index ->
+            ModrinthCatalog.Version(
+                id = "test-version-" + index,
+                projectId = "P7dR8mSH",
+                title = "Fabric API",
+                number = if (index == 0) "0.165.2+26.3"
+                    else "0." + (165-index) + ".0+26.3",
+                releaseType = if (index % 7 == 0) "beta"
+                    else if (index % 11 == 0) "alpha" else "release",
+                published = "2026-11-03",
+                downloads = 2000L - index,
+                requiredCount = 0,
+                optionalCount = 0,
+                incompatibleCount = 0,
+                filename = "fabric-api-test.jar",
+                url = "https://cdn.modrinth.com/data/test.jar",
+                sha512 = null,
+                gameVersions = listOf("26.3"),
+                environment = "server_only"
+            )
+        }
+        instrumentation.runOnMainSync {
+            ModrinthVersionDialog.show(target,"Fabric API","26.3",sample) {}
+        }
+        assertVisible(By.textContains("Choose Fabric API version"),"Native version picker heading")
+        assertVisible(By.textContains("SHOWING 24 OF 24"),"Version count")
+        assertVisible(By.desc("Search available versions"),"Version search input")
+        capture("10-themed-version-picker")
+
+        val search = assertVisible(By.desc("Search available versions"),"Search versions")
+        search.text = "0.165.2"
+        assertVisible(By.textContains("SHOWING 1 OF 24"),"Version filtering updates results")
+        assertVisible(By.textContains("0.165.2+26.3"),"Matching release remains visible")
+        capture("11-version-search-filter")
+
+        search.text = ""
+        assertVisible(By.desc("BETA versions"),"Beta release filter").click()
+        assertVisible(By.textContains("SHOWING 4 OF 24"),"Beta versions are filtered")
+        capture("12-beta-version-filter")
+    }
+
+    /**
      * Live Modrinth API is not a test dependency. Capture the actual version
      * selector when connectivity works; never treat a temporary API outage as
      * a PocketCraft build or UI defect.
