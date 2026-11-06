@@ -158,8 +158,6 @@ class WorldSettingsActivity : Activity() {
         }
         val intro=ui.card(this)
         intro.addView(ui.pill(this,if(active)"ACTIVE WORLD" else "SAVED PROFILE",ui.GREEN))
-        intro.addView(ui.space(this,12))
-        intro.addView(ui.text(this,"World settings",20f,ui.WHITE,true))
         if(!stopped()) {
             intro.addView(ui.space(this,10))
             intro.addView(ui.text(this,
