@@ -25,6 +25,9 @@ internal object ServerVitals {
         val info=ActivityManager.MemoryInfo()
         am.getMemoryInfo(info)
         val available=String.format(Locale.ROOT,"%.1f",info.availMem.toDouble()/1073741824.0)
+        val freeBytes=c.filesDir.usableSpace.coerceAtLeast(0L)
+        val freeStorage=String.format(Locale.ROOT,"%.1f",freeBytes.toDouble()/1073741824.0)
+        val storageState=if(freeBytes < 512L*1024*1024) " · LOW SPACE" else ""
         val battery=c.registerReceiver(null,IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         val level=battery?.getIntExtra(BatteryManager.EXTRA_LEVEL,-1) ?: -1
         val scale=battery?.getIntExtra(BatteryManager.EXTRA_SCALE,-1) ?: -1
@@ -40,6 +43,6 @@ internal object ServerVitals {
             PowerManager.THERMAL_STATUS_SHUTDOWN -> "Shutdown"
             else -> "Unknown"
         } else "Unavailable"
-        return "Phone RAM available: ${available} GB  •  Battery: ${percent}\nThermal status: ${thermal}  •  Server uptime: ${uptime()}"
+        return "Phone RAM free: ${available} GB  •  Battery: ${percent}\nStorage free: ${freeStorage} GB${storageState}\nThermal: ${thermal}  •  Uptime: ${uptime()}"
     }
 }
