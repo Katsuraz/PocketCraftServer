@@ -6,6 +6,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.view.Gravity
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -225,7 +226,6 @@ class ModrinthStudioActivity : Activity() {
                                 minecraft+" download.").setPositiveButton("OK",null).show()
                     }else{
                         AlertDialog.Builder(this).setTitle("Choose "+hit.title+" version")
-                            .setMessage("Exact releases. Existing mod files will not be overwritten.")
                             .setItems(versions.map { v ->
                                 v.number+" ["+v.releaseType.uppercase(Locale.ROOT)+"]  •  "+v.published+
                                 "\n"+v.requiredCount+" required / "+v.optionalCount+" optional dependencies"
@@ -278,18 +278,34 @@ class ModrinthStudioActivity : Activity() {
             }
             label+" · "+it.title
         }.toTypedArray()
-        val builder=AlertDialog.Builder(this).setTitle("Install "+hit.title+" "+v.number+"?")
-            .setMessage("Required dependencies stay selected. Optional dependencies are your choice. "+
-                "Version is pinned; SHA-512 verified. Existing JARs won't be replaced."+
-                if(conflict)"\n\nRemove conflicting mods before continuing." else "")
-            .setNegativeButton("CANCEL",null)
-        if(labels.isNotEmpty())builder.setMultiChoiceItems(labels,selected){dialog,index,checked ->
-            val dep=deps[index]
-            if(dep.kind=="incompatible"||dep.required||dep.installed){
-                selected[index]=dep.kind!="incompatible"
-                (dialog as AlertDialog).listView.setItemChecked(index,selected[index])
-            }else selected[index]=checked
+        val panel=ui.column(this).apply {
+            setPadding(ui.dp(this@ModrinthStudioActivity,16),ui.dp(this@ModrinthStudioActivity,10),
+                ui.dp(this@ModrinthStudioActivity,16),ui.dp(this@ModrinthStudioActivity,12))
         }
+        panel.addView(ui.text(this,"Required dependencies cannot be disabled. " +
+            "Optional dependencies can be selected. Exact pinned version and SHA-512 verified; " +
+            "existing JARs are not overwritten.",12f,ui.MUTED))
+        panel.addView(ui.space(this,10))
+        if(conflict) {
+            panel.addView(ui.text(this,"A conflicting mod is installed. Resolve it first.",
+                12f,ui.RED,true))
+        }
+        deps.forEachIndexed { index, dep ->
+            panel.addView(CheckBox(this).apply {
+                text=labels[index]
+                textSize=12f
+                setTextColor(if(dep.kind=="incompatible")ui.RED else ui.WHITE)
+                isChecked=selected[index]
+                isEnabled=dep.kind=="optional" && !dep.installed
+                setOnCheckedChangeListener { _, checked -> selected[index]=checked }
+                minHeight=ui.dp(this@ModrinthStudioActivity,44)
+            })
+        }
+        if(deps.isEmpty())panel.addView(ui.text(this,
+            "This release declares no Modrinth dependencies.",12f,ui.MUTED))
+        val builder=AlertDialog.Builder(this).setTitle("Install "+hit.title+" "+v.number+"?")
+            .setView(ScrollView(this).apply {addView(panel)})
+            .setNegativeButton("CANCEL",null)
         if(!conflict)builder.setPositiveButton("INSTALL"){_,_->
             val options=deps.indices.filter {
                 deps[it].kind=="optional" && selected[it] && !deps[it].installed
@@ -331,13 +347,28 @@ class ModrinthStudioActivity : Activity() {
                 }
                 outcome.onSuccess { (uri,optional) ->
                     val checked=BooleanArray(optional.size)
+                    val panel=ui.column(this).apply {
+                        setPadding(ui.dp(this@ModrinthStudioActivity,16),
+                            ui.dp(this@ModrinthStudioActivity,10),
+                            ui.dp(this@ModrinthStudioActivity,16),
+                            ui.dp(this@ModrinthStudioActivity,12))
+                    }
+                    panel.addView(ui.text(this,"Verified .mrpack for Fabric " + minecraft +
+                        ". Required files are always included. Choose optional server files below. "+
+                        "Existing server files will not be overwritten.",12f,ui.MUTED))
+                    panel.addView(ui.space(this,9))
+                    optional.forEachIndexed {index, file ->
+                        panel.addView(CheckBox(this).apply {
+                            text="OPTIONAL · "+file
+                            textSize=12f
+                            setTextColor(ui.WHITE)
+                            minHeight=ui.dp(this@ModrinthStudioActivity,44)
+                            setOnCheckedChangeListener { _, value -> checked[index]=value }
+                        })
+                    }
                     val builder=AlertDialog.Builder(this).setTitle("Install "+hit.title+" "+v.number+"?")
-                        .setMessage("Verified Fabric "+minecraft+" pack. Required server files are "+
-                            "always included. Choose additional optional server files.")
+                        .setView(ScrollView(this).apply {addView(panel)})
                         .setNegativeButton("CANCEL"){_,_->uri.path?.let {path->File(path).delete()}}
-                    if(optional.isNotEmpty())builder.setMultiChoiceItems(
-                        optional.map {"OPTIONAL · "+it}.toTypedArray(),checked
-                    ){_,i,value ->checked[i]=value}
                     builder.setPositiveButton("INSTALL"){_,_->
                         val selected=optional.indices.filter {checked[it]}.map {optional[it]}.toSet()
                         install("Installing "+hit.title){
