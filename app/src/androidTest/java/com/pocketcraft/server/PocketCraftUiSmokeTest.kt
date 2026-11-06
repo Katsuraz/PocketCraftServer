@@ -44,8 +44,19 @@ class PocketCraftUiSmokeTest {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
         }
         instrumentation.startActivitySync(intent)
+        instrumentation.waitForIdleSync()
         device.waitForIdle()
-        assertVisible(By.pkg(context.packageName), "PocketCraft screen " + type.simpleName)
+        // Capture the FIRST rendered frame, including permission prompts or
+        // a system crash dialog, so failed launches remain diagnosable.
+        capture("00-launch-" + type.simpleName)
+        val foreground = device.currentPackageName ?: "unknown"
+        Log.i("PocketCraftUISmoke",
+            "Launched " + type.simpleName + " foreground=" + foreground +
+                " expected=" + context.packageName)
+        if (foreground != context.packageName) {
+            throw AssertionError(type.simpleName + " is not foreground (got " +
+                foreground + "). See the launch screenshot and AndroidRuntime logcat.")
+        }
     }
 
     private fun assertVisible(selector: BySelector, description: String): UiObject2 {
