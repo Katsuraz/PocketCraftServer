@@ -661,45 +661,128 @@ class MainActivity : Activity() {
         }
         body.addView(toggle)
         body.addView(ui.space(this,12))
-        if(blockers>0) {
-            detailGroup.addView(setupJourney())
+        // Replace the old wall of hosting panels with a selectable view.
+        // Detailed mode retains all original live panels and actions.
+        connectionHost = null
+        phoneHost = null
+        onlineHost = null
+        val selectedMode = HostingToolsLayout.mode(prefs.getString(HostingToolsLayout.MODE_KEY,null))
+        val layoutHeader=ui.row(this)
+        layoutHeader.addView(ui.text(this,selectedMode.label+" view",15f,ui.WHITE,true),
+            LinearLayout.LayoutParams(0,-2,1f))
+        layoutHeader.addView(ui.action(this,"CUSTOMIZE") { chooseHostingLayout() })
+        detailGroup.addView(layoutHeader)
+        detailGroup.addView(ui.space(this,10))
+        if (selectedMode == HostingToolsLayout.Mode.CLASSIC) {
+            if(blockers>0) {
+                detailGroup.addView(setupJourney())
+                detailGroup.addView(ui.space(this,12))
+            }
+            val join=FrameLayout(this)
+            join.addView(connectionJourneyPanel())
+            connectionHost=join
+            lastConnectionSignature=""
+            detailGroup.addView(join)
             detailGroup.addView(ui.space(this,12))
+            val local=FrameLayout(this)
+            local.addView(phoneOnlyPanel())
+            phoneHost=local
+            lastPhoneSignature=""
+            detailGroup.addView(local)
+            detailGroup.addView(ui.space(this,12))
+            val online=FrameLayout(this)
+            online.addView(internetPanel())
+            onlineHost=online
+            lastOnlineSignature=""
+            detailGroup.addView(online)
+            detailGroup.addView(ui.space(this,12))
+            detailGroup.addView(enginePanel())
+            detailGroup.addView(ui.space(this,12))
+            detailGroup.addView(hostingToolbox())
+        } else {
+            val items=HostingToolsLayout.visible { section ->
+                prefs.getBoolean(HostingToolsLayout.key(section),true)
+            }
+            if(items.isEmpty()) {
+                val empty=ui.card(this)
+                empty.addView(ui.text(this,"No tools selected",14f,ui.WHITE,true))
+                empty.addView(ui.space(this,8))
+                empty.addView(ui.action(this,"SHOW TOOLS") { chooseHostingSections() })
+                detailGroup.addView(empty)
+            } else if(selectedMode==HostingToolsLayout.Mode.SIMPLE) {
+                val group=ui.card(this)
+                items.forEachIndexed { index, section ->
+                    group.addView(HomesteadComponents.menuRow(this,section.symbol,
+                        section.label,hostingToolHint(section)) {
+                        openHostingSection(section)
+                    })
+                    if(index!=items.lastIndex)group.addView(ui.space(this,7))
+                }
+                detailGroup.addView(group)
+            } else {
+                items.chunked(2).forEachIndexed { index, pair ->
+                    if(pair.size==2) {
+                        val first=pair[0]
+                        val second=pair[1]
+                        detailGroup.addView(HomesteadComponents.tileRow(this,
+                            HomesteadComponents.shortcut(this,first.symbol,first.label,
+                                hostingToolHint(first)) { openHostingSection(first) },
+                            HomesteadComponents.shortcut(this,second.symbol,second.label,
+                                hostingToolHint(second)) { openHostingSection(second) }))
+                    } else {
+                        val item=pair[0]
+                        detailGroup.addView(HomesteadComponents.menuRow(this,item.symbol,
+                            item.label,hostingToolHint(item)) { openHostingSection(item) })
+                    }
+                    if(index<items.chunked(2).lastIndex)detailGroup.addView(ui.space(this,9))
+                }
+            }
         }
-        val join=FrameLayout(this)
-        join.addView(connectionJourneyPanel())
-        connectionHost=join
-        lastConnectionSignature=""
-        detailGroup.addView(join)
-        detailGroup.addView(ui.space(this,12))
-        val local=FrameLayout(this)
-        local.addView(phoneOnlyPanel())
-        phoneHost=local
-        lastPhoneSignature=""
-        detailGroup.addView(local)
-        detailGroup.addView(ui.space(this,12))
-        val online=FrameLayout(this)
-        online.addView(internetPanel())
-        onlineHost=online
-        lastOnlineSignature=""
-        detailGroup.addView(online)
-        detailGroup.addView(ui.space(this,12))
-        detailGroup.addView(enginePanel())
-        detailGroup.addView(ui.space(this,13))
+        body.addView(detailGroup)
+    }
+    private fun hostingToolHint(section: HostingToolsLayout.Section): String = when(section) {
+        HostingToolsLayout.Section.FRIENDS -> "Join addresses"
+        HostingToolsLayout.Section.LOCAL -> "LAN hosting"
+        HostingToolsLayout.Section.PLAYIT -> "Remote access"
+        HostingToolsLayout.Section.SERVER -> "Start & stop"
+        HostingToolsLayout.Section.TOOLS -> "Setup & repair"
+        HostingToolsLayout.Section.HEALTH -> "Diagnostics"
+    }
 
+    private fun openHostingSection(section: HostingToolsLayout.Section) {
+        when(section) {
+            HostingToolsLayout.Section.FRIENDS -> showConnectionChooser()
+            HostingToolsLayout.Section.LOCAL -> showHostingPanel("Local hosting") {
+                phoneOnlyPanel()
+            }
+            HostingToolsLayout.Section.PLAYIT -> showHostingPanel("Playit") {
+                internetPanel()
+            }
+            HostingToolsLayout.Section.SERVER -> showHostingPanel("Server controls") {
+                enginePanel()
+            }
+            HostingToolsLayout.Section.TOOLS -> showHostingPanel("Hosting tools") {
+                hostingToolbox()
+            }
+            HostingToolsLayout.Section.HEALTH -> showHealthCenter()
+        }
+    }
+
+    /** Keep advanced actions in their original handlers, now on demand. */
+    private fun hostingToolbox(): LinearLayout {
         val toolbox=ui.card(this)
-        toolbox.addView(HomesteadComponents.sectionHeading(this,"Tools & diagnostics",
-            ""))
+        toolbox.addView(HomesteadComponents.sectionHeading(this,"Tools"))
         toolbox.addView(ui.space(this,12))
         val advancedActions=listOf(
-            Triple("◎","First-time setup","Check the installation guide"),
+            Triple("◎","First-time setup","Installation guide"),
             Triple("✦","Fabric installer","Install or repair Fabric"),
-            Triple("☕","Java runtime","Manage the packaged Java engine"),
-            Triple("↓","Import server","Restore a complete server"),
-            Triple("✓","Health checks","Inspect setup and readiness"),
-            Triple("!","Crash report","Read private crash diagnostics"),
-            Triple("ⓘ","About","App details and credits")
+            Triple("☕","Java runtime","Manage Java"),
+            Triple("↓","Import server","Restore a server"),
+            Triple("✓","Health checks","Readiness"),
+            Triple("!","Crash report","Logs"),
+            Triple("ⓘ","About","App information")
         )
-        advancedActions.forEachIndexed { i, item ->
+        advancedActions.forEachIndexed { i,item ->
             toolbox.addView(HomesteadComponents.menuRow(this,item.first,item.second,item.third) {
                 when(i) {
                     0 -> showFirstRunGuide()
@@ -711,11 +794,67 @@ class MainActivity : Activity() {
                     else -> about()
                 }
             })
-            if(i!=advancedActions.lastIndex) toolbox.addView(ui.space(this,8))
+            if(i!=advancedActions.lastIndex)toolbox.addView(ui.space(this,7))
         }
-        detailGroup.addView(toolbox)
-        body.addView(detailGroup)
+        return toolbox
     }
+
+    private fun showHostingPanel(title: String, factory: () -> LinearLayout) {
+        val content=ui.column(this).apply {
+            setPadding(ui.dp(this@MainActivity,12),ui.dp(this@MainActivity,6),
+                ui.dp(this@MainActivity,12),ui.dp(this@MainActivity,12))
+        }
+        content.addView(factory())
+        val scroll=ScrollView(this).apply { addView(content) }
+        val dialog=AlertDialog.Builder(this).setTitle(title).setView(scroll)
+            .setPositiveButton("CLOSE",null).create()
+        dialog.show()
+        dialog.window?.setLayout(
+            (resources.displayMetrics.widthPixels*.95f).toInt(),
+            (resources.displayMetrics.heightPixels*.78f).toInt())
+    }
+
+    private fun chooseHostingLayout() {
+        val prefs=getSharedPreferences("pocketcraft",0)
+        val modes=HostingToolsLayout.Mode.values()
+        val current=HostingToolsLayout.mode(prefs.getString(HostingToolsLayout.MODE_KEY,null))
+        AlertDialog.Builder(this).setTitle("Hosting layout")
+            .setSingleChoiceItems(modes.map { it.label }.toTypedArray(),
+                modes.indexOf(current)) { dialog,index ->
+                prefs.edit().putString(HostingToolsLayout.MODE_KEY,modes[index].id).apply()
+                dialog.dismiss()
+                render()
+            }
+            .setNeutralButton("SHOW / HIDE TOOLS") { _,_ -> chooseHostingSections() }
+            .setNegativeButton("CANCEL",null).show()
+    }
+
+    private fun chooseHostingSections() {
+        val prefs=getSharedPreferences("pocketcraft",0)
+        val sections=HostingToolsLayout.Section.values()
+        val selected=sections.map { prefs.getBoolean(HostingToolsLayout.key(it),true) }
+            .toBooleanArray()
+        AlertDialog.Builder(this).setTitle("Visible tools")
+            .setMultiChoiceItems(sections.map { it.label }.toTypedArray(),selected) {
+                    _,index,checked -> selected[index]=checked
+            }
+            .setNegativeButton("CANCEL",null)
+            .setNeutralButton("RESET") { _,_ ->
+                val edit=prefs.edit().putString(HostingToolsLayout.MODE_KEY,"simple")
+                sections.forEach { edit.remove(HostingToolsLayout.key(it)) }
+                edit.apply()
+                render()
+            }
+            .setPositiveButton("SAVE") { _,_ ->
+                val edit=prefs.edit()
+                sections.forEachIndexed { index,section ->
+                    edit.putBoolean(HostingToolsLayout.key(section),selected[index])
+                }
+                edit.apply()
+                render()
+            }.show()
+    }
+
     /**
      * Simplified Anvil-inspired hosting workflow, using PocketCraft's real
      * readiness signals rather than promising one-tap internet access.
