@@ -179,7 +179,12 @@ object PocketUi {
                 else intArrayOf(0xFF75583D.toInt(), 0xFF553E2B.toInt()))
                 orientation = GradientDrawable.Orientation.TOP_BOTTOM
             } else setColor(color)
-            cornerRadius = dp(c, when (currentTheme) {\n                "minecraft" -> 4\n                "obsidian", "minimal" -> radius.coerceAtMost(8)\n                "homestead" -> radius.coerceAtMost(15)\n                else -> radius\n            }).toFloat()
+            cornerRadius = dp(c, when (currentTheme) {
+                "minecraft" -> 4
+                "obsidian", "minimal" -> radius.coerceAtMost(8)
+                "homestead" -> radius.coerceAtMost(15)
+                else -> radius
+            }).toFloat()
             if (stroke != null) setStroke(dp(c, 1), stroke)
         }
 
