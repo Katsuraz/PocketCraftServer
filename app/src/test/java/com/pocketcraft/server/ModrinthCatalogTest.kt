@@ -4,15 +4,16 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ModrinthCatalogTest {
-    @Test fun searchUsesOfficialAndFacetsWithServerVersion() {
+    @Test fun searchShowsAnyMinecraftVersionAndLoader() {
         val url = ModrinthCatalog.searchUrl("mod","sodium", "1.21.11",
             "optimization","downloads",20)
         assertTrue(url.startsWith("https://api.modrinth.com/v2/search?"))
         assertTrue(url.contains("offset=20"))
         assertTrue(url.contains("limit=20"))
         assertTrue(url.contains("index=downloads"))
-        assertTrue(java.net.URLDecoder.decode(url,"UTF-8").contains("versions:1.21.11"))
-        assertTrue(java.net.URLDecoder.decode(url,"UTF-8").contains("categories:fabric"))
+        assertFalse(java.net.URLDecoder.decode(url,"UTF-8").contains("versions:1.21.11"))
+        assertFalse(java.net.URLDecoder.decode(url,"UTF-8").contains("categories:fabric"))
+        assertFalse(java.net.URLDecoder.decode(url,"UTF-8").contains("environment:"))
         assertTrue(java.net.URLDecoder.decode(url,"UTF-8").contains("categories:optimization"))
         assertTrue(java.net.URLDecoder.decode(url,"UTF-8").contains("project_type:mod"))
     }

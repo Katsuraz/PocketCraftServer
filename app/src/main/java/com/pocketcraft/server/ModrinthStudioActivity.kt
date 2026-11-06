@@ -18,7 +18,11 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /** Real Modrinth v2 browser: search, sort, filter, page, pick version and dependencies. */
 class ModrinthStudioActivity : Activity() {
-    companion object { const val EXTRA_TYPE = "modrinth_type" }
+    companion object {
+        const val EXTRA_TYPE = "modrinth_type"
+        private const val SAVE_VERSION_FILE = 42719
+    }
+    private var pendingDownload: ModrinthCatalog.Version? = null
     private val ui = PocketUi
     private var kind = "mod"
     private var category = "all"
@@ -66,9 +70,9 @@ class ModrinthStudioActivity : Activity() {
         title.addView(ui.text(this,"  Modrinth Workshop",17f,ui.WHITE,true))
         frame.addView(title)
         frame.addView(ui.space(this,8))
-        frame.addView(ui.pill(this,"FABRIC  •  MINECRAFT " + minecraft,ui.CYAN))
+        frame.addView(ui.pill(this,"ALL MODRINTH PROJECTS  •  SERVER FABRIC " + minecraft,ui.CYAN))
         frame.addView(ui.space(this,7))
-        frame.addView(ui.text(this,"Discover compatible Fabric server mods and modpacks. Client-only shaders and visuals install in your Java client, not on the server.",12f,ui.MUTED))
+        frame.addView(ui.text(this,"Browse every mod and modpack. Pick any release, see compatibility warnings, or download the file without installing.",12f,ui.MUTED))
         frame.addView(ui.space(this,10))
         val tabs=ui.row(this)
         modsButton=ui.action(this,"MODS",kind=="mod") { changeKind("mod") }
@@ -154,7 +158,7 @@ class ModrinthStudioActivity : Activity() {
         val request=++requestId
         val type=kind;val term=search.text.toString().trim()
         val selectedCategory=category;val selectedSort=sort;val selectedOffset=offset
-        status.text="Searching "+type+" projects…"
+        status.text="Searching all "+type+" projects…"
         listing.removeAllViews()
         prev.isEnabled=false;next.isEnabled=false
         Thread {
@@ -174,7 +178,7 @@ class ModrinthStudioActivity : Activity() {
         count=results.totalHits
         val first=if(results.hits.isEmpty())0 else results.offset+1
         status.text=first.toString()+"–"+(results.offset+results.hits.size)+" of "+count+
-            " projects • Fabric "+minecraft
+            " projects • all Minecraft versions"
         page.text="PAGE "+(offset/ModrinthCatalog.PAGE_SIZE+1)
         prev.isEnabled=offset>0
         next.isEnabled=offset+ModrinthCatalog.PAGE_SIZE<count && offset<2000
@@ -182,7 +186,7 @@ class ModrinthStudioActivity : Activity() {
         next.alpha=if(next.isEnabled)1f else .4f
         listing.removeAllViews()
         if(results.hits.isEmpty())listing.addView(ui.text(this,
-            "No server-capable Fabric "+minecraft+" projects matched. Try another category or shorter search. Client-only mods are intentionally excluded.",13f,ui.MUTED))
+            "No matching projects. Try another category or a shorter search.",13f,ui.MUTED))
         results.hits.forEach { hit ->
             val card=ui.card(this)
             card.addView(ui.text(this,hit.title,15f,ui.WHITE,true))
@@ -194,7 +198,7 @@ class ModrinthStudioActivity : Activity() {
             }
             card.addView(ui.space(this,6))
             card.addView(ui.pill(this,hit.serverHint,
-                if(hit.serverHint=="Client-only project")ui.RED else ui.CYAN))
+                if(hit.serverHint.startsWith("Client-only"))ui.RED else ui.CYAN))
             card.addView(ui.space(this,9))
             card.addView(ui.action(this,"CHOOSE VERSION",true){showVersions(hit,type)})
             card.addView(ui.space(this,6))
@@ -208,7 +212,7 @@ class ModrinthStudioActivity : Activity() {
     }
     private fun showVersions(hit:ModrinthCatalog.Hit,type:String){
         val dialog=AlertDialog.Builder(this).setTitle("Releases · "+hit.title)
-            .setMessage("Loading Fabric "+minecraft+" versions…").setCancelable(false).create()
+            .setMessage("Loading all available releases…").setCancelable(false).create()
         dialog.show()
         Thread {
             val outcome=runCatching {ModrinthCatalog.versionReport(hit.id,type,minecraft)}
@@ -222,7 +226,7 @@ class ModrinthStudioActivity : Activity() {
                 outcome.onSuccess { report ->
                     val versions=report.versions
                     if(versions.isEmpty()){
-                        AlertDialog.Builder(this).setTitle("No installable server release")
+                        AlertDialog.Builder(this).setTitle("No verifiable download")
                             .setMessage(report.unavailableReason)
                             .setNeutralButton("VIEW ON MODRINTH") { _, _ ->
                                 startActivity(Intent(Intent.ACTION_VIEW,Uri.parse(
@@ -237,21 +241,110 @@ class ModrinthStudioActivity : Activity() {
             }
         }.start()
     }
+    /**
+     * Compatibility is advisory. The user can download ANY verified release,
+     * including client-only or other-loader files, without touching the server.
+     * Fabric installations require a separate explicit risk confirmation.
+     */
     private fun selectVersion(hit:ModrinthCatalog.Hit,v:ModrinthCatalog.Version,type:String){
+        val warnings=ModrinthCatalog.compatibilityWarnings(v,minecraft)
+        val installableLoader="fabric" in v.loaders
+        val message=buildString {
+            append(hit.title).append(" ").append(v.number).append("\n")
+            append("Minecraft: ").append(v.gameVersions.joinToString(", "))
+            append("\nLoaders: ").append(v.loaders.joinToString(", "))
+            if(warnings.isNotEmpty()) {
+                append("\n\n⚠ COMPATIBILITY WARNINGS\n")
+                warnings.forEach {append("• ").append(it).append("\n")}
+                append("\nAn incompatible mod can prevent the server from starting. " +
+                    "Back up your worlds and mods before installing.")
+            } else {
+                append("\n\nThis release matches your Fabric server.")
+            }
+            append("\n\nDownload Only saves the verified original file " +
+                "without changing any installed mods.")
+        }
+        val builder=AlertDialog.Builder(this)
+            .setTitle(if(warnings.isEmpty())"Release options" else "⚠ Compatibility warning")
+            .setMessage(message)
+            .setNegativeButton("CANCEL",null)
+        if(installableLoader){
+            builder.setPositiveButton(if(warnings.isEmpty())"REVIEW INSTALL" else "INSTALL ANYWAY"){
+                _,_ -> proceedInstall(hit,v,type,warnings.isNotEmpty())
+            }
+            builder.setNeutralButton("DOWNLOAD ONLY"){_,_ ->downloadOnly(v)}
+        } else {
+            // A Forge/NeoForge/Quilt-only JAR cannot be installed as Fabric,
+            // but the user may save it to their Android downloads.
+            builder.setPositiveButton("DOWNLOAD ONLY"){_,_ ->downloadOnly(v)}
+        }
+        builder.show()
+    }
+
+    private fun proceedInstall(hit:ModrinthCatalog.Hit,v:ModrinthCatalog.Version,
+                               type:String,allowMismatch:Boolean){
         if(ServerService.running || ServerService.status in setOf("STARTING","STOPPING")){
             AlertDialog.Builder(this).setTitle("Stop Minecraft first")
-                .setMessage("Mods and packs can only be installed when the server is stopped.")
+                .setMessage("Stop your server before installing, and keep a backup.")
                 .setPositiveButton("OK",null).show()
             return
         }
-        if(type=="modpack")preparePack(hit,v) else reviewMod(hit,v)
+        if(type=="modpack")preparePack(hit,v,allowMismatch)
+        else reviewMod(hit,v,allowMismatch)
     }
-    private fun reviewMod(hit:ModrinthCatalog.Hit,v:ModrinthCatalog.Version){
+
+    /** Save to a user-selected SAF destination, never automatically to mods/. */
+    private fun downloadOnly(v:ModrinthCatalog.Version){
+        pendingDownload=v
+        val fileType=if(v.filename.endsWith(".mrpack",true))
+            "application/zip" else "application/java-archive"
+        val chooser=Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type=fileType
+            putExtra(Intent.EXTRA_TITLE,v.filename.take(140))
+        }
+        try {
+            startActivityForResult(chooser,SAVE_VERSION_FILE)
+        } catch(error:Exception){
+            pendingDownload=null
+            AlertDialog.Builder(this).setTitle("Cannot save file")
+                .setMessage(error.message ?: "No compatible Android file picker available")
+                .setPositiveButton("OK",null).show()
+        }
+    }
+
+    override fun onActivityResult(requestCode:Int,resultCode:Int,data:Intent?){
+        super.onActivityResult(requestCode,resultCode,data)
+        if(requestCode!=SAVE_VERSION_FILE)return
+        val selected=pendingDownload
+        pendingDownload=null
+        if(resultCode!=RESULT_OK || data?.data==null || selected==null)return
+        val destination=data.data!!
+        install("Downloading verified "+selected.filename,
+            showRestartMessage=false,successTitle="✓ Download saved"){
+            val cached=ModrinthCatalog.downloadVersionFile(this,selected)
+            try {
+                val stream=contentResolver.openOutputStream(destination,"w")
+                    ?: throw java.io.IOException("Unable to open selected save location")
+                stream.use {output ->
+                    cached.inputStream().use {input ->input.copyTo(output)}
+                }
+                "Saved "+selected.filename+" to your selected Android location. " +
+                    "This file was NOT installed on the server."
+            } finally {cached.delete()}
+        }
+    }
+
+    private fun reviewMod(hit:ModrinthCatalog.Hit,v:ModrinthCatalog.Version,
+                          allowMismatch:Boolean){
         val wait=AlertDialog.Builder(this).setTitle("Checking dependencies")
             .setMessage("Reading exactly version "+v.number+"…").setCancelable(false).create()
         wait.show()
         Thread {
-            val result=runCatching {WebsiteModInstaller.previewDependencies(this,hit.id,v.id)}
+            val result=runCatching {
+                WebsiteModInstaller.previewDependencies(this,hit.id,v.id,
+                    allowVersionMismatch=allowMismatch)
+            }
             runOnUiThread {
                 if(isFinishing||isDestroyed)return@runOnUiThread
                 wait.dismiss()
@@ -259,12 +352,12 @@ class ModrinthStudioActivity : Activity() {
                     AlertDialog.Builder(this).setTitle("Dependency review failed")
                         .setMessage(it.message?:"Try again").setPositiveButton("OK",null).show()
                 }
-                result.onSuccess {showChoices(hit,v,it)}
+                result.onSuccess {showChoices(hit,v,it,allowMismatch)}
             }
         }.start()
     }
     private fun showChoices(hit:ModrinthCatalog.Hit,v:ModrinthCatalog.Version,
-                            deps:List<WebsiteModInstaller.DependencyChoice>){
+                            deps:List<WebsiteModInstaller.DependencyChoice>,allowMismatch:Boolean){
         val conflict=deps.any {it.kind=="incompatible" && it.installed}
         val selected=BooleanArray(deps.size){i ->
             deps[i].kind!="incompatible" && (deps[i].required||deps[i].installed)
@@ -285,7 +378,10 @@ class ModrinthStudioActivity : Activity() {
         }
         panel.addView(ui.text(this,"Required dependencies cannot be disabled. " +
             "Optional dependencies can be selected. Exact pinned version and SHA-512 verified; " +
-            "existing JARs are not overwritten.",12f,ui.MUTED))
+            "existing JARs are not overwritten." +
+            (if(allowMismatch)"\n\n⚠ You chose an incompatible version. " +
+                "Dependencies might not resolve and Minecraft may crash on startup." else ""),
+            12f,ui.MUTED))
         panel.addView(ui.space(this,10))
         if(conflict) {
             panel.addView(ui.text(this,"A conflicting mod is installed. Resolve it first.",
@@ -312,12 +408,14 @@ class ModrinthStudioActivity : Activity() {
                 deps[it].kind=="optional" && selected[it] && !deps[it].installed
             }.map {deps[it].projectId}.toSet()
             install("Installing "+hit.title){
-                WebsiteModInstaller.installWithDependencies(this,hit.id,v.id,options)
+                WebsiteModInstaller.installWithDependencies(this,hit.id,v.id,options,
+                    allowVersionMismatch=allowMismatch)
             }
         }
         builder.show()
     }
-    private fun preparePack(hit:ModrinthCatalog.Hit,v:ModrinthCatalog.Version){
+    private fun preparePack(hit:ModrinthCatalog.Hit,v:ModrinthCatalog.Version,
+                            allowMismatch:Boolean){
         val cancel=AtomicBoolean(false)
         val wait=AlertDialog.Builder(this).setTitle("Downloading "+hit.title)
             .setMessage("Verifying selected .mrpack checksum…")
@@ -374,7 +472,8 @@ class ModrinthStudioActivity : Activity() {
                         val selected=optional.indices.filter {checked[it]}.map {optional[it]}.toSet()
                         install("Installing "+hit.title){
                             try {
-                                ModpackImporter.install(this,uri,selectedOptional=selected).description()
+                                ModpackImporter.install(this,uri,selectedOptional=selected,
+                                    allowMinecraftMismatch=allowMismatch).description()
                             } finally {uri.path?.let {path->File(path).delete()}}
                         }
                     }
@@ -384,7 +483,9 @@ class ModrinthStudioActivity : Activity() {
             }
         }.start()
     }
-    private fun install(label:String,work:()->String){
+    private fun install(label:String,showRestartMessage:Boolean=true,
+                        successTitle:String="✓ Installation complete",
+                        work:()->String){
         val cancel=AtomicBoolean(false)
         val statusView=ui.text(this,"Preparing…",13f,ui.WHITE)
         val panel=ui.column(this).apply {
@@ -409,8 +510,9 @@ class ModrinthStudioActivity : Activity() {
                 if(isFinishing||isDestroyed)return@runOnUiThread
                 wait.dismiss()
                 result.onSuccess {
-                    AlertDialog.Builder(this).setTitle("✓ Installation complete")
-                        .setMessage(it+"\n\nRestart Minecraft to load the changes.")
+                    AlertDialog.Builder(this).setTitle(successTitle)
+                        .setMessage(it+
+                            (if(showRestartMessage)"\n\nRestart Minecraft to load the changes." else ""))
                         .setPositiveButton("OK",null).show()
                 }.onFailure {
                     AlertDialog.Builder(this)

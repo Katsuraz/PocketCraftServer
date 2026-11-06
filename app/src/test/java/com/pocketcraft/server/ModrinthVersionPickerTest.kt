@@ -25,4 +25,17 @@ class ModrinthVersionPickerTest {
             ModrinthVersionPicker.filter(values,"all","",true).map{it.number})
         assertEquals(0,ModrinthVersionPicker.filter(values,"alpha","does-not-exist").size)
     }
+    @Test fun searchCanFilterByMinecraftVersionOrLoader() {
+        val old=version("0.90","release","2023-10-12")
+            .copy(gameVersions=listOf("1.20.1"),loaders=listOf("fabric"))
+        val other=version("1.0","beta","2026-09-15")
+            .copy(gameVersions=listOf("26.3"),loaders=listOf("neoforge"))
+        val values=listOf(old,other)
+        assertEquals(listOf(old),
+            ModrinthVersionPicker.filter(values,"all","1.20.1"))
+        assertEquals(listOf(other),
+            ModrinthVersionPicker.filter(values,"all","neoforge"))
+        assertEquals(2,ModrinthVersionPicker.filter(values,"all","").size)
+    }
+
 }

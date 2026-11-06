@@ -198,7 +198,8 @@ object WebsiteModInstaller {
      * are warnings, never selectable optional installations.
      */
     fun previewDependencies(context: Context, slug: String,
-                            pinnedVersionId: String? = null): List<DependencyChoice> {
+                            pinnedVersionId: String? = null,
+                            allowVersionMismatch: Boolean = false): List<DependencyChoice> {
         val current = installedVersion(context)
         require(slug.matches(Regex("[A-Za-z0-9_-]{1,120}"))) { "Invalid Modrinth project" }
         val project = json("https://api.modrinth.com/v2/project/" + encode(slug))
@@ -215,12 +216,14 @@ object WebsiteModInstaller {
         if (versions.length() == 0) throw IOException("No Fabric $current release found")
         val version = versions.getJSONObject(0)
         if (version.optString("project_id") != id ||
-            !(0 until (version.optJSONArray("game_versions") ?: JSONArray()).length()).any {
-                version.optJSONArray("game_versions")?.optString(it) == current
-            } ||
             !(0 until (version.optJSONArray("loaders") ?: JSONArray()).length()).any {
                 version.optJSONArray("loaders")?.optString(it) == "fabric"
-            }) throw IOException("The selected version is not Fabric $current for this project")
+            } ||
+            (!allowVersionMismatch &&
+                !(0 until (version.optJSONArray("game_versions") ?: JSONArray()).length()).any {
+                    version.optJSONArray("game_versions")?.optString(it) == current
+                })) throw IOException("This release is not a matching Fabric $current build. " +
+                    "Choose a different version or explicitly confirm the compatibility warning.")
         val deps = version.optJSONArray("dependencies") ?: JSONArray()
         val presentIds = installedModIds(context)
         val found = mutableListOf<DependencyChoice>()
@@ -270,7 +273,10 @@ object WebsiteModInstaller {
      * Fabric JAR verification; never install an unverified or client-only JAR.
      */
     @Synchronized
-    fun installWithDependencies(context: Context, slug: String, pinnedVersionId: String? = null, selectedOptional: Set<String> = emptySet()): String {
+    fun installWithDependencies(context: Context, slug: String,
+                                pinnedVersionId: String? = null,
+                                selectedOptional: Set<String> = emptySet(),
+                                allowVersionMismatch: Boolean = false): String {
         if (ServerService.running) throw IOException("Stop Minecraft before installing mods")
         val current = installedVersion(context)
         require(slug.matches(Regex("[A-Za-z0-9_-]{1,120}"))) { "Invalid Modrinth project" }
@@ -298,7 +304,12 @@ object WebsiteModInstaller {
             }
             if (!visiting.add(id)) throw IOException("Dependency cycle: " + project.optString("title"))
             try {
-                if (project.optString("server_side") == "unsupported")
+                // Confirmation applies only to the explicitly selected
+                // root mod. Dependencies must still be compatible by default.
+                val overrideThisProject = allowVersionMismatch &&
+                    depth == 0 && preferredVersionId != null
+                if (project.optString("server_side") == "unsupported" &&
+                    !overrideThisProject)
                     throw IOException(project.optString("title") + " is client-only")
                 val versions = if (preferredVersionId != null) {
                     JSONArray().put(json("https://api.modrinth.com/v2/version/" + encode(preferredVersionId)))
@@ -317,8 +328,14 @@ object WebsiteModInstaller {
                     if (version.optString("project_id") != id) continue
                     val games = version.optJSONArray("game_versions") ?: JSONArray()
                     val loaders = version.optJSONArray("loaders") ?: JSONArray()
-                    if (!contains(games,current) || !contains(loaders,"fabric")) continue
-                    if (version.optString("environment") in setOf("client_only","singleplayer_only")) continue
+                    // Explicit pinned versions may be for another Minecraft
+                    // release, but must still be actual Fabric JARs. Nothing
+                    // is implicitly forced for auto-resolved dependencies.
+                    if ((!contains(games,current) && !overrideThisProject) ||
+                        !contains(loaders,"fabric")) continue
+                    if (version.optString("environment") in
+                        setOf("client_only","singleplayer_only") &&
+                        !overrideThisProject) continue
                     val files = version.optJSONArray("files") ?: JSONArray()
                     val jars = (0 until files.length()).map { files.getJSONObject(it) }
                         .filter {

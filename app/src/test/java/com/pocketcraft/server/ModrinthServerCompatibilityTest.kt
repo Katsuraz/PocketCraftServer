@@ -7,29 +7,20 @@ import org.junit.Test
 import java.net.URLDecoder
 
 class ModrinthServerCompatibilityTest {
-    @Test fun searchFacetsExcludeClientOnlyProjectsWithoutLosingServerMods() {
+    @Test fun browseAllProjectsWithoutHiddenGameLoaderOrEnvironmentRestrictions() {
         val uri=ModrinthCatalog.searchUrl("mod","","26.3","all","relevance",0)
         val decoded=URLDecoder.decode(uri,"UTF-8")
         val facets=decoded.substringAfter("facets=").substringBefore("&index=")
         val groups=JSONArray(facets)
-        val all=mutableListOf<List<String>>()
-        for(i in 0 until groups.length()){
-            val group=groups.getJSONArray(i)
-            all.add((0 until group.length()).map { group.getString(it) })
-        }
-        assertTrue(all.contains(listOf("categories:fabric")))
-        assertTrue(all.contains(listOf("versions:26.3")))
-        assertTrue(all.contains(listOf("project_type:mod")))
-        val serverOptions=all.first { it.any { value -> value.startsWith("environment:") } }
-        assertTrue(serverOptions.contains("environment:client_and_server"))
-        assertTrue(serverOptions.contains("environment:server_only"))
-        assertTrue(serverOptions.contains("environment:client_or_server"))
-        assertFalse(serverOptions.contains("environment:client_only"))
-        assertFalse(serverOptions.contains("environment:singleplayer_only"))
-        assertTrue("Client-only projects must be rejected",
-            ModrinthCatalog.onlyClientSide("unsupported",listOf("client_only")))
-        assertTrue(ModrinthCatalog.onlyClientSide("unknown",listOf("client_only")))
-        assertFalse(ModrinthCatalog.onlyClientSide("optional",listOf("client_only_server_optional")))
+        assertEquals(1,groups.length())
+        assertEquals("project_type:mod",groups.getJSONArray(0).getString(0))
+        assertFalse(decoded.contains("versions:26.3"))
+        assertFalse(decoded.contains("categories:fabric"))
+        assertFalse(decoded.contains("environment:"))
+        assertTrue(ModrinthCatalog.onlyClientSide("unsupported",listOf("client_only")))
+        assertFalse(ModrinthCatalog.onlyClientSide("optional",
+            listOf("client_only_server_optional")))
+        // Client-only projects are now visible with a warning, not excluded.
     }
 
     private fun version(
@@ -56,28 +47,37 @@ class ModrinthServerCompatibilityTest {
         }))
     }
 
-    @Test fun versionParserAcceptsFabricServerReleaseAndRejectsShaders() {
-        val valid=ModrinthCatalog.parseVersion("P1234","mod","26.3",version())
-        assertNotNull(valid)
-        assertEquals("1.0+26.3",valid!!.number)
-        assertEquals("server_only",valid.environment)
-        assertNull(ModrinthCatalog.parseVersion("P1234","mod","26.3",
-            version(environment="client_only")))
-        assertNull(ModrinthCatalog.parseVersion("P1234","modpack","26.3",
-            version(environment="client_only",filename="pack.mrpack")))
+    @Test fun allPublishedVersionsCanBeSelectedAndWarningsIdentifyRisks() {
+        val normal=ModrinthCatalog.parseVersion("P1234","mod","26.3",version())
+        assertNotNull(normal)
+        assertTrue(ModrinthCatalog.compatibilityWarnings(normal!!,"26.3").isEmpty())
+
+        val older=ModrinthCatalog.parseVersion("P1234","mod","26.3",
+            version(game="1.20.1"))
+        assertNotNull(older)
+        assertTrue(ModrinthCatalog.compatibilityWarnings(older!!,"26.3")
+            .any{ it.contains("1.20.1") })
+
+        val clientOnly=ModrinthCatalog.parseVersion("P1234","mod","26.3",
+            version(environment="client_only"))
+        assertNotNull(clientOnly)
+        assertTrue(ModrinthCatalog.compatibilityWarnings(clientOnly!!,"26.3")
+            .any{ it.contains("Client-only") })
+
+        val otherLoader=ModrinthCatalog.parseVersion("P1234","mod","26.3",
+            version(loader="neoforge"))
+        assertNotNull(otherLoader)
+        assertTrue(ModrinthCatalog.compatibilityWarnings(otherLoader!!,"26.3")
+            .any{ it.contains("neoforge") })
     }
 
-    @Test fun versionParserNeverOffersWrongFilesOrUnverifiedArtifacts() {
+    @Test fun downloadsStillRejectUnsafeFilesAndMissingChecksums() {
         assertNull(ModrinthCatalog.parseVersion("P1234","mod","26.3",
             version(filename="source.zip")))
         assertNull(ModrinthCatalog.parseVersion("P1234","mod","26.3",
             version(url="https://untrusted.example/malware.jar")))
         assertNull(ModrinthCatalog.parseVersion("P1234","mod","26.3",
             version(sha="broken")))
-        assertNull(ModrinthCatalog.parseVersion("P1234","mod","26.3",
-            version(game="26.2")))
-        assertNull(ModrinthCatalog.parseVersion("P1234","mod","26.3",
-            version(loader="neoforge")))
         assertNull(ModrinthCatalog.parseVersion("wrongProject","mod","26.3",version()))
         val pack=ModrinthCatalog.parseVersion("P1234","modpack","26.3",
             version(filename="pack.mrpack",
@@ -86,7 +86,7 @@ class ModrinthServerCompatibilityTest {
         assertEquals("pack.mrpack",pack!!.filename)
     }
 
-    @Test fun unknownEnvironmentIsNotMistakenForClientOnly() {
+    @Test fun advisoryClientEligibilityRemainsAccurate() {
         assertTrue(ModrinthCatalog.isServerEligible("unknown"))
         assertTrue(ModrinthCatalog.isServerEligible("client_and_server"))
         assertTrue(ModrinthCatalog.isServerEligible("client_only_server_optional"))

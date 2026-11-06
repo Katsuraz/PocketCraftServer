@@ -169,7 +169,8 @@ class PocketCraftUiSmokeTest {
                 if(index==3)2 else 0,
                 if(index==3)1 else 0,
                 0,"fabric-api.jar","https://cdn.modrinth.com/data/sample.jar",
-                null,listOf("26.3"),"server_only"
+                null,listOf(if(index==3)"1.20.1" else "26.3"),
+                "server_only",listOf(if(index==4)"neoforge" else "fabric")
             )
         }
         instrumentation.runOnMainSync {
@@ -184,6 +185,11 @@ class PocketCraftUiSmokeTest {
         assertVisible(By.textContains("0.163.2+26.3"),"Beta version")
         assertVisible(By.textContains("1 of 13"),"Filtered release count")
         capture("11-version-picker-beta")
+
+        assertVisible(By.desc("Filter ALPHA versions"),"Alpha filter").click()
+        assertVisible(By.textContains("Loader: neoforge"),"Other loader remains visible")
+        assertVisible(By.textContains("MAY NOT WORK"),"Compatibility warning on version card")
+        capture("11b-version-picker-incompatible-loader")
 
         assertVisible(By.desc("Filter ALL versions"),"All versions").click()
         assertVisible(By.textContains("13 of 13"),"All releases")

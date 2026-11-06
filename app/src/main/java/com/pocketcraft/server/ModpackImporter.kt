@@ -184,7 +184,8 @@ object ModpackImporter {
     }
 
     fun install(context:Context,uri:Uri,apiKey:String?=null,
-                selectedOptional:Set<String> = emptySet()):Summary {
+                selectedOptional:Set<String> = emptySet(),
+                allowMinecraftMismatch:Boolean = false):Summary {
         if(ServerService.running)throw IOException("Stop the server before importing a modpack")
         val base=WorldStore.root(context)
         val staging=File(context.cacheDir,"pocketcraft-pack-"+System.currentTimeMillis())
@@ -211,7 +212,7 @@ object ModpackImporter {
                 val mr=zip.getEntry("modrinth.index.json")
                 val cf=zip.getEntry("manifest.json")
                 return when {
-                    mr!=null -> installMrpack(context,zip,mr,extracted,base,selectedOptional)
+                    mr!=null -> installMrpack(context,zip,mr,extracted,base,selectedOptional,allowMinecraftMismatch)
                     cf!=null -> installCurse(context,zip,cf,extracted,base,apiKey)
                     else -> throw IOException("No modrinth.index.json or CurseForge manifest.json found")
                 }
@@ -219,20 +220,21 @@ object ModpackImporter {
         } finally {staging.deleteRecursively()}
     }
 
-    private fun checkVersion(context:Context,required:String) {
+    private fun checkVersion(context:Context,required:String,allowMinecraftMismatch:Boolean=false) {
         val current=context.getSharedPreferences("pocketcraft",0).getString("gameVersion",null)
         if(current.isNullOrBlank())throw IOException("Minecraft version is unknown. Install or select the Fabric $required server in PocketCraft before importing this pack.")
-        if(current!=required)throw IOException("Modpack requires Minecraft $required, but the current Fabric server is $current. Switch versions before importing.")
+        if(current!=required && !allowMinecraftMismatch)
+            throw IOException("Modpack requires Minecraft $required, but the current Fabric server is $current. Switch versions or explicitly confirm the mismatch warning before importing.")
     }
 
-    private fun installMrpack(context:Context,zip:ZipFile,manifest:java.util.zip.ZipEntry,stage:File,base:File,selectedOptional:Set<String>):Summary {
+    private fun installMrpack(context:Context,zip:ZipFile,manifest:java.util.zip.ZipEntry,stage:File,base:File,selectedOptional:Set<String>,allowMinecraftMismatch:Boolean):Summary {
         val index=JSONObject(zip.getInputStream(manifest).bufferedReader().use{it.readText()})
         if(index.optString("game")!="minecraft")throw IOException("Only Minecraft modpacks are supported")
         val deps=index.getJSONObject("dependencies")
         val version=deps.optString("minecraft")
         val loader=deps.optString("fabric-loader")
         if(loader.isBlank())throw IOException("This pack is not Fabric. Forge/NeoForge/Quilt cannot run in PocketCraft Fabric.")
-        checkVersion(context,version)
+        checkVersion(context,version,allowMinecraftMismatch)
         val files=index.getJSONArray("files")
         if(files.length()>MAX_FILES)throw IOException("Too many modpack files")
         var skipped=0
