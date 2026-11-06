@@ -246,39 +246,71 @@ class ModrinthStudioActivity : Activity() {
      * including client-only or other-loader files, without touching the server.
      * Fabric installations require a separate explicit risk confirmation.
      */
-    private fun selectVersion(hit:ModrinthCatalog.Hit,v:ModrinthCatalog.Version,type:String){
+    // A fixed-size, scrollable Homestead card avoids Android's default
+    // three-button AlertDialog layout splitting actions into tall rows.
+    internal fun selectVersion(hit:ModrinthCatalog.Hit,v:ModrinthCatalog.Version,type:String){
         val warnings=ModrinthCatalog.compatibilityWarnings(v,minecraft)
-        val installableLoader="fabric" in v.loaders
+        val canInstall="fabric" in v.loaders
+        val panel=ui.column(this).apply {
+            background=ui.shape(this@ModrinthStudioActivity,ui.PANEL,15,ui.BORDER)
+            setPadding(ui.dp(this@ModrinthStudioActivity,15),
+                ui.dp(this@ModrinthStudioActivity,14),
+                ui.dp(this@ModrinthStudioActivity,15),
+                ui.dp(this@ModrinthStudioActivity,13))
+        }
+        panel.addView(ui.text(this,
+            if(warnings.isEmpty())"Release options" else "⚠ Compatibility warning",
+            17f,ui.WHITE,true))
+        panel.addView(ui.space(this,9))
+        panel.addView(ui.text(this,hit.title+" · "+v.number,14f,ui.CYAN,true))
+        panel.addView(ui.space(this,6))
+        panel.addView(ui.text(this,"Minecraft: "+
+            v.gameVersions.take(6).joinToString(", ").ifBlank { "unspecified" } +
+            "\nLoader: "+v.loaders.joinToString(", ").ifBlank { "unspecified" },
+            12f,ui.MUTED))
+        panel.addView(ui.space(this,8))
         val message=buildString {
-            append(hit.title).append(" ").append(v.number).append("\n")
-            append("Minecraft: ").append(v.gameVersions.joinToString(", "))
-            append("\nLoaders: ").append(v.loaders.joinToString(", "))
-            if(warnings.isNotEmpty()) {
-                append("\n\n⚠ COMPATIBILITY WARNINGS\n")
-                warnings.forEach {append("• ").append(it).append("\n")}
-                append("\nAn incompatible mod can prevent the server from starting. " +
-                    "Back up your worlds and mods before installing.")
-            } else {
-                append("\n\nThis release matches your Fabric server.")
+            if(warnings.isEmpty())append("✓ Matches your Fabric server.")
+            else {
+                warnings.forEach {append("⚠ ").append(it).append("\n")}
+                append("\nIncompatible mods can prevent Minecraft from starting. Back up your server first.")
             }
-            append("\n\nDownload Only saves the verified original file " +
-                "without changing any installed mods.")
+            append("\n\nDownload Only saves the original SHA-512-verified file without installing it.")
         }
-        val builder=AlertDialog.Builder(this)
-            .setTitle(if(warnings.isEmpty())"Release options" else "⚠ Compatibility warning")
-            .setMessage(message)
-            .setNegativeButton("CANCEL",null)
-        if(installableLoader){
-            builder.setPositiveButton(if(warnings.isEmpty())"REVIEW INSTALL" else "INSTALL ANYWAY"){
-                _,_ -> proceedInstall(hit,v,type,warnings.isNotEmpty())
-            }
-            builder.setNeutralButton("DOWNLOAD ONLY"){_,_ ->downloadOnly(v)}
-        } else {
-            // A Forge/NeoForge/Quilt-only JAR cannot be installed as Fabric,
-            // but the user may save it to their Android downloads.
-            builder.setPositiveButton("DOWNLOAD ONLY"){_,_ ->downloadOnly(v)}
+        val details=ScrollView(this).apply {
+            isFillViewport=false
+            val content=ui.text(this@ModrinthStudioActivity,message,12f,
+                if(warnings.isEmpty())ui.MUTED else ui.CYAN)
+            addView(content)
         }
-        builder.show()
+        panel.addView(details,LinearLayout.LayoutParams(-1,
+            ui.dp(this,if(warnings.isEmpty())110 else 165)))
+        panel.addView(ui.space(this,12))
+        val holder=arrayOfNulls<AlertDialog>(1)
+        if(canInstall){
+            panel.addView(ui.action(this,
+                if(warnings.isEmpty())"REVIEW INSTALL" else "INSTALL ANYWAY",true){
+                    holder[0]?.dismiss()
+                    proceedInstall(hit,v,type,warnings.isNotEmpty())
+            })
+            panel.addView(ui.space(this,7))
+        }
+        panel.addView(ui.action(this,"DOWNLOAD ONLY"){
+            holder[0]?.dismiss()
+            downloadOnly(v)
+        })
+        panel.addView(ui.space(this,7))
+        panel.addView(ui.action(this,"CANCEL"){holder[0]?.dismiss()})
+        val dialog=AlertDialog.Builder(this).setView(panel).create()
+        holder[0]=dialog
+        dialog.setOnShowListener {
+            dialog.window?.setBackgroundDrawable(
+                android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+            dialog.window?.setLayout(
+                (resources.displayMetrics.widthPixels*.93f).toInt(),
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT)
+        }
+        dialog.show()
     }
 
     private fun proceedInstall(hit:ModrinthCatalog.Hit,v:ModrinthCatalog.Version,
