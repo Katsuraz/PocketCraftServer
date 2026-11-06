@@ -107,16 +107,9 @@ class ServerFilesActivity : Activity() {
         if(!current.isDirectory){directory=serverRoot;return showFolder()}
         directory=current
         val screen=ui.column(this).apply{setBackgroundColor(ui.BG)}
-        val header=ui.row(this)
-        header.setPadding(ui.dp(this,16),ui.dp(this,13),ui.dp(this,16),ui.dp(this,10))
-        header.addView(ui.action(this,if(current==serverRoot)"CLOSE" else "‹ BACK"){
-            onBackPressed()
-        },LinearLayout.LayoutParams(ui.dp(this,90),-2))
-        val title=ui.column(this).apply{setPadding(ui.dp(this@ServerFilesActivity,13),0,0,0)}
-        title.addView(ui.text(this,"Server files",20f,ui.WHITE,true))
-        title.addView(ui.text(this,"PRIVATE • ON THIS PHONE",10f,ui.MUTED,true))
-        header.addView(title)
-        screen.addView(header)
+        screen.addView(HomesteadComponents.subpageHeader(this,
+            "Server files",if(current==serverRoot)"On-device storage"
+            else current.name) { onBackPressed() })
         val scroll=ScrollView(this)
         val body=ui.column(this)
         body.setPadding(ui.dp(this,17),ui.dp(this,7),ui.dp(this,17),ui.dp(this,24))
