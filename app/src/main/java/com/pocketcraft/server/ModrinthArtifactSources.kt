@@ -24,7 +24,7 @@ internal object ModrinthArtifactSources {
         versionNumber: String
     ): List<String> {
         if (!listOf(projectId,projectSlug,versionId,versionNumber)
-                .all { safeToken.matches(it) }) return emptyList()
+                .all { safeToken.matches(it) && !it.startsWith(".") && !it.contains("..") }) return emptyList()
         // The public Modrinth Maven accepts project slug OR id and
         // version_number OR version id. Use the immutable identifiers first.
         return listOf(
