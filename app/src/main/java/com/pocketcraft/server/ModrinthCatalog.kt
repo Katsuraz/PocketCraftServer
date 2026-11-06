@@ -21,7 +21,7 @@ internal object ModrinthCatalog {
     val categories = listOf("all", "optimization", "worldgen", "utility", "adventure",
         "technology", "decoration", "food", "storage", "equipment", "library", "management")
     private const val API = "https://api.modrinth.com/v2"
-    private const val MAX_JSON = 2_000_000
+    private const val MAX_JSON = 8_000_000
     private const val PACK_LIMIT = 150L * 1024 * 1024
     private val identifier = Regex("[A-Za-z0-9_-]{1,120}")
     private val minecraftVersion = Regex("[A-Za-z0-9._+-]{1,45}")
@@ -227,46 +227,66 @@ internal object ModrinthCatalog {
                 add("Client-only release. It is not designed for a dedicated Minecraft server.")
         }
 
-    /** Only a pinned, matching .mrpack from Modrinth's API can be imported. */
-    fun downloadPack(context: Context, version: Version): Uri {
-        if (ServerService.running || ServerService.status in setOf("STARTING","STOPPING"))
-            throw IOException("Stop Minecraft before installing a modpack")
-        if (!version.filename.endsWith(".mrpack",true) || version.sha512 == null)
-            throw IOException("This pack version has no verifiable .mrpack SHA-512")
+    /** Download any listed Modrinth file to app cache with SHA-512 verification.
+     * This does not install the file or touch the Minecraft mods/world folders.
+     */
+    fun downloadVersionFile(context: Context, version: Version): File {
+        if (!version.filename.endsWith(".jar",true) &&
+            !version.filename.endsWith(".mrpack",true))
+            throw IOException("Only .jar and .mrpack downloads are supported")
+        if (version.sha512 == null ||
+            !version.sha512.matches(Regex("[0-9a-fA-F]{128}")))
+            throw IOException("This release has no verifiable SHA-512")
         val source = URL(version.url)
         if (source.protocol != "https" || source.host != "cdn.modrinth.com")
-            throw IOException("Untrusted Modrinth pack file")
-        val target = File(context.cacheDir, "modrinth-selected-" + System.nanoTime() + ".mrpack")
+            throw IOException("Untrusted Modrinth download URL")
+        val extension = if (version.filename.endsWith(".mrpack",true)) ".mrpack" else ".jar"
+        val target = File(context.cacheDir,"modrinth-selected-" +
+            System.nanoTime() + extension)
         val conn = source.openConnection() as HttpURLConnection
         conn.connectTimeout = 20000
         conn.readTimeout = 60000
         conn.instanceFollowRedirects = false
         try {
-            if (conn.responseCode !in 200..299) throw IOException("Pack download HTTP " + conn.responseCode)
-            if (conn.contentLengthLong > PACK_LIMIT) throw IOException("Pack archive exceeds 150 MB")
+            if (conn.responseCode !in 200..299)
+                throw IOException("Modrinth download HTTP " + conn.responseCode)
+            if (conn.contentLengthLong > PACK_LIMIT)
+                throw IOException("Download exceeds 150 MB")
             val digest = MessageDigest.getInstance("SHA-512")
             var copied = 0L
             conn.inputStream.use { input ->
-                target.outputStream().buffered().use { out ->
+                target.outputStream().buffered().use { output ->
                     val buffer = ByteArray(32768)
                     while (true) {
                         InstallProgress.check()
-                        val size = input.read(buffer)
-                        if (size < 0) break
-                        copied += size
-                        if (copied > PACK_LIMIT) throw IOException("Pack archive exceeds 150 MB")
-                        digest.update(buffer,0,size)
-                        out.write(buffer,0,size)
-                        InstallProgress.emit("Downloading " + version.number, copied, conn.contentLengthLong)
+                        val n = input.read(buffer)
+                        if (n < 0) break
+                        copied += n
+                        if (copied > PACK_LIMIT)
+                            throw IOException("Download exceeds 150 MB")
+                        digest.update(buffer,0,n)
+                        output.write(buffer,0,n)
+                        InstallProgress.emit("Downloading " + version.number,
+                            copied,conn.contentLengthLong)
                     }
                 }
             }
-            if (!digest.digest().joinToString("") { "%02x".format(it) }
-                .equals(version.sha512,true)) throw IOException("Modrinth pack SHA-512 mismatch")
-            return Uri.fromFile(target)
+            val received = digest.digest().joinToString("") { "%02x".format(it) }
+            if (!received.equals(version.sha512,true))
+                throw IOException("Modrinth SHA-512 verification failed")
+            return target
         } catch (e: Exception) {
             target.delete()
             throw e
         } finally { conn.disconnect() }
+    }
+
+    /** Installable pack fetch still requires a stopped Minecraft server. */
+    fun downloadPack(context: Context, version: Version): Uri {
+        if (ServerService.running || ServerService.status in setOf("STARTING","STOPPING"))
+            throw IOException("Stop Minecraft before installing a modpack")
+        if (!version.filename.endsWith(".mrpack",true))
+            throw IOException("The selected release is not a .mrpack")
+        return Uri.fromFile(downloadVersionFile(context,version))
     }
 }
