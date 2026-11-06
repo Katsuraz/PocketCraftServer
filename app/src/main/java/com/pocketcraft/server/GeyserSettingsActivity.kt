@@ -40,68 +40,109 @@ class GeyserSettingsActivity : Activity() {
     private lateinit var assisted: Switch
     private var transport = "nethernet"
     private var signaling = "hybrid"
-    private var selectedPane = "Local"
+    private var selectedPane = "Connect"
     private var saveFooter: View? = null
+
+    /** Compact labels keep help available without printing tutorials on the screen. */
+    private fun fieldLabel(parent: LinearLayout, title: String, help: String) {
+        val row=ui.row(this)
+        row.addView(ui.text(this,title,13f,ui.WHITE,true),
+            LinearLayout.LayoutParams(0,-2,1f))
+        val info=ui.text(this,"ⓘ",15f,ui.MUTED,true).apply {
+            gravity=android.view.Gravity.CENTER
+            minWidth=ui.dp(this@GeyserSettingsActivity,36)
+            minHeight=ui.dp(this@GeyserSettingsActivity,36)
+            isClickable=true
+            isFocusable=true
+            contentDescription="Help: $title"
+            setOnClickListener {
+                AlertDialog.Builder(this@GeyserSettingsActivity)
+                    .setTitle(title).setMessage(help)
+                    .setPositiveButton("OK",null).show()
+            }
+        }
+        row.addView(info)
+        parent.addView(row)
+        parent.addView(ui.space(this,4))
+    }
 
     private fun addInput(parent: LinearLayout, label: String, help: String, value: String,
                          numeric: Boolean = false, password: Boolean = false): EditText {
-        parent.addView(ui.text(this, label, 14f, ui.WHITE, true))
-        parent.addView(ui.space(this, 4))
-        parent.addView(ui.text(this, help, 11f, ui.MUTED))
-        parent.addView(ui.space(this, 7))
-        val edit = EditText(this).apply {
+        fieldLabel(parent,label,help)
+        val edit=EditText(this).apply {
             setSingleLine(true)
             setText(value)
-            textSize = 15f
+            textSize=14f
             setTextColor(ui.WHITE)
             setHintTextColor(ui.MUTED)
-            if (numeric) inputType = InputType.TYPE_CLASS_NUMBER
-            if (password) inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-            background = ui.shape(this@GeyserSettingsActivity, ui.SURFACE, 12, ui.BORDER)
-            setPadding(ui.dp(this@GeyserSettingsActivity, 13), ui.dp(this@GeyserSettingsActivity, 10),
-                ui.dp(this@GeyserSettingsActivity, 13), ui.dp(this@GeyserSettingsActivity, 10))
+            if(numeric) inputType=InputType.TYPE_CLASS_NUMBER
+            if(password) inputType=InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            background=ui.shape(this@GeyserSettingsActivity,ui.SURFACE,10,ui.BORDER)
+            setPadding(ui.dp(this@GeyserSettingsActivity,12),ui.dp(this@GeyserSettingsActivity,7),
+                ui.dp(this@GeyserSettingsActivity,12),ui.dp(this@GeyserSettingsActivity,7))
         }
-        parent.addView(edit, LinearLayout.LayoutParams(-1, -2))
-        parent.addView(ui.space(this, 16))
+        parent.addView(edit,LinearLayout.LayoutParams(-1,-2))
+        parent.addView(ui.space(this,10))
         return edit
     }
 
     private fun addSwitch(parent: LinearLayout, label: String, help: String, value: Boolean): Switch {
-        val row = ui.row(this)
-        val labels = ui.column(this).apply {
-            addView(ui.text(this@GeyserSettingsActivity, label, 14f, ui.WHITE, true))
-            addView(ui.space(this@GeyserSettingsActivity, 4))
-            addView(ui.text(this@GeyserSettingsActivity, help, 11f, ui.MUTED))
+        val row=ui.row(this)
+        val labelText=ui.text(this,label,13f,ui.WHITE,true)
+        row.addView(labelText,LinearLayout.LayoutParams(0,-2,1f))
+        val info=ui.text(this,"ⓘ",15f,ui.MUTED,true).apply {
+            gravity=android.view.Gravity.CENTER
+            minWidth=ui.dp(this@GeyserSettingsActivity,36)
+            minHeight=ui.dp(this@GeyserSettingsActivity,40)
+            isClickable=true
+            isFocusable=true
+            contentDescription="Help: $label"
+            setOnClickListener {
+                AlertDialog.Builder(this@GeyserSettingsActivity).setTitle(label)
+                    .setMessage(help).setPositiveButton("OK",null).show()
+            }
         }
-        row.addView(labels, LinearLayout.LayoutParams(0, -2, 1f))
-        val toggle = Switch(this).apply { isChecked = value }
+        row.addView(info)
+        val toggle=Switch(this).apply { isChecked=value; contentDescription=label }
         row.addView(toggle)
         parent.addView(row)
-        parent.addView(ui.space(this, 16))
+        parent.addView(ui.space(this,8))
         return toggle
     }
 
     private fun addSelector(parent: LinearLayout, title: String, choices: List<String>,
                             initial: String, changed: (String) -> Unit) {
-        parent.addView(ui.text(this, title, 14f, ui.WHITE, true))
-        parent.addView(ui.space(this, 8))
-        val button = ui.action(this, initial.uppercase() + "  ▾") { }
-        button.setOnClickListener {
-            PocketSounds.play(this, PocketSounds.Event.CLICK)
-            AlertDialog.Builder(this).setTitle(title)
-                .setItems(choices.toTypedArray()) { _, index ->
-                    button.text = choices[index].uppercase() + "  ▾"
-                    changed(choices[index])
-                }.setNegativeButton("CANCEL", null).show()
+        val row=ui.row(this)
+        row.addView(ui.text(this,title,13f,ui.WHITE,true),
+            LinearLayout.LayoutParams(0,-2,1f))
+        val button=ui.text(this,initial.uppercase()+"  ▾",13f,ui.GREEN,true).apply {
+            gravity=android.view.Gravity.CENTER
+            setPadding(ui.dp(this@GeyserSettingsActivity,12),ui.dp(this@GeyserSettingsActivity,10),
+                ui.dp(this@GeyserSettingsActivity,12),ui.dp(this@GeyserSettingsActivity,10))
+            background=ui.pressable(this@GeyserSettingsActivity,
+                ui.shape(this@GeyserSettingsActivity,ui.SURFACE,10,ui.BORDER))
+            isClickable=true
+            isFocusable=true
+            contentDescription="$title: $initial"
         }
-        parent.addView(button)
-        parent.addView(ui.space(this, 16))
+        button.setOnClickListener {
+            PocketSounds.play(this,PocketSounds.Event.CLICK)
+            AlertDialog.Builder(this).setTitle(title)
+                .setItems(choices.toTypedArray()) { _,index ->
+                    button.text=choices[index].uppercase()+"  ▾"
+                    button.contentDescription="$title: "+choices[index]
+                    changed(choices[index])
+                }.setNegativeButton("CANCEL",null).show()
+        }
+        row.addView(button)
+        parent.addView(row)
+        parent.addView(ui.space(this,10))
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         selectedPane=savedInstanceState?.getString("geyserPane")
-            ?.takeIf { it in listOf("Local","Internet","Files") } ?: "Local"
+            ?.takeIf { it in listOf("Connect","Advanced","Files") } ?: "Connect"
         ui.loadTheme(this)
         PocketSounds.prepare(this)
         window.statusBarColor = ui.BG
@@ -119,7 +160,7 @@ class GeyserSettingsActivity : Activity() {
 
         val screen = ui.column(this).apply { setBackgroundColor(ui.BG) }
         screen.addView(HomesteadComponents.subpageHeader(this,
-            "Bedrock & Geyser","Network configuration") { finish() })
+            "Bedrock","Crossplay") { finish() })
 
         val scroll = ScrollView(this).apply { isFillViewport = true }
         val body = ui.column(this).apply {
@@ -127,36 +168,37 @@ class GeyserSettingsActivity : Activity() {
                 ui.dp(this@GeyserSettingsActivity, 18), ui.dp(this@GeyserSettingsActivity, 20))
         }
         val intro=ui.card(this)
-        intro.addView(ui.text(this,"Connect Bedrock players",19f,ui.WHITE,true))
-        intro.addView(ui.space(this,6))
-        intro.addView(ui.text(this,
-            "Simple local, internet and file settings. Your saved NXS token stays hidden.",
-            12f,ui.MUTED))
-        intro.addView(ui.space(this,12))
+        intro.addView(ui.text(this,"Crossplay",20f,ui.WHITE,true))
+        intro.addView(ui.space(this,8))
+        intro.addView(ui.pill(this,when {
+            loaded.isBlank() -> "NOT SET UP"
+            serverBusy() -> "SERVER ACTIVE • READ ONLY"
+            else -> "READY TO EDIT"
+        },when {
+            loaded.isBlank() -> ui.RED
+            serverBusy() -> ui.CYAN
+            else -> ui.GREEN
+        }))
         if(loaded.isBlank()) {
-            intro.addView(ui.text(this,
-                "No Geyser config.yml found. Start Geyser once or import a config in Files.",
-                12f,ui.RED))
-            intro.addView(ui.space(this,9))
-        }
-        if(serverBusy()) {
-            intro.addView(ui.text(this,
-                "Stop Minecraft before editing or importing settings.",
-                12f,ui.RED))
-            intro.addView(ui.space(this,9))
+            intro.addView(ui.space(this,8))
+            intro.addView(ui.text(this,"Start Geyser once to create config.yml.",12f,ui.MUTED))
         }
         val health=if(loaded.isNotBlank()) GeyserNetworkSettings.parse(loaded) else null
-        health?.warnings?.forEach { warning ->
-            intro.addView(ui.text(this,"⚠ "+warning,11f,ui.RED))
-            intro.addView(ui.space(this,6))
+        if(!health?.warnings.isNullOrEmpty()) {
+            intro.addView(ui.space(this,8))
+            intro.addView(ui.action(this,"⚠  "+health!!.warnings.size+" CONFIG WARNINGS") {
+                AlertDialog.Builder(this).setTitle("Geyser warnings")
+                    .setMessage(health.warnings.joinToString("\n\n"))
+                    .setPositiveButton("OK",null).show()
+            })
         }
         body.addView(intro)
-        body.addView(ui.space(this,15))
+        body.addView(ui.space(this,12))
 
         val panels=linkedMapOf<String,LinearLayout>()
         val buttons=linkedMapOf<String,TextView>()
         val nav=ui.row(this)
-        listOf("Local","Internet","Files").forEachIndexed { i,name ->
+        listOf("Connect","Advanced","Files").forEachIndexed { i,name ->
             val button=ui.text(this,name,12f,ui.MUTED,true).apply {
                 minHeight=ui.dp(this@GeyserSettingsActivity,48)
                 gravity=android.view.Gravity.CENTER
@@ -177,7 +219,7 @@ class GeyserSettingsActivity : Activity() {
                                 if(chosen)ui.BORDER else null))
                         button.setTextColor(if(chosen)ui.GREEN else ui.MUTED)
                     }
-                    saveFooter?.visibility=if(name=="Files")View.GONE else View.VISIBLE
+                    saveFooter?.visibility=if(name=="Advanced")View.VISIBLE else View.GONE
                 }
             }
             buttons[name]=button
@@ -188,74 +230,81 @@ class GeyserSettingsActivity : Activity() {
         body.addView(nav)
         body.addView(ui.space(this,13))
 
+        val quick=ui.card(this)
+        quick.addView(HomesteadComponents.sectionHeading(this,"Playit",""))
+        quick.addView(ui.space(this,10))
+        quick.addView(ui.pill(this,
+            if(values.hasSavedNxsToken) "NXS TOKEN SAVED" else "NXS TOKEN MISSING",
+            if(values.hasSavedNxsToken) ui.GREEN else ui.RED))
+        quick.addView(ui.space(this,12))
+        quick.addView(ui.action(this,"IMPORT PLAYIT SETTINGS",
+            true,loaded.isNotBlank() && !serverBusy()) { pastePlayitSettings() })
+        quick.addView(ui.space(this,8))
+        quick.addView(ui.action(this,"MANUAL SETUP  ›") {
+            selectedPane="Advanced"
+            render()
+        })
+        quick.addView(ui.space(this,10))
+        quick.addView(ui.text(this,"Bedrock  •  "+values.transport.uppercase()+
+            "  •  "+values.port,12f,ui.MUTED))
+        panels["Connect"]=quick
+
         val local=ui.card(this)
-        local.addView(HomesteadComponents.sectionHeading(this,"Local connectivity",
-            "The address and ports on this Android phone"))
-        local.addView(ui.space(this,15))
+        local.addView(HomesteadComponents.sectionHeading(this,"Local",""))
+        local.addView(ui.space(this,10))
         address=addInput(local,"Bind IP",
-            "Normally 0.0.0.0. This is not a Playit public address.",values.address)
+            "Local interface. Use 0.0.0.0 for all interfaces. Do not paste the public Playit hostname here.",
+            values.address)
         port=addInput(local,"Bedrock port",
-            "Local signaling or RakNet port; commonly 19132.",values.port.toString(),numeric=true)
-        webRtcPort=addInput(local,"WebRTC UDP port",
-            "0 shares the Bedrock port; use another UDP port for BOTH.",
+            "Port used by the Bedrock listener, normally 19132.",values.port.toString(),numeric=true)
+        webRtcPort=addInput(local,"WebRTC port",
+            "0 shares the Bedrock port. Both transports need a separate WebRTC UDP port.",
             values.webRtcPort.toString(),numeric=true)
         addSelector(local,"Transport",listOf("nethernet","raknet","both"),transport) {
             transport=it
         }
-        panels["Local"]=local
+
 
         val internet=ui.card(this)
-        internet.addView(HomesteadComponents.sectionHeading(this,"Playit & NXS",
-            "External NetherNet signaling and connection hints"))
-        internet.addView(ui.space(this,15))
-        addSelector(internet,"Signaling mode",
-            listOf("hybrid","builtin","nxs","none"),signaling) { signaling=it }
-        internet.addView(ui.text(this,
-            "HYBRID supports local built-in signaling and external NXS together. Your remote connection still needs a registered token and working networking.",
-            11f,ui.CYAN))
-        internet.addView(ui.space(this,14))
-        endpoint=addInput(internet,"NXS service URL",
-            "For Playit, use https://nethernet.playit.gg",values.nxsEndpoint)
-        token=addInput(internet,"Replace NXS token (optional)",
-            if(values.hasSavedNxsToken)
-                "Token saved. Leave blank to keep it, or enter a new value to replace."
-            else "Paste your private NXS token. Never share or screenshot it.",
+        internet.addView(HomesteadComponents.sectionHeading(this,"Signaling",""))
+        internet.addView(ui.space(this,10))
+        addSelector(internet,"Mode",listOf("hybrid","builtin","nxs","none"),signaling) {
+            signaling=it
+        }
+        endpoint=addInput(internet,"NXS URL",
+            "External signaling endpoint. Use the URL supplied by your provider. For Playit: https://nethernet.playit.gg",
+            values.nxsEndpoint)
+        token=addInput(internet,"NXS token",
+            if(values.hasSavedNxsToken) "Saved securely. Leave blank to keep the current token."
+            else "Paste the private token from Playit's Geyser configuration help. Never share it.",
             "",password=true)
-        advertised=addInput(internet,"Advertised addresses (optional)",
-            "Comma-separated hosts/IPs. Leave blank for automatic discovery.",
+        advertised=addInput(internet,"Advertised IP",
+            "Optional comma-separated public UDP endpoints. Use the exact values from Playit's Geyser instructions.",
             values.advertiseAddresses)
         stun=addSwitch(internet,"STUN discovery",
-            "Find your external address automatically.",values.stunDiscovery)
+            "Find your public IP automatically when no advertised endpoint is configured.",
+            values.stunDiscovery)
         assisted=addSwitch(internet,"Assisted joins",
-            "Allow NXS to assist difficult direct connections.",values.assistedJoins)
-        panels["Internet"]=internet
+            "Allow the signaling provider to help peers connect when direct UDP does not work.",
+            values.assistedJoins)
+        val advanced=ui.column(this)
+        advanced.addView(local)
+        advanced.addView(ui.space(this,10))
+        advanced.addView(internet)
+        panels["Advanced"]=advanced
 
         val filesPane=ui.card(this)
-        filesPane.addView(HomesteadComponents.sectionHeading(this,"Configuration file",
-            "Import, replace and restore Geyser settings safely"))
+        filesPane.addView(HomesteadComponents.sectionHeading(this,"Config files",""))
         filesPane.addView(ui.space(this,12))
-        filesPane.addView(ui.text(this,
-            "Save in Local or Internet updates only the managed fields. Importing replaces the entire file after confirmation, so keep a backup.",
-            12f,ui.MUTED))
-        filesPane.addView(ui.space(this,14))
-        filesPane.addView(ui.action(this,"PASTE PLAYIT GEYSER SETTINGS",
-            true,loaded.isNotBlank() && !serverBusy()) { pastePlayitSettings() })
-        filesPane.addView(ui.space(this,9))
-        filesPane.addView(ui.text(this,
-            "Playit dashboard → Bedrock (NetherNet) tunnel → Configuration help → Geyser → Copy. " +
-                "Only the network fields and Java authentication mode are merged. " +
-                "Everything else stays intact. Your private token is never shown in diagnostics.",
-            11f,ui.MUTED))
-        filesPane.addView(ui.space(this,12))
-        filesPane.addView(ui.action(this,"IMPORT / REPLACE CONFIG.YML",
-            true,!serverBusy()) { selectConfig() })
-        filesPane.addView(ui.space(this,9))
-        filesPane.addView(ui.action(this,"RESTORE PREVIOUS CONFIG",
-            false,backup.isFile && !serverBusy()) { restoreBackup() })
+        filesPane.addView(ui.action(this,"IMPORT PLAYIT",true,
+            loaded.isNotBlank() && !serverBusy()) { pastePlayitSettings() })
         filesPane.addView(ui.space(this,10))
-        filesPane.addView(ui.text(this,
-            "PocketCraft saves a private backup before replacement. Restart Minecraft to apply changes.",
-            11f,ui.MUTED))
+        filesPane.addView(ui.action(this,"REPLACE CONFIG",false,!serverBusy()) { selectConfig() })
+        filesPane.addView(ui.space(this,10))
+        filesPane.addView(ui.action(this,"RESTORE BACKUP",false,
+            backup.isFile && !serverBusy()) { restoreBackup() })
+        filesPane.addView(ui.space(this,10))
+        filesPane.addView(ui.text(this,"Backups are automatic.",11f,ui.MUTED))
         panels["Files"]=filesPane
 
         panels.forEach { (name,panel) ->
@@ -275,9 +324,9 @@ class GeyserSettingsActivity : Activity() {
             setPadding(ui.dp(this@GeyserSettingsActivity,16),ui.dp(this@GeyserSettingsActivity,10),
                 ui.dp(this@GeyserSettingsActivity,16),ui.dp(this@GeyserSettingsActivity,14))
         }
-        footer.addView(ui.action(this,"SAVE GEYSER SETTINGS",
+        footer.addView(ui.action(this,"SAVE CHANGES",
             true,loaded.isNotBlank() && !serverBusy()) { save() })
-        footer.visibility=if(selectedPane=="Files")View.GONE else View.VISIBLE
+        footer.visibility=if(selectedPane=="Advanced")View.VISIBLE else View.GONE
         saveFooter=footer
         screen.addView(footer)
         ui.styleFormInputs(screen)
@@ -358,7 +407,7 @@ class GeyserSettingsActivity : Activity() {
             return
         }
         val field = EditText(this).apply {
-            hint = "Paste Playit Configuration help > Geyser > Copy"
+            hint = "Paste Playit Geyser config"
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or
                 InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
             minLines = 7
@@ -374,17 +423,14 @@ class GeyserSettingsActivity : Activity() {
             setPadding(ui.dp(this@GeyserSettingsActivity,18),ui.dp(this@GeyserSettingsActivity,8),
                 ui.dp(this@GeyserSettingsActivity,18),ui.dp(this@GeyserSettingsActivity,8))
         }
-        wrap.addView(ui.text(this,
-            "Paste the PRIVATE Geyser snippet from Playit. Never share or screenshot it. " +
-                "PocketCraft merges only supported settings and backs up the current file.",
-            12f,ui.MUTED))
+        wrap.addView(ui.text(this,"Playit → Configuration help → Geyser",12f,ui.MUTED))
         wrap.addView(ui.space(this,10))
         wrap.addView(field)
         val dialog = AlertDialog.Builder(this)
-            .setTitle("Import Playit NetherNet settings")
+            .setTitle("Import Playit")
             .setView(wrap)
             .setNegativeButton("CANCEL",null)
-            .setPositiveButton("MERGE SETTINGS",null)
+            .setPositiveButton("IMPORT",null)
             .create()
         dialog.setOnShowListener {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
