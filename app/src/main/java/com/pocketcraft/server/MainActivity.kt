@@ -29,6 +29,7 @@ class MainActivity : Activity() {
     private val uiHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private var readyText: TextView? = null
     private var heroState: TextView? = null
+    private var primaryServerAction: TextView? = null
     private var vitalsText: TextView? = null
     private var lastVitalsUpdate = 0L
     private var onlineHost: FrameLayout? = null
@@ -72,11 +73,25 @@ class MainActivity : Activity() {
                 else -> "Starting Minecraft • not joinable yet"
             }
             heroState?.text = when {
-                !ServerService.running -> "●  OFFLINE"
+                state == "STARTING" -> "●  STARTING"
+                state == "STOPPING" -> "●  STOPPING"
+                !ServerService.running -> if(state == "ERROR") "●  NEEDS ATTENTION" else "●  OFFLINE"
                 ServerService.javaReady && ServerService.bedrockJoinVerified -> "●  BEDROCK JOIN VERIFIED"
                 ServerService.javaReady && ServerService.bedrockReady -> "●  GEYSER STARTED"
                 ServerService.javaReady -> "●  JAVA READY"
                 else -> "●  STARTING"
+            }
+            primaryServerAction?.let { button ->
+                val busy = state in setOf("STARTING","STOPPING")
+                button.text = when {
+                    state == "STARTING" -> "STARTING MINECRAFT…"
+                    state == "STOPPING" -> "STOPPING MINECRAFT…"
+                    ServerService.running -> "■  STOP SERVER"
+                    HostingHealth.startBlockers(healthSnapshot()) > 0 -> "✦  FINISH SETUP"
+                    else -> "▶  START SERVER"
+                }
+                button.isEnabled = !busy
+                button.alpha = if(busy) .52f else 1f
             }
             val now=android.os.SystemClock.elapsedRealtime()
             if(tab==0 && now-lastVitalsUpdate>=5000) {
@@ -326,6 +341,16 @@ class MainActivity : Activity() {
         return item
     }
     private fun render() {
+        if (tab != 0) {
+            heroState = null
+            primaryServerAction = null
+            readyText = null
+            vitalsText = null
+            crossplaySummaryHost = null
+            connectionHost = null
+            phoneHost = null
+            onlineHost = null
+        }
         if (tab != 3) {
             consoleOutput = null
             consoleLogScroll = null
@@ -339,44 +364,11 @@ class MainActivity : Activity() {
             scrollOffsets[renderedTab] = currentScroller?.scrollY ?: scrollOffsets[renderedTab]
         }
         val screen = ui.column(this).apply { setBackgroundColor(ui.BG) }
-        val brand = ui.row(this).apply {
-            setPadding(ui.dp(this@MainActivity,18),ui.dp(this@MainActivity,16),
-                ui.dp(this@MainActivity,18),ui.dp(this@MainActivity,14))
-        }
-        val logo = ImageView(this).apply {
-            setImageResource(R.drawable.pocket_logo)
-            scaleType = ImageView.ScaleType.FIT_CENTER
-            background = ui.shape(this@MainActivity,ui.SUBTLE,12,ui.BORDER)
-            setPadding(ui.dp(this@MainActivity,3),ui.dp(this@MainActivity,3),
-                ui.dp(this@MainActivity,3),ui.dp(this@MainActivity,3))
-            contentDescription = "PocketCraft app logo"
-        }
-        brand.addView(logo,LinearLayout.LayoutParams(ui.dp(this,44),ui.dp(this,44)))
-        val version = runCatching {
-            packageManager.getPackageInfo(packageName,0).versionName ?: "dev"
-        }.getOrDefault("dev")
-        brand.addView(ui.column(this).apply {
-            setPadding(ui.dp(this@MainActivity,12),0,0,0)
-            addView(ui.text(this@MainActivity,"PocketCraft",20f,ui.WHITE,true))
-            addView(ui.space(this@MainActivity,4))
-            addView(ui.text(this@MainActivity,"v$version",11f,ui.MUTED))
-        }, LinearLayout.LayoutParams(0,-2,1f))
-        val settings = ImageView(this).apply {
-            setImageResource(R.drawable.pc_settings)
-            setColorFilter(ui.MUTED)
-            scaleType = ImageView.ScaleType.CENTER_INSIDE
-            setPadding(ui.dp(this@MainActivity,12),ui.dp(this@MainActivity,12),
-                ui.dp(this@MainActivity,12),ui.dp(this@MainActivity,12))
-            background = ui.pressable(this@MainActivity,ui.shape(this@MainActivity,ui.SURFACE,14))
-            contentDescription = "Server settings"
-            isFocusable = true
-            setOnClickListener {
-                PocketSounds.play(this@MainActivity,PocketSounds.Event.CLICK)
-                startActivity(Intent(this@MainActivity,SettingsActivity::class.java))
-            }
-        }
-        brand.addView(settings,LinearLayout.LayoutParams(ui.dp(this,46),ui.dp(this,46)))
-        screen.addView(brand)
+        screen.addView(HomesteadComponents.masthead(this,
+            if (tab == 2 && openedWorldFolder != null) "World folder"
+            else HomesteadNavigation.label(tab)) {
+            startActivity(Intent(this, SettingsActivity::class.java))
+        })
 
         val scroller = ScrollView(this).apply {
             isFillViewport = true
@@ -411,47 +403,13 @@ class MainActivity : Activity() {
         scroller.addView(body)
         screen.addView(scroller,LinearLayout.LayoutParams(-1,0,1f))
 
-        val navbar = ui.row(this).apply {
-            background = ui.shape(this@MainActivity,ui.PANEL,0,ui.BORDER)
-            setPadding(ui.dp(this@MainActivity,7),ui.dp(this@MainActivity,8),
-                ui.dp(this@MainActivity,7),ui.dp(this@MainActivity,7))
-        }
-        val icons = intArrayOf(R.drawable.pc_home,R.drawable.pc_mods,
-            R.drawable.pc_worlds,R.drawable.pc_console)
-        val names = listOf("Home","Mods","Worlds","Console")
-        repeat(4) { i ->
-            val selected = i == tab
-            val item = ui.column(this).apply {
-                gravity = Gravity.CENTER
-                background = ui.pressable(this@MainActivity,
-                    ui.shape(this@MainActivity,if(selected)ui.SURFACE else ui.PANEL,12))
-                isClickable = true
-                isFocusable = true
-                isSelected = selected
-                contentDescription = names[i] + if(selected) ", selected" else ", tab"
-                setOnClickListener {
-                    if(tab != i) {
-                        PocketSounds.play(this@MainActivity,PocketSounds.Event.SELECT)
-                        if (i != 2) openedWorldFolder = null
-                        tab = i
-                        render()
-                    }
-                }
+        screen.addView(HomesteadComponents.bottomDock(this, tab) { selectedPage ->
+            if (tab != selectedPage) {
+                if (selectedPage != 2) openedWorldFolder = null
+                tab = selectedPage
+                render()
             }
-            val navIcon = ImageView(this).apply {
-                setImageResource(icons[i])
-                setColorFilter(if(selected)ui.GREEN else ui.MUTED)
-                scaleType = ImageView.ScaleType.FIT_CENTER
-                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-            }
-            item.addView(navIcon,LinearLayout.LayoutParams(ui.dp(this,23),ui.dp(this,23)))
-            item.addView(ui.space(this,5))
-            item.addView(ui.text(this,names[i],11f,if(selected)ui.GREEN else ui.MUTED,selected)
-                .apply { gravity=Gravity.CENTER
-                    importantForAccessibility=View.IMPORTANT_FOR_ACCESSIBILITY_NO })
-            navbar.addView(item,LinearLayout.LayoutParams(0,ui.dp(this,56),1f))
-        }
-        screen.addView(navbar)
+        })
         ui.styleFormInputs(screen)
         setContentView(screen)
         if (tab == 3 && consoleLogExpanded) {
@@ -577,156 +535,180 @@ class MainActivity : Activity() {
             (resources.displayMetrics.heightPixels*.82f).toInt())
     }
 
+    /**
+     * Homestead 2 home is a launchpad, not a second copy of every settings page.
+     * All actions keep their existing tested handlers and engine behavior.
+     */
     private fun dashboard(body: LinearLayout) {
-        // A calm, compact Home page. Technical detail is available on demand.
-        body.addView(ui.space(this,6))
+        val busy = ServerService.status in setOf("STARTING","STOPPING")
+        val blockers = HostingHealth.startBlockers(healthSnapshot())
+        body.addView(HomesteadComponents.pageIntro(this,
+            "YOUR SERVER", "Home",
+            "One place to start Minecraft and check how it is running."))
+        body.addView(ui.space(this,17))
+
         val hero = ui.card(this)
-        val header = ui.row(this)
-        header.addView(ui.pill(this,
-            if(ServerService.javaReady) "●  ONLINE"
-            else if(ServerService.running) "●  STARTING" else "●  OFFLINE",
-            if(ServerService.javaReady) ui.GREEN else if(ServerService.running) ui.CYAN else ui.MUTED
-        ).also { heroState = it })
-        header.addView(View(this),LinearLayout.LayoutParams(0,1,1f))
-        header.addView(ui.text(this,"FABRIC",11f,ui.MUTED,true))
-        hero.addView(header)
-        hero.addView(ui.space(this,16))
-        hero.addView(ui.text(this,"My server  •  "+WorldStore.active(this),21f,ui.WHITE,true))
-        hero.addView(ui.space(this,13))
-        val readyForStart = HostingHealth.startBlockers(healthSnapshot()) == 0
+        hero.addView(WorldArt(this).apply {
+            contentDescription = "Pixel art of the Homestead woodland and cabin"
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            background = ui.shape(this@MainActivity,ui.SUBTLE,10)
+        })
+        hero.addView(ui.space(this,14))
+        val stateRow = ui.row(this)
+        stateRow.addView(ui.pill(this,when {
+            ServerService.status == "STARTING" -> "●  STARTING"
+            ServerService.status == "STOPPING" -> "●  STOPPING"
+            ServerService.javaReady -> "●  ONLINE"
+            else -> "●  OFFLINE"
+        },if(ServerService.javaReady)ui.GREEN else ui.MUTED).also { heroState = it })
+        stateRow.addView(View(this),LinearLayout.LayoutParams(0,1,1f))
+        stateRow.addView(ui.text(this,"FABRIC SERVER",10f,ui.CYAN,true))
+        hero.addView(stateRow)
+        hero.addView(ui.space(this,14))
+        hero.addView(ui.text(this,WorldStore.active(this),22f,ui.WHITE,true))
+        hero.addView(ui.space(this,6))
+        hero.addView(ui.text(this,
+            if(ServerService.running) "Minecraft is running on this phone"
+            else "Your world is ready when you are",
+            12f,ui.MUTED))
+        hero.addView(ui.space(this,9))
+        hero.addView(ui.text(this,"Checking server state…",11f,ui.CYAN)
+            .also { readyText=it })
+        hero.addView(ui.space(this,17))
         hero.addView(ui.action(this,when {
+            ServerService.status == "STARTING" -> "STARTING MINECRAFT…"
+            ServerService.status == "STOPPING" -> "STOPPING MINECRAFT…"
             ServerService.running -> "■  STOP SERVER"
-            readyForStart -> "▶  START SERVER"
-            else -> "SET UP SERVER"
-        },true) {
+            blockers > 0 -> "✦  FINISH SETUP"
+            else -> "▶  START SERVER"
+        },true,!busy) {
             when {
+                ServerService.status in setOf("STARTING","STOPPING") -> toast("Minecraft is busy")
                 ServerService.running -> confirmStopMinecraft()
-                readyForStart -> startMinecraft()
+                HostingHealth.startBlockers(healthSnapshot()) == 0 -> startMinecraft()
                 !serverJar.isFile -> installFabricPrompt()
                 !ServerDownloads.eulaAccepted(this) -> offerEula()
                 !RuntimeStore.isInstalled(this) -> installJavaPrompt()
                 else -> showHealthCenter()
             }
-        })
+        }.also { primaryServerAction=it })
         body.addView(hero)
+        body.addView(ui.space(this,17))
+
+        body.addView(HomesteadComponents.sectionHeading(this,"Quick access",
+            "Jump straight to the part you want to manage"))
+        body.addView(ui.space(this,11))
+        body.addView(HomesteadComponents.tileRow(this,
+            HomesteadComponents.shortcut(this,"▧","Worlds",
+                WorldStore.worlds(this).size.toString()+" saved") {
+                openedWorldFolder=null
+                tab=2
+                render()
+            },
+            HomesteadComponents.shortcut(this,"⬡","Mods",
+                modFiles().count { it.name.endsWith(".jar") }.toString()+" active") {
+                tab=1
+                render()
+            }))
         body.addView(ui.space(this,10))
+        body.addView(HomesteadComponents.tileRow(this,
+            HomesteadComponents.shortcut(this,"♟","Players","Whitelist & access") {
+                showPlayerManager()
+            },
+            HomesteadComponents.shortcut(this,"▤","Server files","Browse storage") {
+                openServerFiles()
+            }))
+        body.addView(ui.space(this,17))
+
+        val summary=FrameLayout(this)
+        summary.addView(crossplaySummaryPanel())
+        crossplaySummaryHost=summary
+        lastCrossplaySummarySignature=""
+        body.addView(summary)
+        body.addView(ui.space(this,16))
+
         val vitals=ui.card(this)
-        vitals.addView(ui.text(this,"DEVICE & SERVER STATUS",11f,ui.CYAN,true))
-        vitals.addView(ui.space(this,7))
+        vitals.addView(HomesteadComponents.sectionHeading(this,"Phone & performance",
+            "A lightweight status snapshot"))
+        vitals.addView(ui.space(this,10))
         vitals.addView(ui.text(this,runCatching { ServerVitals.device(this) }
             .getOrDefault("Device metrics unavailable"),12f,ui.WHITE).also { vitalsText=it })
-        vitals.addView(ui.space(this,5))
-        vitals.addView(ui.text(this,
-            "Players observed: "+PlayerActivity.count()+
-            "  •  TPS / JVM heap: not available without server metrics integration",
-            11f,ui.MUTED))
+        vitals.addView(ui.space(this,8))
+        vitals.addView(ui.text(this,"Observed players: "+PlayerActivity.count()+
+            "  •  TPS and JVM heap need a server metrics mod",10f,ui.MUTED))
         body.addView(vitals)
-        body.addView(ui.space(this,12))
-        // A new installation must not hide the essential setup steps in Advanced.
-        if (HostingHealth.startBlockers(healthSnapshot()) > 0) {
-            body.addView(setupJourney())
-            body.addView(ui.space(this,12))
+        body.addView(ui.space(this,14))
+
+        val prefs=getSharedPreferences("pocketcraft",0)
+        var expanded=prefs.getBoolean("hostingExpanded",false)
+        val detailGroup=ui.column(this).apply {
+            visibility=if(expanded)View.VISIBLE else View.GONE
         }
-        val crossplaySummary = FrameLayout(this)
-        crossplaySummary.addView(crossplaySummaryPanel())
-        crossplaySummaryHost = crossplaySummary
-        lastCrossplaySummarySignature = ""
-        body.addView(crossplaySummary)
-        body.addView(ui.space(this,16))
-
-        // Common actions live here; setup/troubleshooting is collapsed to remove redundancy.
-        val actions = ui.card(this)
-        actions.addView(ui.text(this,"MANAGE SERVER",11f,ui.CYAN,true))
-        actions.addView(ui.space(this,7))
-        // One obvious location per task: Worlds tab for worlds and header gear for settings.
-        actions.addView(actionRow("♟","Players & permissions") {showPlayerManager()})
-        actions.addView(line())
-        actions.addView(actionRow("▤","Server files") {openServerFiles()})
-        val technical=ui.column(this)
-        technical.addView(line())
-        technical.addView(actionRow("◎","First-time setup guide") {showFirstRunGuide()})
-        technical.addView(line())
-        technical.addView(actionRow("✦","Install Fabric") {installFabricPrompt()})
-        technical.addView(line())
-        technical.addView(actionRow("☕","Java runtime") {installJavaPrompt()})
-        technical.addView(line())
-        technical.addView(actionRow("↓","Import full server") {picker(1)})
-        technical.addView(line())
-        technical.addView(actionRow("✓","Server health") {showHealthCenter()})
-        technical.addView(line())
-        technical.addView(actionRow("!","Crash diagnostics") {showCrashReport()})
-        technical.addView(line())
-        technical.addView(actionRow("ⓘ","About PocketCraft") {about()})
-        technical.visibility=View.GONE
-        actions.addView(ui.space(this,8))
-        actions.addView(ui.action(this,"＋  ADVANCED & SETUP TOOLS") {
-            technical.visibility=if(technical.visibility==View.VISIBLE)View.GONE else View.VISIBLE
-        })
-        actions.addView(technical)
-        body.addView(actions)
-        body.addView(ui.space(this,16))
-
-        // The full existing local, crossplay, Playit and diagnostic workflows
-        // remain intact but are no longer repeated on the default Home screen.
-        val advancedBody = ui.column(this)
-        val prefs = getSharedPreferences("pocketcraft",0)
-        var expanded = prefs.getBoolean("hostingExpanded",false)
-        advancedBody.visibility = if(expanded) View.VISIBLE else View.GONE
-        lateinit var advancedToggle: TextView
-        advancedToggle = ui.action(this,
-            if(expanded) "−  HIDE HOSTING DETAILS" else "＋  HOSTING & CROSSPLAY"
-        ) {
-            expanded = !expanded
+        val toggle=ui.action(this,if(expanded)
+            "−  HIDE HOSTING & TOOLS" else "＋  HOSTING & TOOLS") {}
+        toggle.setOnClickListener {
+            PocketSounds.play(this,PocketSounds.Event.CLICK)
+            expanded=!expanded
             prefs.edit().putBoolean("hostingExpanded",expanded).apply()
-            advancedBody.visibility = if(expanded) View.VISIBLE else View.GONE
-            advancedToggle.text = if(expanded) "−  HIDE HOSTING DETAILS" else "＋  HOSTING & CROSSPLAY"
+            detailGroup.visibility=if(expanded)View.VISIBLE else View.GONE
+            toggle.text=if(expanded)"−  HIDE HOSTING & TOOLS" else "＋  HOSTING & TOOLS"
         }
-        body.addView(advancedToggle)
+        body.addView(toggle)
         body.addView(ui.space(this,12))
-
-        val joinHost = FrameLayout(this)
-        joinHost.addView(connectionJourneyPanel())
-        connectionHost = joinHost
-        lastConnectionSignature = ""
-        advancedBody.addView(joinHost)
-        advancedBody.addView(ui.space(this,12))
-        advancedBody.addView(setupJourney())
-        advancedBody.addView(ui.space(this,12))
-        advancedBody.addView(enginePanel())
-        advancedBody.addView(ui.space(this,12))
-        val localHost = FrameLayout(this)
-        localHost.addView(phoneOnlyPanel())
-        phoneHost = localHost
-        lastPhoneSignature = ""
-        advancedBody.addView(localHost)
-        advancedBody.addView(ui.space(this,12))
-        val online = FrameLayout(this)
+        if(blockers>0) {
+            detailGroup.addView(setupJourney())
+            detailGroup.addView(ui.space(this,12))
+        }
+        val join=FrameLayout(this)
+        join.addView(connectionJourneyPanel())
+        connectionHost=join
+        lastConnectionSignature=""
+        detailGroup.addView(join)
+        detailGroup.addView(ui.space(this,12))
+        val local=FrameLayout(this)
+        local.addView(phoneOnlyPanel())
+        phoneHost=local
+        lastPhoneSignature=""
+        detailGroup.addView(local)
+        detailGroup.addView(ui.space(this,12))
+        val online=FrameLayout(this)
         online.addView(internetPanel())
-        onlineHost = online
-        lastOnlineSignature = ""
-        advancedBody.addView(online)
-        advancedBody.addView(ui.space(this,15))
-        advancedBody.addView(h("Server details"))
-        advancedBody.addView(ui.space(this,10))
-        val statsRow = ui.row(this)
-        statsRow.addView(stat(serverProperty("max-players","5"),"PLAYERS","♟"),ui.weight(this))
-        statsRow.addView(stat(modFiles().count { it.name.endsWith(".jar") }.toString(),"MODS","⬡"),LinearLayout.LayoutParams(0,-2,1f))
-        advancedBody.addView(statsRow)
-        advancedBody.addView(ui.space(this,9))
-        val statsRow2 = ui.row(this)
-        statsRow2.addView(stat(WorldStore.worlds(this).size.toString(),"WORLDS","▧"),ui.weight(this))
-        statsRow2.addView(stat((getSharedPreferences("pocketcraft",0).getInt("heapMB",2048)/1024f).let {
-            String.format(Locale.ROOT,"%.1f GB",it) },"RAM","◉"),LinearLayout.LayoutParams(0,-2,1f))
-        advancedBody.addView(statsRow2)
-        advancedBody.addView(ui.space(this,12))
-        val note = ui.card(this)
-        note.addView(ui.text(this,"Crossplay compatibility",15f,ui.WHITE,true))
-        note.addView(ui.space(this,6))
-        note.addView(ui.text(this,
-            "Use matching Geyser-Fabric and Floodgate versions. Check Console for Java and Bedrock readiness.",
-            12f,ui.MUTED))
-        advancedBody.addView(note)
-        body.addView(advancedBody)
+        onlineHost=online
+        lastOnlineSignature=""
+        detailGroup.addView(online)
+        detailGroup.addView(ui.space(this,12))
+        detailGroup.addView(enginePanel())
+        detailGroup.addView(ui.space(this,13))
+
+        val toolbox=ui.card(this)
+        toolbox.addView(HomesteadComponents.sectionHeading(this,"Tools & diagnostics",
+            "Advanced controls live here, away from the Home shortcuts"))
+        toolbox.addView(ui.space(this,12))
+        val advancedActions=listOf(
+            Triple("◎","First-time setup","Check the installation guide"),
+            Triple("✦","Fabric installer","Install or repair Fabric"),
+            Triple("☕","Java runtime","Manage the packaged Java engine"),
+            Triple("↓","Import server","Restore a complete server"),
+            Triple("✓","Health checks","Inspect setup and readiness"),
+            Triple("!","Crash report","Read private crash diagnostics"),
+            Triple("ⓘ","About","App details and credits")
+        )
+        advancedActions.forEachIndexed { i, item ->
+            toolbox.addView(HomesteadComponents.menuRow(this,item.first,item.second,item.third) {
+                when(i) {
+                    0 -> showFirstRunGuide()
+                    1 -> installFabricPrompt()
+                    2 -> installJavaPrompt()
+                    3 -> picker(1)
+                    4 -> showHealthCenter()
+                    5 -> showCrashReport()
+                    else -> about()
+                }
+            })
+            if(i!=advancedActions.lastIndex) toolbox.addView(ui.space(this,8))
+        }
+        detailGroup.addView(toolbox)
+        body.addView(detailGroup)
     }
     /**
      * Simplified Anvil-inspired hosting workflow, using PocketCraft's real
