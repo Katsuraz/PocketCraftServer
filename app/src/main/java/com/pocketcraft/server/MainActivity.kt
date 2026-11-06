@@ -1771,98 +1771,110 @@ class MainActivity : Activity() {
     }
 
     private fun modsPage(body:LinearLayout) {
-        val version = getSharedPreferences("pocketcraft",0).getString("gameVersion",null)
-        val hero=ui.card(this)
-        hero.addView(ui.text(this,"Mods",24f,ui.WHITE,true))
-        hero.addView(ui.space(this,6))
-        hero.addView(ui.text(this,"Discover · Install · Manage",12f,ui.MUTED))
-        hero.addView(ui.space(this,12))
-        hero.addView(ui.pill(this, "FABRIC  •  " + (version ?: "Select server version"),ui.CYAN))
-        hero.addView(ui.space(this,13))
-        hero.addView(ui.action(this,"⌕  BROWSE MODS",true) { browseMods() })
-        hero.addView(ui.space(this,8))
-        hero.addView(ui.action(this,"▦  BROWSE MODPACKS") { browseModrinth() })
-        hero.addView(ui.space(this,8))
-        hero.addView(ui.action(this,"▣  WORLD DATAPACKS") { showDatapacks() })
-        body.addView(hero)
-        body.addView(ui.space(this,15))
+        val version=getSharedPreferences("pocketcraft",0).getString("gameVersion",null)
+        val files=modFiles()
+        val installed=files.count { it.name.endsWith(".jar") }
+        val disabled=files.count { it.name.endsWith(".disabled") }
 
-        val actions=ui.card(this)
-        actions.addView(ui.text(this,"Your library",17f,ui.WHITE,true))
-        actions.addView(ui.space(this,10))
-        val list=modFiles()
-        actions.addView(ui.text(this,
-            list.count { it.name.endsWith(".jar") }.toString() + " active  •  " +
-                list.count { it.name.endsWith(".disabled") } + " disabled",12f,ui.MUTED))
-        actions.addView(ui.space(this,10))
-        actions.addView(ui.action(this,"＋  IMPORT MOD") { picker(2) })
-        actions.addView(ui.space(this,7))
-        actions.addView(ui.action(this,"＋  IMPORT MODPACK") {
-            if(ServerService.running) toast("Stop Minecraft first") else picker(5)
-        })
-        actions.addView(ui.space(this,7))
-        actions.addView(ui.action(this,"▤  OPEN MODS FOLDER") {openServerFiles("mods")})
-        body.addView(actions)
-        body.addView(ui.space(this,15))
+        body.addView(HomesteadComponents.pageIntro(this,
+            "THE WORKSHOP","Mods & modpacks",
+            "Discover, install and manage your Fabric additions."))
+        body.addView(ui.space(this,16))
+        val discovery=ui.card(this)
+        discovery.addView(ui.pill(this,
+            "FABRIC  •  "+(version ?: "VERSION NOT SELECTED"),ui.CYAN))
+        discovery.addView(ui.space(this,13))
+        discovery.addView(ui.text(this,"Find something new",18f,ui.WHITE,true))
+        discovery.addView(ui.space(this,6))
+        discovery.addView(ui.text(this,
+            "Browse Modrinth without needing to manage folders manually.",12f,ui.MUTED))
+        discovery.addView(ui.space(this,13))
+        discovery.addView(ui.action(this,"⌕  BROWSE MODS",true) { browseMods() })
+        discovery.addView(ui.space(this,8))
+        discovery.addView(ui.action(this,"▦  BROWSE MODPACKS") { browseModrinth() })
+        body.addView(discovery)
+        body.addView(ui.space(this,16))
+
+        body.addView(HomesteadComponents.sectionHeading(this,"My library",
+            "$installed enabled  •  $disabled disabled"))
+        body.addView(ui.space(this,11))
+        body.addView(HomesteadComponents.tileRow(this,
+            HomesteadComponents.shortcut(this,"＋","Import JAR","From your phone") { picker(2) },
+            HomesteadComponents.shortcut(this,"▤","Mods folder","Browse all files") {
+                openServerFiles("mods")
+            }))
+        body.addView(ui.space(this,9))
+        body.addView(HomesteadComponents.menuRow(this,"▦","Import modpack",
+            "Load an existing .mrpack archive",enabled=!ServerService.running) { picker(5) })
+        body.addView(ui.space(this,16))
 
         val crossplay=ui.card(this)
-        crossplay.addView(ui.text(this,"Bedrock crossplay",17f,ui.WHITE,true))
-        crossplay.addView(ui.space(this,9))
-        crossplay.addView(ui.action(this,"INSTALL GEYSER + FLOODGATE",true) {
+        crossplay.addView(HomesteadComponents.sectionHeading(this,"Bedrock compatibility",
+            "Manage Geyser and Floodgate separately from your mod library"))
+        crossplay.addView(ui.space(this,11))
+        crossplay.addView(HomesteadComponents.menuRow(this,"⚙","Geyser & network settings",
+            "Ports, signaling, NXS and safe config.yml replacement") {
+            startActivity(Intent(this,GeyserSettingsActivity::class.java))
+        })
+        crossplay.addView(ui.space(this,8))
+        crossplay.addView(HomesteadComponents.menuRow(this,"↔","Install crossplay files",
+            "Check Geyser, Floodgate and Fabric API dependencies") {
             AlertDialog.Builder(this).setTitle("Install crossplay?")
                 .setMessage("Install matching Geyser, Floodgate and Fabric API files where supported.")
                 .setNegativeButton("CANCEL",null)
-                .setPositiveButton("INSTALL") {_,_->
+                .setPositiveButton("INSTALL") { _,_ ->
                     downloadAsync("Crossplay files") { ServerDownloads.installCrossplay(this) }
                 }.show()
         })
-        crossplay.addView(ui.space(this,7))
-        crossplay.addView(ui.action(this,"PASTE PLAYIT SETTINGS") {pastePlayitGeyserSettings()})
-        crossplay.addView(ui.space(this,7))
-        crossplay.addView(ui.action(this,"EDIT GEYSER CONFIG") {editGeyserConfiguration()})
         body.addView(crossplay)
-        body.addView(ui.space(this,18))
+        body.addView(ui.space(this,17))
 
-        body.addView(ui.text(this,"Installed",18f,ui.WHITE,true))
+        body.addView(HomesteadComponents.sectionHeading(this,"Installed mods",
+            "Disable or delete mods when the server is stopped"))
         body.addView(ui.space(this,10))
-        if(list.isEmpty()) {
-            body.addView(ui.text(this,"No mods yet. Find your first mod above.",12f,ui.MUTED))
+        if(files.isEmpty()) {
+            body.addView(empty("⬡","No mods installed",
+                "Browse Modrinth or import a Fabric JAR to get started."))
         }
-        list.forEach { file ->
+        files.forEach { file ->
             val enabled=file.name.endsWith(".jar")
             val meta=ModInspector.inspect(file)
             val card=ui.card(this)
-            val top=ui.row(this)
-            top.addView(ui.text(this,meta.title,14f,ui.WHITE,true),
-                LinearLayout.LayoutParams(0,-2,1f))
-            top.addView(ui.pill(this,if(enabled)"ACTIVE" else "OFF",
-                if(enabled)ui.GREEN else ui.MUTED))
-            card.addView(top)
-            card.addView(ui.space(this,6))
-            card.addView(ui.text(this,meta.version+"  •  "+(if(meta.fabric)"Fabric" else "Review format"),
+            val heading=ui.row(this)
+            val titles=ui.column(this)
+            titles.addView(ui.text(this,meta.title,14f,ui.WHITE,true))
+            titles.addView(ui.space(this,5))
+            titles.addView(ui.text(this,
+                meta.version+"  •  "+(if(meta.fabric)"Fabric" else "Check compatibility"),
                 11f,ui.MUTED))
-            card.addView(ui.space(this,10))
-            val row=ui.row(this)
-            row.addView(ui.action(this,if(enabled)"Disable" else "Enable",false,!ServerService.running) {
-                val target=File(mods,if(enabled)file.name+".disabled" else file.name.removeSuffix(".disabled"))
+            heading.addView(titles,LinearLayout.LayoutParams(0,-2,1f))
+            heading.addView(ui.pill(this,if(enabled)"ON" else "OFF",
+                if(enabled)ui.GREEN else ui.MUTED))
+            card.addView(heading)
+            card.addView(ui.space(this,12))
+            val actions=ui.row(this)
+            val change=ui.action(this,if(enabled)"DISABLE" else "ENABLE",
+                false,!ServerService.running) {
+                val target=File(mods,if(enabled)file.name+".disabled"
+                    else file.name.removeSuffix(".disabled"))
                 if(target.exists() || !file.renameTo(target))toast("Could not change mod")
                 else render()
-            },ui.weight(this))
-            row.addView(ui.action(this,"Delete",false,!ServerService.running) {
+            }
+            actions.addView(change,ui.weight(this))
+            actions.addView(ui.action(this,"REMOVE",false,!ServerService.running) {
                 AlertDialog.Builder(this).setTitle("Remove mod?")
                     .setMessage(meta.title)
                     .setNegativeButton("CANCEL",null)
-                    .setPositiveButton("REMOVE"){_,_->if(file.delete())render()else toast("Delete failed")}
-                    .show()
+                    .setPositiveButton("REMOVE"){_,_->
+                        if(file.delete())render() else toast("Delete failed")
+                    }.show()
             },LinearLayout.LayoutParams(0,-2,1f))
-            card.addView(row)
+            card.addView(actions)
             body.addView(card)
-            body.addView(ui.space(this,9))
+            body.addView(ui.space(this,10))
         }
-        body.addView(ui.space(this,8))
-        body.addView(ui.action(this,"ADVANCED: INSTALL FROM URL") {installFromWebsite()})
-        body.addView(ui.space(this,8))
-        body.addView(ui.action(this,"RESTORE GEYSER BACKUP") {restoreGeyserBackup()})
+        body.addView(HomesteadComponents.menuRow(this,"⋯","Install from URL",
+            "Advanced download and import options") { installFromWebsite() })
     }
 
     private fun browseMods(category:String = "all") {
@@ -2003,7 +2015,9 @@ class MainActivity : Activity() {
             return
         }
         openedWorldFolder = null
-        body.addView(h("Worlds","Tap a world to manage its settings, files and backups"))
+        body.addView(HomesteadComponents.pageIntro(this,
+            "WORLD LIBRARY","Your worlds",
+            "Open a world to manage its own settings, files and backups."))
         body.addView(ui.space(this,13))
         val active=WorldStore.active(this)
         val activeCard=ui.card(this)
@@ -2030,24 +2044,15 @@ class MainActivity : Activity() {
         if(worlds.isEmpty())body.addView(empty("▧","No generated worlds yet",
             "Create a new world, then start Minecraft to generate it, or import an existing Java world ZIP."))
         worlds.forEach { file ->
-            val card=ui.card(this)
-            val heading=ui.row(this)
-            val text=ui.column(this)
-            text.addView(ui.text(this,file.name,16f,ui.WHITE,true))
-            text.addView(ui.space(this,5))
-            text.addView(ui.text(this,if(WorldStore.isPending(file))
-                "Ready to generate on first start" else "Generated world",
-                11f,ui.MUTED))
-            heading.addView(text,LinearLayout.LayoutParams(0,-2,1f))
-            if(file.name==active)heading.addView(ui.pill(this,"ACTIVE",ui.GREEN))
-            card.addView(heading)
-            card.addView(ui.space(this,11))
-            card.addView(ui.action(this,"OPEN WORLD  ›",true) {
-                openedWorldFolder = file.name
-                currentScroller?.scrollTo(0,0)
+            body.addView(HomesteadComponents.menuRow(this,
+                "▧",file.name,
+                if(WorldStore.isPending(file)) "Generate when the server starts"
+                else "Settings  •  Files  •  Backups",
+                if(file.name==active)"ACTIVE" else "") {
+                openedWorldFolder=file.name
+                scrollOffsets[2]=0
                 render()
             })
-            body.addView(card)
             body.addView(ui.space(this,10))
         }
         body.addView(ui.text(this,"Backups stay on this phone until exported. Always keep an off-device ZIP copy before uninstalling PocketCraft or resetting Android.",
@@ -2065,6 +2070,10 @@ class MainActivity : Activity() {
         })
         body.addView(ui.space(this,13))
         val heading = ui.card(this)
+        heading.addView(WorldArt(this).apply {
+            importantForAccessibility=View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        })
+        heading.addView(ui.space(this,13))
         heading.addView(ui.text(this,"▧  " + world.name,22f,ui.WHITE,true))
         heading.addView(ui.space(this,7))
         heading.addView(ui.pill(this,if(active)"ACTIVE WORLD" else "SAVED WORLD",
@@ -2086,37 +2095,43 @@ class MainActivity : Activity() {
         body.addView(heading)
         body.addView(ui.space(this,13))
 
-        val actions = ui.card(this)
-        actions.addView(ui.text(this,"WORLD FOLDER",11f,ui.CYAN,true))
-        actions.addView(ui.space(this,8))
-        actions.addView(actionRow("⚙","World settings") {
+        body.addView(HomesteadComponents.sectionHeading(this,"In this world",
+            "Each setting belongs to this world folder"))
+        body.addView(ui.space(this,11))
+        body.addView(HomesteadComponents.menuRow(this,"⚙","World settings",
+            "Game mode, difficulty, view distance, seed and PvP") {
             startActivity(Intent(this,WorldSettingsActivity::class.java).apply {
                 putExtra(WorldSettingsActivity.EXTRA_WORLD,world.name)
             })
         })
-        actions.addView(line())
-        actions.addView(actionRow("▤","World files") {openServerFiles(world.name)})
-        actions.addView(line())
+        body.addView(ui.space(this,8))
+        body.addView(HomesteadComponents.menuRow(this,"▤","World files",
+            "Explore region files, datapacks and level data") {
+            openServerFiles(world.name)
+        })
         if(!WorldStore.isPending(world)) {
-            actions.addView(actionRow("◈","Datapacks") {
-                if(active) showDatapacks()
-                else openServerFiles(world.name + "/datapacks")
+            body.addView(ui.space(this,8))
+            body.addView(HomesteadComponents.menuRow(this,"◈","Datapacks",
+                "Manage datapacks for this world") {
+                if(active)showDatapacks() else openServerFiles(world.name+"/datapacks")
             })
-            actions.addView(line())
         }
-        actions.addView(actionRow("▧","Backups & snapshots") {showSnapshotManager(world)})
-        actions.addView(line())
+        body.addView(ui.space(this,8))
+        body.addView(HomesteadComponents.menuRow(this,"▧","Snapshots & backups",
+            "Review saved snapshots of this world") { showSnapshotManager(world) })
         if(!WorldStore.isPending(world)) {
-            actions.addView(actionRow("+","Create local snapshot") {
-                if(offline) downloadAsync("Backup world") {
+            body.addView(ui.space(this,8))
+            body.addView(HomesteadComponents.menuRow(this,"＋","Create snapshot",
+                "Save a local recovery point",enabled=offline) {
+                downloadAsync("Backup world") {
                     val saved=WorldSnapshots.create(this,world)
-                    "Snapshot saved: " + saved.name
-                } else toast("Stop the server before creating a snapshot")
+                    "Snapshot saved: "+saved.name
+                }
             })
-            actions.addView(line())
         }
-        actions.addView(actionRow("⋯","More world actions") {showWorldActions(world)})
-        body.addView(actions)
+        body.addView(ui.space(this,8))
+        body.addView(HomesteadComponents.menuRow(this,"⋯","More world actions",
+            "Rename, duplicate, export or delete") { showWorldActions(world) })
         body.addView(ui.space(this,12))
         body.addView(ui.text(this,
             "World settings are saved separately. Server-wide connections, accounts and Geyser are managed from the top-right Settings icon.",
