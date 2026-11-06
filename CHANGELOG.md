@@ -1,5 +1,21 @@
 # PocketCraft changelog
 
+## v0.8.45 (versionCode 70) — Stable: Pinned Dependency 404 Recovery
+
+- Fix the real **Terralith 2.6.5+26.3 → Lithostitched** installation failure: a required Modrinth dependency can specify a pinned version whose CDN asset or version metadata returns HTTP 404/410. Previously this stopped installation even if the same dependency project published a working Fabric 26.3 version.
+- Added an **explicit, reversible recovery checkbox** in the dependency-review dialog, enabled by default when a pin exists. First attempt the exact pinned release. Only when the pin is genuinely unavailable (404/410), and the option stays checked, try a different compatible Fabric release for the **same Modrinth project**. Skip the exact known-broken release ID.
+- The **parent mod remains pinned** to the release the user selected. Compatibility fallback never changes the parent or arbitrarily chooses a different project or loader. Automatically resolved dependencies continue to require the current Fabric server Minecraft version.
+- **No fallback** for SHA-512 mismatch, corrupt JAR, 500/network errors, cancellation, missing compatible releases or nested dependency errors. The installer still verifies downloads, checks Fabric metadata, stops when the server is running, never overwrites installed JARs and rolls back newly introduced JARs if the overall installation fails.
+- Installation progress explains when a missing pinned asset is replaced by a compatible release, and the success message identifies recovered versions. Users may uncheck the recovery option to enforce exact dependency pins.
+- Added pure JVM tests for pinned Lithostitched HTTP 404/410 recovery, disallowed error types, nested dependency failures, user opt-out and fallback failures. Added a deterministic Android emulator test that opens the Terralith/Lithostitched dependency dialog, captures screenshots and verifies the opt-in checkbox is changeable.
+- Preserved the app package, signing identity, user worlds, Playit, Geyser/Floodgate, server runtime, Minecraft installations and the existing Modrinth browse-all behavior.
+
+### Limitations and testing
+- A compatible Fabric/Minecraft version is not guaranteed to satisfy every mod's *semantic version requirement*. Pinned-release recovery is a user-approved last resort, not a claim of compatibility.
+- An HTTP 404 from all available verifiable sources can still prevent installation; the app explains what failed and points to the required Modrinth project.
+- Physical-phone game startup, Bedrock joins and the full v0.9.0 roadmap remain unverified. Official v0.8.45 is published only after signed production Android build, JVM tests and Android emulator smoke tests pass.
+
+
 ## v0.8.44 (versionCode 69) — Stable: Required Dependency Recovery & Compact Release Dialogs
 
 - **Fix for Terralith/Lithostitched HTTP 404 dependencies:** When the CDN URL for an exact required Fabric mod JAR returns HTTP 404/410, PocketCraft now tries Modrinth's **official documented Maven repository** for the same project/version before attempting other compatible releases (for unpinned dependencies). Maven downloads are accepted only after matching the original Modrinth SHA-512 and passing Fabric JAR checks. The user is never silently given an unverified file or an incompatible loader.

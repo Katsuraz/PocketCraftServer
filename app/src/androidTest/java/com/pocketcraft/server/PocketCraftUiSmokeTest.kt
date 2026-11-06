@@ -233,6 +233,48 @@ class PocketCraftUiSmokeTest {
         assertVisible(By.text("CANCEL"),"Cancel mismatch dialog").click()
     }
 
+
+    /**
+     * Regression for the actual Terralith / Lithostitched pinned dependency
+     * review. No live API, no installed worlds, no download is performed.
+     */
+    @Test
+    fun pinnedDependencyRecoveryIsVisibleAndUserControlled() {
+        val screen=instrumentation.startActivitySync(Intent(context,
+            ModrinthStudioActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+            }) as ModrinthStudioActivity
+        val terralith=ModrinthCatalog.Hit(
+            "8oi3bsk5","terralith","Terralith",
+            "Worldgen mod","Stardust Labs",20000000L,null,"Review version")
+        val release=ModrinthCatalog.Version(
+            "aGE3hYAA","8oi3bsk5","Terralith 2.6.5",
+            "2.6.5+26.3","release","2026-09-27",120000L,
+            1,0,0,"Terralith_26.3.jar",
+            "https://cdn.modrinth.com/data/example.jar",
+            "a".repeat(128),listOf("26.3"),"server_only",listOf("fabric"))
+        val lithostitched=WebsiteModInstaller.DependencyChoice(
+            "XaDC71GB","Lithostitched",true,false,"pZgI6b2t","required")
+        instrumentation.runOnMainSync {
+            screen.showChoices(terralith,release,listOf(lithostitched),false)
+        }
+        val recovery=assertVisible(
+            By.textContains("RECOVER UNAVAILABLE PINNED DEPENDENCIES"),
+            "Required pinned dependency recovery option")
+        assertTrue("Pinned recovery should be selected for this install",recovery.isChecked)
+        capture("13-terralith-pinned-dependency-recovery")
+
+        recovery.click()
+        assertTrue("User must be able to disable alternative dependency versions",
+            !recovery.isChecked)
+        capture("14-terralith-recovery-opted-out")
+        recovery.click()
+        assertTrue("User must be able to reenable dependency fallback",recovery.isChecked)
+        assertVisible(By.textContains("INSTALL WITH DEPENDENCIES"),
+            "Installer confirmation that does not auto install")
+        capture("15-terralith-recovery-opted-in")
+    }
+
     /**
      * Live Modrinth API is not a test dependency. Capture the actual version
      * selector when connectivity works; never treat a temporary API outage as

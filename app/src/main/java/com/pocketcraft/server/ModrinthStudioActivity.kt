@@ -388,7 +388,7 @@ class ModrinthStudioActivity : Activity() {
             }
         }.start()
     }
-    private fun showChoices(hit:ModrinthCatalog.Hit,v:ModrinthCatalog.Version,
+    internal fun showChoices(hit:ModrinthCatalog.Hit,v:ModrinthCatalog.Version,
                             deps:List<WebsiteModInstaller.DependencyChoice>,allowMismatch:Boolean){
         val conflict=deps.any {it.kind=="incompatible" && it.installed}
         val selected=BooleanArray(deps.size){i ->
@@ -413,8 +413,9 @@ class ModrinthStudioActivity : Activity() {
                 ui.dp(this@ModrinthStudioActivity,16),ui.dp(this@ModrinthStudioActivity,12))
         }
         panel.addView(ui.text(this,"Required dependencies cannot be disabled. " +
-            "Optional dependencies can be selected. Exact pinned version and SHA-512 verified; " +
-            "existing JARs are not overwritten." +
+            "Optional dependencies can be selected. Your selected parent mod stays pinned; " +
+            "every downloaded JAR must pass SHA-512 verification; existing JARs " +
+            "are not overwritten." +
             (if(allowMismatch)"\n\n⚠ You chose an incompatible version. " +
                 "Dependencies might not resolve and Minecraft may crash on startup." else ""),
             12f,ui.MUTED))
@@ -436,16 +437,47 @@ class ModrinthStudioActivity : Activity() {
         }
         if(deps.isEmpty())panel.addView(ui.text(this,
             "This release declares no Modrinth dependencies.",12f,ui.MUTED))
+        // Modrinth pins sometimes reference missing CDN assets or deleted
+        // versions. The user explicitly controls whether those *required*
+        // dependency pins may fall back to the same project's current
+        // Minecraft + Fabric release. The chosen parent mod stays pinned.
+        val pinnedDependencies=deps.filter {
+            it.versionId != null && it.kind in setOf("required","optional") &&
+                !it.installed
+        }
+        val allowRecovery=booleanArrayOf(true)
+        if(pinnedDependencies.isNotEmpty()) {
+            panel.addView(ui.space(this,12))
+            panel.addView(CheckBox(this).apply {
+                text="RECOVER UNAVAILABLE PINNED DEPENDENCIES (404/410)"
+                textSize=12f
+                setTextColor(ui.WHITE)
+                isChecked=true
+                minHeight=ui.dp(this@ModrinthStudioActivity,48)
+                setOnCheckedChangeListener { _,checked ->allowRecovery[0]=checked }
+            })
+            panel.addView(ui.text(this,
+                "If the specified dependency cannot be downloaded, try another " +
+                "SHA-512-verified Fabric "+minecraft+" release of that SAME mod. " +
+                "Does not change your selected "+hit.title+" version. " +
+                "Uncheck to require exact dependency pins. Other failures " +
+                "(including checksum mismatches) will still stop installation.",
+                11f,ui.MUTED))
+        }
         val builder=AlertDialog.Builder(this).setTitle("Install "+hit.title+" "+v.number+"?")
             .setView(ScrollView(this).apply {addView(panel)})
             .setNegativeButton("CANCEL",null)
-        if(!conflict)builder.setPositiveButton("INSTALL"){_,_->
+        if(!conflict)builder.setPositiveButton(
+            if(pinnedDependencies.isNotEmpty())"INSTALL WITH DEPENDENCIES" else "INSTALL"
+        ){_,_->
             val options=deps.indices.filter {
                 deps[it].kind=="optional" && selected[it] && !deps[it].installed
             }.map {deps[it].projectId}.toSet()
             install("Installing "+hit.title){
                 WebsiteModInstaller.installWithDependencies(this,hit.id,v.id,options,
-                    allowVersionMismatch=allowMismatch)
+                    allowVersionMismatch=allowMismatch,
+                    allowPinnedDependencyRecovery =
+                        pinnedDependencies.isNotEmpty() && allowRecovery[0])
             }
         }
         builder.show()

@@ -276,7 +276,8 @@ object WebsiteModInstaller {
     fun installWithDependencies(context: Context, slug: String,
                                 pinnedVersionId: String? = null,
                                 selectedOptional: Set<String> = emptySet(),
-                                allowVersionMismatch: Boolean = false): String {
+                                allowVersionMismatch: Boolean = false,
+                                allowPinnedDependencyRecovery: Boolean = false): String {
         if (ServerService.running) throw IOException("Stop Minecraft before installing mods")
         val current = installedVersion(context)
         require(slug.matches(Regex("[A-Za-z0-9_-]{1,120}"))) { "Invalid Modrinth project" }
@@ -292,7 +293,9 @@ object WebsiteModInstaller {
         fun isMissingFile(e: Exception): Boolean =
             e is IOException && (e.message?.contains("HTTP 404") == true ||
                 e.message?.contains("HTTP 410") == true)
-        fun installProject(projectSlug: String, preferredVersionId: String? = null, depth: Int = 0) {
+        fun installProject(projectSlug: String, preferredVersionId: String? = null,
+                           depth: Int = 0, recovered: Boolean = false,
+                           excludeVersionId: String? = null) {
             if (depth > 12 || completed.size > 30) throw IOException("Too many nested dependencies")
             val project = json("https://api.modrinth.com/v2/project/" + encode(projectSlug))
             val id = project.getString("id")
@@ -326,6 +329,10 @@ object WebsiteModInstaller {
                     InstallProgress.check()
                     val version = versions.getJSONObject(i)
                     if (version.optString("project_id") != id) continue
+                    // Never retry the exact immutable pin whose download
+                    // just failed. Choose a genuinely different release.
+                    if (excludeVersionId != null &&
+                        version.optString("id") == excludeVersionId) continue
                     val games = version.optJSONArray("game_versions") ?: JSONArray()
                     val loaders = version.optJSONArray("loaders") ?: JSONArray()
                     // Explicit pinned versions may be for another Minecraft
@@ -365,11 +372,31 @@ object WebsiteModInstaller {
                                 !(kind == "optional" && depId in selectedOptional)) continue
                             val depVersion = d.optString("version_id").takeIf { it.isNotBlank() }
                             try {
-                                if (depId.isNotBlank()) installProject(depId,depVersion,depth+1)
+                                // Resolve project ID independently of a pinned version
+                                // whenever possible. A missing version must not prevent
+                                // recovery to a matching Fabric version of this project.
+                                val dependencyProjectId = if (depId.isNotBlank()) depId
                                 else if (depVersion != null) {
-                                    val dep = json("https://api.modrinth.com/v2/version/" + encode(depVersion))
-                                    installProject(dep.getString("project_id"),depVersion,depth+1)
+                                    json("https://api.modrinth.com/v2/version/" +
+                                        encode(depVersion)).getString("project_id")
                                 } else throw IOException("A required dependency has no Modrinth project")
+                                ModrinthDependencyRecovery.attempt(
+                                    pinnedVersionId = depVersion,
+                                    userApproved = allowPinnedDependencyRecovery,
+                                    first = {
+                                        installProject(dependencyProjectId,depVersion,depth+1)
+                                    },
+                                    compatible = {
+                                        installProject(dependencyProjectId,null,depth+1,
+                                            recovered=true,excludeVersionId=depVersion)
+                                    },
+                                    onRecover = {
+                                        InstallProgress.emit("Pinned dependency " + dependencyProjectId +
+                                            " unavailable (404/410); trying current Fabric " +
+                                            current + " versions of the SAME project…")
+                                    },
+                                    isNestedDependencyError = { it is DependencyInstallFailure }
+                                )
                             } catch (e: IOException) {
                                 throw DependencyInstallFailure(
                                     title + " needs a dependency (" +
@@ -385,7 +412,8 @@ object WebsiteModInstaller {
                                     throw IOException("Missing trusted SHA-512 checksum for " + title)
                                 installFile(context,jar.getString("url"),jar.getString("filename"),
                                     sha512,title)
-                                installed.add(title)
+                                installed.add(title + " " + version.optString("version_number") +
+                                    if (recovered) " (compatible fallback for missing pinned release)" else "")
                                 completed.add(id)
                                 return
                             } catch (e: IOException) {
@@ -411,7 +439,10 @@ object WebsiteModInstaller {
                                                 title + " " + version.optString("version_number"))
                                             installFile(context,mirror,jar.getString("filename"),
                                                 originalHash,title)
-                                            installed.add(title + " (verified Maven mirror)")
+                                            installed.add(title + " " +
+                                                version.optString("version_number") +
+                                                (if (recovered) " (compatible dependency fallback)" else "") +
+                                                " (verified Maven mirror)")
                                             completed.add(id)
                                             return
                                         } catch (mirrorError: IOException) {
@@ -450,7 +481,10 @@ object WebsiteModInstaller {
                                                 InstallProgress.emit(
                                                     "Trying official Fabric API mirror (SHA-512 verified)")
                                                 installFile(context, source, officialJar, hash, title)
-                                                installed.add(title + " (verified official mirror)")
+                                                installed.add(title + " " +
+                                                    version.optString("version_number") +
+                                                    (if (recovered) " (compatible dependency fallback)" else "") +
+                                                    " (verified official mirror)")
                                                 completed.add(id)
                                                 return
                                             } catch (fallbackError: IOException) {
