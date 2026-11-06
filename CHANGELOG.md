@@ -1,5 +1,24 @@
 # PocketCraft changelog
 
+## v0.8.40 (versionCode 65) — Official stable: Modrinth Workshop
+
+A **non-beta, incremental stable release** focused on the existing Fabric mod/modpack manager.
+This release does not claim the remaining v0.9.0 Ultimate Hosting roadmap is finished.
+
+- New full-screen **Modrinth Workshop** for Fabric server mods and modpacks with searchable results, 20-at-a-time pagination, search categories, and official relevance/downloads/updated/newest/follows sorting.
+- Select **any listed compatible Fabric release** for the installed Minecraft version, rather than silently installing only the newest one. See exact version numbers, release channel, dates, and dependency counts.
+- Inspect the **chosen mod release's** required/optional/incompatible dependencies, distinguish installed mods, choose optional dependencies, and prevent unchecking required entries. Existing conflicting mods are called out before installation.
+- Install selected versions through the existing allowlisted Modrinth installer with file type checks and SHA-512 verification, preserving installed JARs. Attempt to roll back newly introduced JARs if a dependency installation fails.
+- For a selected Modrinth modpack version, verify the downloaded .mrpack SHA-512 first, review the archive's optional server files, and choose which optional files to include. Required server files remain mandatory. Existing server files are not overwritten.
+- Preserve the app package, signing identity, themes, worlds, server settings, Fabric runtime, installed mods, Geyser/Floodgate, Playit and update channels. New activity is not externally exported.
+
+### Honest constraints and compatibility
+- Only server-oriented **Fabric** mods and Fabric .mrpack modpacks matching the app's selected Minecraft version are supported. Modrinth's catalog is not a promise that two mods work together or that a server-side mod is crossplay-compatible with Geyser.
+- Already installed mods are not silently replaced or upgraded; disable/remove conflicting versions only after backups. Complex version constraints, nested/bundled dependencies, custom modpack scripts, and mod interoperability still require manual checks.
+- Real Android installation, preservation across signing-key changes, Minecraft launches, Bedrock live joins, and performance on specific phones require device testing. Automated CI and signing checks do not establish those facts.
+- The full v0.9.0 hosting overhaul remains an open roadmap. This release intentionally uses an incremental stable version number rather than calling an incomplete overhaul complete.
+
+
 ## v0.9.0-beta.3 (versionCode 64) — Console Shortcuts & Accurate Player Lists
 
 **Incremental official beta, not a completed v0.9.0 stable release.**
