@@ -26,8 +26,8 @@ class ModrinthServerCompatibilityTest {
         assertTrue(serverOptions.contains("environment:client_or_server"))
         assertFalse(serverOptions.contains("environment:client_only"))
         assertFalse(serverOptions.contains("environment:singleplayer_only"))
-        assertFalse("Client-only projects must be rejected",
-            ModrinthCatalog.onlyClientSide("unsupported",listOf("client_only")) == false)
+        assertTrue("Client-only projects must be rejected",
+            ModrinthCatalog.onlyClientSide("unsupported",listOf("client_only")))
         assertTrue(ModrinthCatalog.onlyClientSide("unknown",listOf("client_only")))
         assertFalse(ModrinthCatalog.onlyClientSide("optional",listOf("client_only_server_optional")))
     }
