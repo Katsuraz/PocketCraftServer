@@ -1,5 +1,19 @@
 # PocketCraft changelog
 
+## v0.8.41 (versionCode 66) — Official stable: dialog and Modrinth experience polish
+
+- Fixed native Android dialogs inheriting mismatched system gray. Dialog background, text, secondary text, border and accent now follow each of PocketCraft's ten supported palettes, preserving light-theme readability.
+- Replaced the enormous Modrinth `setItems` version popup with a compact, scrollable, woodland-styled release picker.
+- Search within compatible releases by number or title and filter them by Release, Beta or Alpha without another network request.
+- Show each release separately with a clear selection button, date, download count, and dependency information only when dependencies are actually declared (avoids repetitive zero counts).
+- Keep exact-version dependency review and the separate pre-install confirmation. Version browsing does not modify installed mods or worlds.
+- Add deterministic offline Android emulator UI regression tests that open the real release dialog, search versions, filter releases and save screenshots; normal Android app-build and release-signing checks continue to run.
+
+### Constraints and remaining v0.9.0 work
+
+This is a verified **incremental stable maintenance release**, not a claim that the full Ultimate Hosting v0.9.0 roadmap is finished. Other master-prompt work (safe mod updates, world/profile management, scheduled backups, richer diagnostics and on-phone Bedrock joining) remains open. Automated x86_64 emulator UI tests do not verify the ARM64 on-device Java server runtime, Geyser or Playit. Back up existing worlds before any updates.
+
+
 ## v0.8.40 (versionCode 65) — Official stable: Modrinth Workshop
 
 A **non-beta, incremental stable release** focused on the existing Fabric mod/modpack manager.
