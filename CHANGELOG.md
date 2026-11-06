@@ -1,5 +1,20 @@
 # PocketCraft changelog
 
+## v0.8.42 (versionCode 67) — Stable: Modrinth Server Compatibility Fix
+
+- Fixed Modrinth Workshop listing **client-only Minecraft mods** as server-installable search results. The catalog now combines Fabric loader and Minecraft version filters with the official Modrinth v2 **server-capable environment** facets, including valid server-optional and server-only variants. A second check rejects clearly client-only results if the search index returns them anyway.
+- As an example, **Iris Shaders is a Java client-side shader loader**, not something to install into the PocketCraft dedicated Fabric server. It should no longer appear as a server-install option.
+- Improved version selection failure reporting: distinguishes no matching Fabric Minecraft release, client-only releases, and releases without valid server downloads. Provides a direct link to the project's Modrinth page for comparison.
+- Only offers release files with trusted HTTPS Modrinth CDN URLs and valid SHA-512 metadata; never installs a client-only release on the server. Existing mod folders and automatic dependency review behavior remain unchanged.
+- Added JVM regression coverage for live API facet syntax, Fabric 26.3 server/loader filtering, the client-only environment behavior, safe download URLs and valid checksum metadata.
+- Preserves the new Homestead version picker, existing Android package and signing identity, Playit, NetherNet, Geyser/Floodgate, all server worlds, backups and installed files. Android unit tests, APK signing checks and emulator UI smoke tests must pass before public release.
+
+### Scope and remaining verification
+- A project may list Fabric and Minecraft 26.3 globally without publishing a downloadable Fabric **server** build for that exact version. Such projects remain incompatible.
+- Shader/rendering mods such as Iris can be installed in a supported Java client, not in PocketCraft's Android phone server.
+- Real-device hosting, Bedrock remote connection, mod interoperability and the broader v0.9.0 roadmap still require separate verification.
+
+
 ## v0.8.41 (versionCode 66) — Stable: Homestead UI & File Browser Polish
 
 - Replaced Modrinth's giant default-Android **version popup** with a bounded, scrollable, Homestead-styled release picker. Compact cards show exact version numbers, release/beta/alpha status, publication date and downloads. Zero-dependency lines are omitted, while nonzero required/optional/incompatible counts remain visible.
