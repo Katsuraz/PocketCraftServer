@@ -117,8 +117,7 @@ class ServerFilesActivity : Activity() {
             "Minecraft / "+current.relativeTo(serverRoot).invariantSeparatorsPath
         body.addView(ui.text(this,breadcrumb,12f,ui.GREEN,true))
         body.addView(ui.space(this,9))
-        body.addView(ui.text(this,"Explore your real server data without root or a third-party file manager.",12f,ui.MUTED))
-        body.addView(ui.space(this,16))
+        body.addView(ui.space(this,10))
         if(current==serverRoot){
             val shortcuts=ui.card(this)
             shortcuts.addView(ui.text(this,"QUICK ACCESS",11f,ui.CYAN,true))
@@ -144,13 +143,10 @@ class ServerFilesActivity : Activity() {
             body.addView(shortcuts)
             body.addView(ui.space(this,13))
             val access=ui.card(this)
-            access.addView(ui.text(this,"PHONE FILE MANAGER",16f,ui.WHITE,true))
+            access.addView(ui.text(this,"ANDROID FILES",16f,ui.WHITE,true))
             access.addView(ui.space(this,8))
-            access.addView(ui.text(this,
-                "Open the live server folder in Android Files. If your file manager does not support PocketCraft storage, use the file editor above or export a ZIP below.",
-                12f,ui.MUTED))
-            access.addView(ui.space(this,10))
-            access.addView(ui.action(this,"OPEN SERVER IN FILES",true) {
+            access.addView(ui.space(this,9))
+            access.addView(ui.action(this,"OPEN FILES",true) {
                 openInAndroidFiles()
             })
             body.addView(access)
@@ -158,15 +154,18 @@ class ServerFilesActivity : Activity() {
             val backupCard=ui.card(this)
             backupCard.addView(ui.text(this,"BACKUP & RESTORE",11f,ui.GREEN,true))
             backupCard.addView(ui.space(this,8))
-            backupCard.addView(ui.text(this,"Protect your server before reinstalling",16f,ui.WHITE,true))
+            backupCard.addView(ui.text(this,"Full server backup",16f,ui.WHITE,true))
             backupCard.addView(ui.space(this,8))
-            backupCard.addView(ui.text(this,
-                "Export one ZIP with worlds, mods and settings. Import it after a fresh install. Stop Minecraft first. Android Java runtime and Playit agent credentials are not included.",
-                12f,ui.MUTED))
-            backupCard.addView(ui.space(this,12))
-            backupCard.addView(ui.action(this,"EXPORT COMPLETE SERVER ZIP",true){startExportAll()})
+            backupCard.addView(ui.action(this,"ⓘ  ABOUT BACKUPS") {
+                AlertDialog.Builder(this).setTitle("Server backups")
+                    .setMessage("Exports worlds, mods and settings. Stop Minecraft first. " +
+                        "Java runtime and private Playit credentials are not included.")
+                    .setPositiveButton("OK",null).show()
+            })
+            backupCard.addView(ui.space(this,9))
+            backupCard.addView(ui.action(this,"EXPORT ZIP",true){startExportAll()})
             backupCard.addView(ui.space(this,8))
-            backupCard.addView(ui.action(this,"RESTORE SERVER ZIP"){startImportAll()})
+            backupCard.addView(ui.action(this,"RESTORE ZIP"){startImportAll()})
             body.addView(backupCard)
             body.addView(ui.space(this,13))
         }
@@ -189,18 +188,17 @@ class ServerFilesActivity : Activity() {
                 (filter.isBlank()||it.name.contains(filter,true))
         }?.sortedWith(compareBy<File>{!it.isDirectory}.thenBy{it.name.lowercase()}) ?: emptyList()
         if(files.isEmpty()){
-            body.addView(ui.text(this,"No files here. Start Minecraft once to generate configs.",12f,ui.MUTED))
+            body.addView(ui.text(this,"No files",12f,ui.MUTED))
         }
         files.take(200).forEach { file ->
             val folder=file.isDirectory
             val button=ui.action(this,(if(folder)"▣  " else "▤  ")+file.name) {openPath(file)}
             button.contentDescription=if(folder)"Open folder "+file.name else "Open file "+file.name
             body.addView(button)
-            body.addView(ui.text(this,if(folder)"Folder" else ServerFileOps.humanSize(file.length())+
-                if(ServerFileOps.isEditable(file))" • editable" else " • view/export",11f,ui.MUTED))
+            body.addView(ui.text(this,if(folder)"Folder" else ServerFileOps.humanSize(file.length()),11f,ui.MUTED))
             body.addView(ui.space(this,9))
         }
-        if(files.size>200)body.addView(ui.text(this,"Showing the first 200 items. Use Search to narrow results.",12f,ui.MUTED))
+        if(files.size>200)body.addView(ui.text(this,"200 items shown • Use Search",12f,ui.MUTED))
         scroll.addView(body)
         screen.addView(scroll,LinearLayout.LayoutParams(-1,0,1f))
         setContentView(screen)
