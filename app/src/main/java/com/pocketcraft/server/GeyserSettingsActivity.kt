@@ -238,6 +238,15 @@ class GeyserSettingsActivity : Activity() {
             "Save in Local or Internet updates only the managed fields. Importing replaces the entire file after confirmation, so keep a backup.",
             12f,ui.MUTED))
         filesPane.addView(ui.space(this,14))
+        filesPane.addView(ui.action(this,"PASTE PLAYIT GEYSER SETTINGS",
+            true,loaded.isNotBlank() && !serverBusy()) { pastePlayitSettings() })
+        filesPane.addView(ui.space(this,9))
+        filesPane.addView(ui.text(this,
+            "Playit dashboard → Bedrock (NetherNet) tunnel → Configuration help → Geyser → Copy. " +
+                "Only the network fields and Java authentication mode are merged. " +
+                "Everything else stays intact. Your private token is never shown in diagnostics.",
+            11f,ui.MUTED))
+        filesPane.addView(ui.space(this,12))
         filesPane.addView(ui.action(this,"IMPORT / REPLACE CONFIG.YML",
             true,!serverBusy()) { selectConfig() })
         filesPane.addView(ui.space(this,9))
@@ -339,6 +348,64 @@ class GeyserSettingsActivity : Activity() {
             file.failWrite(stream)
             throw e
         }
+    }
+
+    /** Applies the provider's official snippet without replacing unrelated Geyser settings. */
+    private fun pastePlayitSettings() {
+        if (serverBusy()) { toast("Stop Minecraft before editing Geyser"); return }
+        if (!config.isFile || config.length() !in 1..128000L) {
+            toast("Start Geyser once to generate its config.yml first")
+            return
+        }
+        val field = EditText(this).apply {
+            hint = "Paste Playit Configuration help > Geyser > Copy"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or
+                InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+            minLines = 7
+            maxLines = 12
+            textSize = 13f
+            setTextColor(ui.WHITE)
+            setHintTextColor(ui.MUTED)
+            background = ui.shape(this@GeyserSettingsActivity,ui.SURFACE,12,ui.BORDER)
+            setPadding(ui.dp(this@GeyserSettingsActivity,12),ui.dp(this@GeyserSettingsActivity,10),
+                ui.dp(this@GeyserSettingsActivity,12),ui.dp(this@GeyserSettingsActivity,10))
+        }
+        val wrap = ui.column(this).apply {
+            setPadding(ui.dp(this@GeyserSettingsActivity,18),ui.dp(this@GeyserSettingsActivity,8),
+                ui.dp(this@GeyserSettingsActivity,18),ui.dp(this@GeyserSettingsActivity,8))
+        }
+        wrap.addView(ui.text(this,
+            "Paste the PRIVATE Geyser snippet from Playit. Never share or screenshot it. " +
+                "PocketCraft merges only supported settings and backs up the current file.",
+            12f,ui.MUTED))
+        wrap.addView(ui.space(this,10))
+        wrap.addView(field)
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Import Playit NetherNet settings")
+            .setView(wrap)
+            .setNegativeButton("CANCEL",null)
+            .setPositiveButton("MERGE SETTINGS",null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                if (serverBusy()) { toast("Stop Minecraft first"); return@setOnClickListener }
+                runCatching {
+                    val existing = config.readText(Charsets.UTF_8)
+                    val updated = GeyserConfigEditor.mergePlayitSnippet(existing,
+                        field.text.toString())
+                    writeSafely(updated, keepBackup = true)
+                }.onSuccess {
+                    field.text.clear()
+                    dialog.dismiss()
+                    toast("Playit settings merged. Restart Minecraft to apply them.")
+                    render()
+                }.onFailure {
+                    // Validation errors name settings, never submitted token contents.
+                    toast("Not applied: " + (it.message ?: "Invalid Playit Geyser configuration"))
+                }
+            }
+        }
+        dialog.show()
     }
 
     private fun selectConfig() {

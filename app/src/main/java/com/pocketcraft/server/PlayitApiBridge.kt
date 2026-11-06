@@ -20,7 +20,8 @@ internal object PlayitApiBridge {
         val bedrockAddress: String?,
         val bedrockTunnelCount: Int,
         val pendingBedrockCount: Int,
-        val paid: Boolean
+        val paid: Boolean,
+        val bedrockReportedEndpoint: String? = null
     )
 
     private fun secret(c: Context): String? {
@@ -73,6 +74,7 @@ internal object PlayitApiBridge {
         var javaCount = 0
         var pendingJava = 0
         var bedrockAddress: String? = null
+        var bedrockReportedEndpoint: String? = null
         var bedrockCount = 0
         var pendingBedrock = 0
         if (tunnels != null) {
@@ -86,7 +88,11 @@ internal object PlayitApiBridge {
                     if (addr.isNotBlank()) address = addr
                 } else if (type == "nethernet" || type == "minecraft-bedrock") {
                     bedrockCount++
-                    if (addr.isNotBlank()) bedrockAddress = addr
+                    if (addr.isNotBlank()) {
+                        val resolved = PlayitAddressResolver.resolve(type, addr)
+                        bedrockAddress = resolved.joinAddress
+                        bedrockReportedEndpoint = resolved.reportedEndpoint
+                    }
                 }
             }
         }
@@ -107,7 +113,8 @@ internal object PlayitApiBridge {
             bedrockAddress = bedrockAddress,
             bedrockTunnelCount = bedrockCount,
             pendingBedrockCount = pendingBedrock,
-            paid = data.optJSONObject("permissions")?.optBoolean("has_premium") ?: false
+            paid = data.optJSONObject("permissions")?.optBoolean("has_premium") ?: false,
+            bedrockReportedEndpoint = bedrockReportedEndpoint
         )
     }
 
