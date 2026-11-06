@@ -1,5 +1,21 @@
 # PocketCraft changelog
 
+
+## v0.8.46 (versionCode 71) — All-Modrinth-Mod Dependency Version Selection
+
+- Every Modrinth Fabric mod's required and optional dependencies now offer the same **Choose Version** action. The choices are the author's exact pinned release, an auto-selected compatible Fabric release that bypasses an unavailable pin, or a specific SHA-512-verified Modrinth Fabric release.
+- Version choices are keyed to the immutable dependency project ID, not to Terralith, Lithostitched or any hardcoded mod. The installer applies these choices consistently wherever that project appears in a nested dependency graph; the originally selected parent mod remains pinned.
+- Selecting a dependency release for another Minecraft version or a client-only build requires a separate warning and explicit confirmation. Other-loader releases remain in Download Only; only selected Fabric JARs can be installed on a Fabric server.
+- The existing **Recover unavailable pinned dependencies (HTTP 404/410)** checkbox remains for user-authorized fallback when a dependency is left on its default pinned version. Choosing Auto-compatible bypasses the bad pin up front, without depending on an HTTP 404.
+- Required dependencies cannot be unchecked. Optional dependencies remain opt-in, previously installed mods are preserved, dependency cycles and recursion limits are checked, SHA-512 and Fabric JAR verification remain enforced, and an overall installation failure attempts to remove newly introduced JARs.
+- Added JVM coverage for generic per-project selection (multiple independent dependencies and conflict protection) and Android 14 emulator UI testing with an arbitrary, non-Terralith mod. No user worlds or mod files are changed by the update itself.
+
+### Limitations
+- A Fabric release targeting another Minecraft version may still break server startup. Choosing a version is not a compatibility guarantee; back up mods and worlds before installing.
+- Dependencies already installed are kept as-is by the existing installer and are not silently replaced. For a different installed version, review/remove it safely first.
+- Real-device end-to-end Modrinth CDN downloads and live Fabric server startup still require physical-phone validation.
+
+
 ## v0.8.45 (versionCode 70) — Stable: Pinned Dependency 404 Recovery
 
 - Fix the real **Terralith 2.6.5+26.3 → Lithostitched** installation failure: a required Modrinth dependency can specify a pinned version whose CDN asset or version metadata returns HTTP 404/410. Previously this stopped installation even if the same dependency project published a working Fabric 26.3 version.
