@@ -160,23 +160,8 @@ class SettingsActivity : Activity() {
         if (file.exists()) file.inputStream().use { props.load(it) }
 
         val screen=ui.column(this).apply { setBackgroundColor(ui.BG) }
-        val toolbar=ui.row(this).apply {
-            setPadding(ui.dp(this@SettingsActivity,18),ui.dp(this@SettingsActivity,20),
-                ui.dp(this@SettingsActivity,18),ui.dp(this@SettingsActivity,18))
-        }
-        toolbar.addView(ui.text(this,"‹",34f,ui.GREEN,true).apply {
-            contentDescription="Back to dashboard"
-            setOnClickListener {
-                PocketSounds.play(this@SettingsActivity,PocketSounds.Event.CLICK)
-                finish()
-            }
-            setPadding(0,0,ui.dp(this@SettingsActivity,19),0)
-        })
-        toolbar.addView(ui.column(this).apply {
-            addView(ui.text(this@SettingsActivity,"Server settings",20f,ui.WHITE,true))
-            addView(ui.text(this@SettingsActivity,"YOUR WORLD  •  YOUR RULES",10f,ui.MUTED,true))
-        })
-        screen.addView(toolbar)
+        screen.addView(HomesteadComponents.subpageHeader(this,
+            "Settings","Homestead control room") { finish() })
         val scroll=ScrollView(this).apply { isVerticalScrollBarEnabled=false; isFillViewport=true }
         val body=ui.column(this).apply {
             setPadding(ui.dp(this@SettingsActivity,18),0,ui.dp(this@SettingsActivity,18),ui.dp(this@SettingsActivity,30))
