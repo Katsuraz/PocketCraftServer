@@ -24,6 +24,7 @@ import javax.net.ssl.HttpsURLConnection
 object PocketUpdates {
     private const val REPO = "Katsuraz/PocketCraftServer"
     private const val API = "https://api.github.com/repos/" + REPO + "/releases/latest"
+    private const val BETA_API = "https://api.github.com/repos/" + REPO + "/releases?per_page=15"
     private const val MAX_APK = 350L * 1024 * 1024
     private const val CHECK_INTERVAL = 24L * 60 * 60 * 1000
 
@@ -43,6 +44,19 @@ object PocketUpdates {
     fun installedName(context: Context): String =
         context.packageManager.getPackageInfo(context.packageName,0).versionName ?: "unknown"
 
+    fun channel(context: Context): String =
+        UpdateChannels.normalize(context.getSharedPreferences("pocketcraft",0)
+            .getString(UpdateChannels.KEY,UpdateChannels.STABLE))
+
+    fun setChannel(context: Context, channel: String) {
+        require(channel in setOf(UpdateChannels.STABLE,UpdateChannels.BETA))
+        context.getSharedPreferences("pocketcraft",0).edit()
+            .putString(UpdateChannels.KEY,channel)
+            .remove("availableUpdate")
+            .remove("lastUpdateCheck")
+            .apply()
+    }
+
     fun autoCheckEnabled(context: Context): Boolean =
         context.getSharedPreferences("pocketcraft",0).getBoolean("autoUpdateCheck",true)
 
@@ -59,7 +73,7 @@ object PocketUpdates {
         prefs.edit().putLong("lastUpdateCheck",now).apply()
         val appContext = context.applicationContext
         Thread {
-            runCatching { fetchLatest() }.onSuccess { release ->
+            runCatching { fetchLatest(channel(appContext)) }.onSuccess { release ->
                 prefs.edit().putString("availableUpdate",
                     if (release != null && release.versionCode > installedVersion(appContext))
                         release.versionName else "").apply()
@@ -74,7 +88,9 @@ object PocketUpdates {
     }
 
     private fun getHttps(url: String, limit: Int = 200_000): String {
-        require(validDownloadUrl(url) || url == API) { "Untrusted update URL" }
+        require(validDownloadUrl(url) || url == API || url == BETA_API) {
+            "Untrusted update URL"
+        }
         val connection = URL(url).openConnection() as HttpsURLConnection
         connection.connectTimeout = 12000
         connection.readTimeout = 18000
@@ -101,15 +117,35 @@ object PocketUpdates {
         } finally { connection.disconnect() }
     }
 
-    /** No published release is different from an up-to-date release. */
-    fun fetchLatest(): Release? {
-        val response = getHttps(API)
-        if (response.isEmpty()) return null
-        val json = JSONObject(response)
-        require(!json.optBoolean("draft") && !json.optBoolean("prerelease")) {
-            "Latest release is not stable"
+    /** Stable uses GitHub latest; Beta examines recent prereleases and stable releases. */
+    fun fetchLatest(channel: String = UpdateChannels.STABLE): Release? {
+        val normalized=UpdateChannels.normalize(channel)
+        val releases = if (normalized == UpdateChannels.STABLE) {
+            getHttps(API).takeIf { it.isNotBlank() }?.let {
+                listOf(JSONObject(it))
+            } ?: emptyList()
+        } else {
+            val data=org.json.JSONArray(getHttps(BETA_API,1_000_000))
+            (0 until data.length()).map { data.getJSONObject(it) }
         }
+        var best: Release? = null
+        for (json in releases) {
+            if (json.optBoolean("draft") ||
+                !UpdateChannels.accepts(normalized,json.optBoolean("prerelease"))) continue
+            // Skip older third-party or incomplete releases from the beta listing,
+            // but never accept an unverified artifact.
+            val candidate = runCatching { parseVerifiedRelease(json) }.getOrNull()
+                ?: continue
+            if (best==null || candidate.versionCode > best.versionCode)
+                best=candidate
+        }
+        return best
+    }
+
+    private fun parseVerifiedRelease(json: JSONObject): Release {
         val tag = json.getString("tag_name")
+        require(tag.startsWith("v")) { "Release tag must start with v" }
+        val prerelease=json.optBoolean("prerelease")
         val assets = json.getJSONArray("assets")
         val links = linkedMapOf<String, Pair<String,Long>>()
         for (i in 0 until assets.length()) {
@@ -119,17 +155,25 @@ object PocketUpdates {
             require(validDownloadUrl(url)) { "Unexpected GitHub release URL" }
             links[name] = url to asset.optLong("size",0)
         }
-        val manifestUrl = links["pocketcraft-update.json"]?.first
-            ?: error("Release is missing pocketcraft-update.json; cannot verify an update")
-        val manifest = JSONObject(getHttps(manifestUrl, 8192))
-        val name = manifest.getString("apkName")
-        val apk = links[name] ?: error("Release APK does not match its manifest")
-        val hash = manifest.getString("sha256").lowercase(Locale.ROOT)
+        val manifestUrl=links["pocketcraft-update.json"]?.first
+            ?: error("Missing signed-update metadata")
+        val manifest=JSONObject(getHttps(manifestUrl,8192))
+        val name=manifest.getString("apkName")
+        val apk=links[name] ?: error("Release APK does not match its manifest")
+        val hash=manifest.getString("sha256").lowercase(Locale.ROOT)
         require(Regex("[0-9a-f]{64}").matches(hash)) { "Missing valid SHA-256" }
-        val versionName = manifest.getString("versionName")
-        require(tag == "v" + versionName) { "Release tag and manifest version disagree" }
-        val versionCode = manifest.getLong("versionCode")
-        require(versionCode > 0 && versionName.length < 40) { "Invalid release version" }
+        val versionName=manifest.getString("versionName")
+        require(tag=="v"+versionName) { "Release tag and manifest disagree" }
+        require(prerelease==UpdateChannels.isBetaVersion(versionName)) {
+            "Release prerelease flag and version disagree"
+        }
+        if(manifest.has("channel"))
+            require(manifest.getString("channel")==
+                if(prerelease) UpdateChannels.BETA else UpdateChannels.STABLE) {
+                "Manifest update channel mismatch"
+            }
+        val versionCode=manifest.getLong("versionCode")
+        require(versionCode>0 && versionName.length<40) { "Invalid release version" }
         require(apk.second in 1..MAX_APK) { "Unexpected APK size" }
         return Release(versionCode,versionName,tag,
             json.optString("body",""),json.optString("published_at",""),
