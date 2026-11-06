@@ -194,6 +194,26 @@ class PocketCraftUiSmokeTest {
         capture("12-beta-version-filter")
     }
 
+    @Test
+    fun fileManagerSortDialogCanBeOpenedFromRealScreen() {
+        launch(ServerFilesActivity::class.java)
+        var sort = device.findObject(By.textContains("SORT: NAME"))
+        repeat(5) {
+            if (sort == null) {
+                device.swipe(540,1850,540,580,20)
+                device.waitForIdle()
+                sort = device.findObject(By.textContains("SORT: NAME"))
+            }
+        }
+        val button = sort ?: throw AssertionError("File sorting button is not reachable")
+        button.click()
+        assertVisible(By.textContains("Sort files"),"File sorting chooser")
+        capture("13-file-sort-dialog")
+        assertVisible(By.textContains("Modified (newest first)"),
+            "Sort by most recent modification").click()
+        assertVisible(By.textContains("Server files"),"File browser after sorting")
+    }
+
     /**
      * Live Modrinth API is not a test dependency. Capture the actual version
      * selector when connectivity works; never treat a temporary API outage as
