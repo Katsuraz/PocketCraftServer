@@ -1,5 +1,23 @@
 # PocketCraft changelog
 
+## v0.8.44 (versionCode 69) — Stable: Required Dependency Recovery & Compact Release Dialogs
+
+- **Fix for Terralith/Lithostitched HTTP 404 dependencies:** When the CDN URL for an exact required Fabric mod JAR returns HTTP 404/410, PocketCraft now tries Modrinth's **official documented Maven repository** for the same project/version before attempting other compatible releases (for unpinned dependencies). Maven downloads are accepted only after matching the original Modrinth SHA-512 and passing Fabric JAR checks. The user is never silently given an unverified file or an incompatible loader.
+- Use immutable project/version IDs first, with the documented slug+version-number coordinate as another source. Validate all Maven path tokens and refuse traversal, unsupported schemes, and untrusted hosts.
+- Improved error reporting when every verified source is unavailable. Dependency installation still rolls back newly added JARs on failure and never overwrites existing mods.
+- When a required dependency fails, offer a **VIEW REQUIRED MOD** link so the user can retrieve and import a proper matching Fabric dependency manually.
+- Show **automatic compatible release** versus **pinned version** status alongside required dependencies.
+- Replaced the stretched default three-button **Release options** popup with a bounded Homestead-themed dialog using full-width install, download-only and cancel buttons, with scrollable warning text.
+- Added unit tests for safe Modrinth Maven source generation and an Android emulator screenshot/navigation regression for both normal and incompatible release options.
+- Run a non-blocking GitHub CI diagnostic request to test the public Maven artifact endpoint without blocking offline or outage-safe Android builds.
+
+### Limitations and safety
+
+- A publicly listed mod is not proof that its current download URL or Maven mirror is reachable from every location. Actual physical-device download/install success still needs on-device testing.
+- If an explicitly pinned dependency release is unavailable, PocketCraft does not silently replace it with another version. Unpinned dependencies can try alternative compatible versions.
+- Server version, signing certificate, app ID, Minecraft worlds, Playit, Geyser and current install paths are unchanged. The full v0.9.0 roadmap remains open.
+
+
 ## v0.8.43 (versionCode 68) — Stable: Browse Every Modrinth Version
 
 - **Removed restrictive Modrinth search filters** for the selected Minecraft release, Fabric loader and server environment. The Workshop now shows all mods and modpacks of the selected project type; category, search and sorting remain available. Client-only projects are labeled rather than hidden.

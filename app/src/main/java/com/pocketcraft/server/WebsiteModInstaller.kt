@@ -392,6 +392,39 @@ object WebsiteModInstaller {
                                 if (!isMissingFile(e)) throw e
                                 missingCount++
                                 missingAssetName = jar.optString("filename")
+                                // Modrinth's Maven endpoint is a documented
+                                // alternative source of the EXACT same release.
+                                // A SHA-512 match against the original CDN
+                                // metadata is mandatory before any installation.
+                                val originalHash = jar.optJSONObject("hashes")
+                                    ?.optString("sha512")
+                                if (originalHash != null &&
+                                    originalHash.matches(Regex("[0-9a-fA-F]{128}"))) {
+                                    val mirrors = ModrinthArtifactSources.mavenJarCandidates(
+                                        id,project.optString("slug"),
+                                        version.optString("id"),
+                                        version.optString("version_number"))
+                                    for (mirror in mirrors) {
+                                        InstallProgress.check()
+                                        try {
+                                            InstallProgress.emit("Trying verified Modrinth Maven mirror for " +
+                                                title + " " + version.optString("version_number"))
+                                            installFile(context,mirror,jar.getString("filename"),
+                                                originalHash,title)
+                                            installed.add(title + " (verified Maven mirror)")
+                                            completed.add(id)
+                                            return
+                                        } catch (mirrorError: IOException) {
+                                            if (mirrorError.message?.contains("checksum",
+                                                    ignoreCase = true) == true)
+                                                throw IOException("Modrinth Maven returned a different " +
+                                                    "file for " + title +
+                                                    "; expected SHA-512 did not match",mirrorError)
+                                            InstallProgress.emit("Maven mirror unavailable; " +
+                                                "trying another verified source…")
+                                        }
+                                    }
+                                }
                                 // Modrinth's Fabric API CDN links can return 404
                                 // even while the exact artifact is published by Fabric.
                                 // Only use the official Fabric artifacts when the
@@ -452,7 +485,8 @@ object WebsiteModInstaller {
                     throw IOException("No Fabric " + current + " server release for " + title)
                 if (missingCount > 0)
                     throw IOException(title + " has a Fabric " + current +
-                        " version, but its JAR download returned HTTP 404/410" +
+                        " release, but its download is unavailable (HTTP 404/410) " +
+                        "on Modrinth CDN and verified Maven fallback" +
                         (missingAssetName?.let { " (" + it + ")" } ?: "") +
                         ". Try the official Fabric JAR from the author's website, then " +
                         "Mods > IMPORT MOD. Do not use the Bukkit/Paper plugin JAR." +

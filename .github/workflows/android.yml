@@ -60,6 +60,30 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+      # An external integration probe, deliberately non-blocking: Modrinth's
+      # network can be down, but the Android app must still compile and test.
+      - name: Probe official Modrinth Maven fallback for Lithostitched (diagnostic)
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        run: |
+          set +e
+          PROJECT="XaDC71GB"
+          RELEASE="pZgI6b2t"
+          SRC="https://api.modrinth.com/maven/maven/modrinth/$PROJECT/$RELEASE/$PROJECT-$RELEASE.jar"
+          echo "Probing immutable Modrinth Maven release for Fabric 26.3"
+          curl --location --fail --silent --show-error \
+            --connect-timeout 10 --max-time 35 \
+            --output "$RUNNER_TEMP/lithostitched-maven.jar" \
+            --write-out "Maven HTTP %{http_code}, bytes %{size_download}, final %{url_effective}\n" \
+            "$SRC"
+          status=$?
+          if [ "$status" -eq 0 ]; then
+            sha512sum "$RUNNER_TEMP/lithostitched-maven.jar"
+            file "$RUNNER_TEMP/lithostitched-maven.jar"
+          else
+            echo "Maven probe unavailable; fallback cannot be claimed as tested on this run."
+          fi
+          exit 0
       - name: Install Android SDK components
         run: |
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
