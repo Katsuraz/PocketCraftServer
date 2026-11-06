@@ -1,5 +1,16 @@
 # PocketCraft changelog
 
+## v0.8.37 (versionCode 59) — NetherNet reliability and safer Playit setup
+
+- Fix Bedrock NetherNet public join address display: normalize a Playit `nethernet` tunnel's Bedrock client hostname to port 19132 instead of showing its reported UDP allocation port, without rewriting Java or legacy Bedrock tunnel addresses.
+- Preserve the unmodified Playit-reported endpoint as an explicitly labeled diagnostic when it differs from the Bedrock join address.
+- Restore a guided **Paste Playit Geyser Settings** action to Geyser Settings → Files. Safely merge supported `bedrock` and `java.auth-type` values from Playit's Configuration Help into the existing Geyser config.
+- Preserve unrelated YAML, existing NXS credentials when omitted from the pasted snippet, world and server data. Normalize legacy misplaced advertised UDP addresses into Geyser's signaling section.
+- Block edits while the server is starting, running or stopping; use an atomic write and a private backup before replacement.
+- Add address-regression and Geyser-import tests, including duplicate-field rejection and no-secret error handling.
+- **Limitations:** Tunnel assignment alone does not establish successful public Bedrock connectivity. Verify Android WebRTC JNI, Playit agent startup and a real Bedrock join on hardware before claiming full crossplay success.
+
+
 ## v0.8.36 (versionCode 58) — Homestead 2 UI overhaul
 
 - Completely rebuild Home as a woodland server launchpad with compact server status, cabin artwork, quick-entry tiles and a dedicated advanced hosting panel. Existing Java, Playit, and Bedrock services remain unchanged.
