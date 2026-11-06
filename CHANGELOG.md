@@ -1,5 +1,16 @@
 # PocketCraft changelog
 
+## v0.8.39 (versionCode 61) — Customizable Hosting & Tools layouts
+
+- Rework **Home → Hosting & Tools** to end the long wall of stacked explanatory panels.
+- Add three selectable views: **Minimal** (short single-line tool rows, default), **Cards** (two-column shortcut tiles), and **Detailed** (original full hosting panels and all diagnostics).
+- Provide **Customize → Show / Hide Tools** with independently toggleable Friends, Local, Playit, Server, Tools and Health shortcuts. Save layout and visibility in app preferences, and provide an easy reset to defaults.
+- Keep every original hosting action, Java / Bedrock connection chooser, local-server panel, Playit panel, engine controls, setup utilities, health checks and troubleshooting available on demand; existing Detailed view retains the original live-refresh panels.
+- All feature changes are UI-only and additive. Keep Java runtime, Geyser, Playit, server data, world and mod files, signing identity and update pipeline unchanged. Include regression tests for layout defaults and visibility behavior.
+- Three editable design studies added to the existing PocketCraft Figma Homestead file.
+- **Validation:** Android CI build and unit tests must pass. Physical phone UI and Bedrock connectivity still require an on-device smoke test.
+
+
 ## v0.8.38 (versionCode 60) — Minimal Homestead interface overhaul
 
 - Rebuild the Geyser/Bedrock settings flow around **Connect**, **Advanced** and **Files**. The primary screen shows only current configuration state and Playit import; all detailed ports, transport, signaling, STUN, NXS and credentials remain accessible in Advanced.
