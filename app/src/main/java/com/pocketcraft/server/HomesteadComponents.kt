@@ -82,6 +82,35 @@ internal object HomesteadComponents {
         return bar
     }
 
+    fun subpageHeader(
+        c: Context, title: String, subtitle: String, onBack: () -> Unit
+    ): LinearLayout {
+        val row=ui.row(c).apply {
+            background=ui.shape(c,ui.SUBTLE,0)
+            setPadding(d(c,15),d(c,13),d(c,17),d(c,13))
+            minimumHeight=d(c,68)
+        }
+        val back=ui.text(c,"‹",31f,ui.GREEN,true).apply {
+            gravity=Gravity.CENTER
+            background=ui.pressable(c,ui.shape(c,ui.SURFACE,12,ui.BORDER))
+            contentDescription="Back"
+            isFocusable=true
+            isClickable=true
+            setOnClickListener {
+                PocketSounds.play(c,PocketSounds.Event.CLICK)
+                onBack()
+            }
+        }
+        row.addView(back,LinearLayout.LayoutParams(d(c,46),d(c,46)))
+        row.addView(ui.column(c).apply {
+            setPadding(d(c,13),0,0,0)
+            addView(ui.text(c,title,18f,ui.WHITE,true))
+            addView(ui.space(c,5))
+            addView(ui.text(c,subtitle.uppercase(),10f,ui.CYAN,true))
+        },LinearLayout.LayoutParams(0,-2,1f))
+        return row
+    }
+
     fun bottomDock(c: Context, selectedTab: Int, onNavigate: (Int) -> Unit): LinearLayout {
         val dock = ui.row(c).apply {
             background = ui.shape(c, ui.PANEL, 0, ui.BORDER)
