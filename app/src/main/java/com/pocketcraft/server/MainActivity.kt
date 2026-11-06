@@ -673,33 +673,50 @@ class MainActivity : Activity() {
         layoutHeader.addView(ui.action(this,"CUSTOMIZE") { chooseHostingLayout() })
         detailGroup.addView(layoutHeader)
         detailGroup.addView(ui.space(this,10))
+        val isVisible: (HostingToolsLayout.Section) -> Boolean = {
+            prefs.getBoolean(HostingToolsLayout.key(it),true)
+        }
         if (selectedMode == HostingToolsLayout.Mode.CLASSIC) {
             if(blockers>0) {
                 detailGroup.addView(setupJourney())
                 detailGroup.addView(ui.space(this,12))
             }
-            val join=FrameLayout(this)
-            join.addView(connectionJourneyPanel())
-            connectionHost=join
-            lastConnectionSignature=""
-            detailGroup.addView(join)
-            detailGroup.addView(ui.space(this,12))
-            val local=FrameLayout(this)
-            local.addView(phoneOnlyPanel())
-            phoneHost=local
-            lastPhoneSignature=""
-            detailGroup.addView(local)
-            detailGroup.addView(ui.space(this,12))
-            val online=FrameLayout(this)
-            online.addView(internetPanel())
-            onlineHost=online
-            lastOnlineSignature=""
-            detailGroup.addView(online)
-            detailGroup.addView(ui.space(this,12))
-            detailGroup.addView(enginePanel())
-            detailGroup.addView(ui.space(this,12))
-            detailGroup.addView(hostingToolbox())
-        } else {
+            if(isVisible(HostingToolsLayout.Section.FRIENDS)) {
+                val join=FrameLayout(this)
+                join.addView(connectionJourneyPanel())
+                connectionHost=join
+                lastConnectionSignature=""
+                detailGroup.addView(join)
+                detailGroup.addView(ui.space(this,12))
+            }
+            if(isVisible(HostingToolsLayout.Section.LOCAL)) {
+                val local=FrameLayout(this)
+                local.addView(phoneOnlyPanel())
+                phoneHost=local
+                lastPhoneSignature=""
+                detailGroup.addView(local)
+                detailGroup.addView(ui.space(this,12))
+            }
+            if(isVisible(HostingToolsLayout.Section.PLAYIT)) {
+                val online=FrameLayout(this)
+                online.addView(internetPanel())
+                onlineHost=online
+                lastOnlineSignature=""
+                detailGroup.addView(online)
+                detailGroup.addView(ui.space(this,12))
+            }
+            if(isVisible(HostingToolsLayout.Section.SERVER)) {
+                detailGroup.addView(enginePanel())
+                detailGroup.addView(ui.space(this,12))
+            }
+            if(isVisible(HostingToolsLayout.Section.TOOLS)) {
+                detailGroup.addView(hostingToolbox())
+                detailGroup.addView(ui.space(this,12))
+            }
+            if(isVisible(HostingToolsLayout.Section.HEALTH)) {
+                detailGroup.addView(ui.action(this,"✓  HEALTH CHECKS") { showHealthCenter() })
+            }
+                } else {
             val items=HostingToolsLayout.visible { section ->
                 prefs.getBoolean(HostingToolsLayout.key(section),true)
             }
