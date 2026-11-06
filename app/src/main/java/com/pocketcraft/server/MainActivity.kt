@@ -66,6 +66,8 @@ class MainActivity : Activity() {
         override fun run() {
             val state = ServerService.status
             readyText?.text = when {
+                state=="STARTING" -> "Starting Minecraft • not joinable yet"
+                state=="STOPPING" -> "Stopping Minecraft • closing connections"
                 !ServerService.running -> if(state=="ERROR") "Server error • open Console" else "Server offline"
                 ServerService.javaReady && ServerService.bedrockJoinVerified -> "Java + Bedrock player joined"
                 ServerService.javaReady && ServerService.bedrockReady -> "Java ready • Geyser started (not tested)"
@@ -585,7 +587,7 @@ class MainActivity : Activity() {
             ServerService.running -> "■  STOP SERVER"
             blockers > 0 -> "✦  FINISH SETUP"
             else -> "▶  START SERVER"
-        },true,!busy) {
+        },true) {
             when {
                 ServerService.status in setOf("STARTING","STOPPING") -> toast("Minecraft is busy")
                 ServerService.running -> confirmStopMinecraft()
