@@ -1419,11 +1419,20 @@ class MainActivity : Activity() {
             })
         }
         card.addView(ui.space(this,10))
-        card.addView(ui.action(this,"SWITCH AGENT") {
+        val extras=ui.column(this).apply { visibility=View.GONE }
+        val more=ui.action(this,"MORE OPTIONS  ▾") {}
+        more.setOnClickListener {
+            val show=extras.visibility!=View.VISIBLE
+            extras.visibility=if(show)View.VISIBLE else View.GONE
+            more.text=if(show)"FEWER OPTIONS  ▴" else "MORE OPTIONS  ▾"
+        }
+        card.addView(more)
+        card.addView(extras)
+        extras.addView(ui.action(this,"SWITCH AGENT") {
             existingPlayitAgentPrompt()
         })
-        card.addView(ui.space(this,9))
-        card.addView(ui.action(this,"DIAGNOSTICS") {
+        extras.addView(ui.space(this,9))
+        extras.addView(ui.action(this,"DIAGNOSTICS") {
             AlertDialog.Builder(this)
                 .setTitle("Internet hosting diagnostics")
                 .setMessage(PlayitManager.recentLog(this).takeLast(4500))
@@ -1433,8 +1442,8 @@ class MainActivity : Activity() {
                 .setPositiveButton("CLOSE",null)
                 .show()
         })
-        card.addView(ui.space(this,8))
-        card.addView(ui.action(this,"ⓘ  SETUP HELP") {
+        extras.addView(ui.space(this,8))
+        extras.addView(ui.action(this,"ⓘ  SETUP HELP") {
             AlertDialog.Builder(this).setTitle("Remote access")
                 .setMessage("Assign tunnels to this phone's Playit agent. " +
                     "Java: 127.0.0.1:$javaPort. Bedrock: 127.0.0.1:$bedrockPort. " +
