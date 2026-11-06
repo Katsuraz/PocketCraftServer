@@ -528,7 +528,12 @@ class SettingsActivity : Activity() {
     @Deprecated("Activity result callback")
     override fun onActivityResult(requestCode:Int,resultCode:Int,data:Intent?) {
         super.onActivityResult(requestCode,resultCode,data)
-        if (requestCode == 72 && resultCode == RESULT_OK) {\n            ui.loadTheme(this)\n            recreate()\n            return\n        }\n        if (requestCode != 71 || resultCode != RESULT_OK) return
+        if (requestCode == 72 && resultCode == RESULT_OK) {
+            ui.loadTheme(this)
+            recreate()
+            return
+        }
+        if (requestCode != 71 || resultCode != RESULT_OK) return
         val fontUri = data?.data ?: return
         val filename = runCatching {
             contentResolver.query(fontUri,arrayOf(android.provider.OpenableColumns.DISPLAY_NAME),
