@@ -294,7 +294,8 @@ object WebsiteModInstaller {
             e is IOException && (e.message?.contains("HTTP 404") == true ||
                 e.message?.contains("HTTP 410") == true)
         fun installProject(projectSlug: String, preferredVersionId: String? = null,
-                           depth: Int = 0, recovered: Boolean = false) {
+                           depth: Int = 0, recovered: Boolean = false,
+                           excludeVersionId: String? = null) {
             if (depth > 12 || completed.size > 30) throw IOException("Too many nested dependencies")
             val project = json("https://api.modrinth.com/v2/project/" + encode(projectSlug))
             val id = project.getString("id")
@@ -328,6 +329,10 @@ object WebsiteModInstaller {
                     InstallProgress.check()
                     val version = versions.getJSONObject(i)
                     if (version.optString("project_id") != id) continue
+                    // Never retry the exact immutable pin whose download
+                    // just failed. Choose a genuinely different release.
+                    if (excludeVersionId != null &&
+                        version.optString("id") == excludeVersionId) continue
                     val games = version.optJSONArray("game_versions") ?: JSONArray()
                     val loaders = version.optJSONArray("loaders") ?: JSONArray()
                     // Explicit pinned versions may be for another Minecraft
@@ -382,7 +387,8 @@ object WebsiteModInstaller {
                                         installProject(dependencyProjectId,depVersion,depth+1)
                                     },
                                     compatible = {
-                                        installProject(dependencyProjectId,null,depth+1,recovered=true)
+                                        installProject(dependencyProjectId,null,depth+1,
+                                            recovered=true,excludeVersionId=depVersion)
                                     },
                                     onRecover = {
                                         InstallProgress.emit("Pinned dependency " + dependencyProjectId +
