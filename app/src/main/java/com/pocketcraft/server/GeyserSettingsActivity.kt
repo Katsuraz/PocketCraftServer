@@ -113,20 +113,8 @@ class GeyserSettingsActivity : Activity() {
         signaling = values.signalingMode.takeIf { it in listOf("builtin", "nxs", "hybrid", "none") } ?: "hybrid"
 
         val screen = ui.column(this).apply { setBackgroundColor(ui.BG) }
-        val header = ui.row(this).apply {
-            setPadding(ui.dp(this@GeyserSettingsActivity, 18), ui.dp(this@GeyserSettingsActivity, 18),
-                ui.dp(this@GeyserSettingsActivity, 18), ui.dp(this@GeyserSettingsActivity, 14))
-        }
-        header.addView(ui.text(this, "‹", 32f, ui.GREEN, true).apply {
-            contentDescription = "Back"
-            setOnClickListener { finish() }
-            setPadding(0, 0, ui.dp(this@GeyserSettingsActivity, 18), 0)
-        })
-        header.addView(ui.column(this).apply {
-            addView(ui.text(this@GeyserSettingsActivity, "Bedrock & Geyser", 20f, ui.WHITE, true))
-            addView(ui.text(this@GeyserSettingsActivity, "EASY NETWORK SETTINGS", 10f, ui.MUTED, true))
-        })
-        screen.addView(header)
+        screen.addView(HomesteadComponents.subpageHeader(this,
+            "Bedrock & Geyser","Network configuration") { finish() })
 
         val scroll = ScrollView(this).apply { isFillViewport = true }
         val body = ui.column(this).apply {
