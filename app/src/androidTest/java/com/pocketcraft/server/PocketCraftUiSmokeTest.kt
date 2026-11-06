@@ -142,6 +142,54 @@ class PocketCraftUiSmokeTest {
     }
 
     /**
+     * Deterministic UI regression for the same long version list users see:
+     * no network dependency or server process required.
+     */
+    @Test
+    fun modrinthVersionPickerIsStyledFilterableAndScrollable() {
+        val screen=instrumentation.startActivitySync(Intent(context,
+            ModrinthStudioActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+            })
+        device.waitForIdle()
+        val releases=(0 until 13).map { index ->
+            val type=when(index) {
+                2 -> "beta"
+                4 -> "alpha"
+                else -> "release"
+            }
+            ModrinthCatalog.Version(
+                "version"+index,"fabric-api","Fabric API",
+                "0."+(165-index)+".2+26.3",type,
+                "2026-11-"+(3+index).toString().padStart(2,'0'),
+                (52000-index*1000).toLong(),
+                if(index==3)2 else 0,
+                if(index==3)1 else 0,
+                0,"fabric-api.jar","https://cdn.modrinth.com/data/sample.jar",
+                null,listOf("26.3"),"server_only"
+            )
+        }
+        instrumentation.runOnMainSync {
+            ModrinthVersionPicker.show(screen,"Fabric API","26.3",releases) {}
+        }
+        assertVisible(By.textContains("Choose Fabric API version"),"Themed version heading")
+        assertVisible(By.textContains("0.165.2+26.3"),"Newest version card")
+        assertVisible(By.desc("Filter BETA versions"),"Release channel filters")
+        capture("10-version-picker-full-list")
+
+        assertVisible(By.desc("Filter BETA versions"),"Beta filter").click()
+        assertVisible(By.textContains("0.163.2+26.3"),"Beta version")
+        assertVisible(By.textContains("1 of 13"),"Filtered release count")
+        capture("11-version-picker-beta")
+
+        assertVisible(By.desc("Filter ALL versions"),"All versions").click()
+        assertVisible(By.textContains("13 of 13"),"All releases")
+        assertVisible(By.textContains("ORDER"),"Sort toggle").click()
+        assertVisible(By.textContains("oldest first"),"Oldest-first feedback")
+        capture("12-version-picker-sorted")
+    }
+
+    /**
      * Live Modrinth API is not a test dependency. Capture the actual version
      * selector when connectivity works; never treat a temporary API outage as
      * a PocketCraft build or UI defect.
