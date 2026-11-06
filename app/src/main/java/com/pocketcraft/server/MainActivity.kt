@@ -1979,11 +1979,19 @@ class MainActivity : Activity() {
         discovery.addView(ui.text(this,"Find something new",18f,ui.WHITE,true))
         discovery.addView(ui.space(this,6))
         discovery.addView(ui.text(this,
-            "Browse Modrinth without needing to manage folders manually.",12f,ui.MUTED))
+            "Search, sort and browse pages of Modrinth projects. Choose exact Fabric releases, required and optional dependencies, or modpack versions.",12f,ui.MUTED))
         discovery.addView(ui.space(this,13))
-        discovery.addView(ui.action(this,"⌕  BROWSE MODS",true) { browseMods() })
+        discovery.addView(ui.action(this,"⌕  OPEN MODRINTH MODS",true) {
+            startActivity(Intent(this,ModrinthStudioActivity::class.java).apply {
+                putExtra(ModrinthStudioActivity.EXTRA_TYPE,"mod")
+            })
+        })
         discovery.addView(ui.space(this,8))
-        discovery.addView(ui.action(this,"▦  BROWSE MODPACKS") { browseModrinth() })
+        discovery.addView(ui.action(this,"▦  OPEN MODRINTH MODPACKS") {
+            startActivity(Intent(this,ModrinthStudioActivity::class.java).apply {
+                putExtra(ModrinthStudioActivity.EXTRA_TYPE,"modpack")
+            })
+        })
         body.addView(discovery)
         body.addView(ui.space(this,16))
 
