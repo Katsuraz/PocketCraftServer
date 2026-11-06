@@ -1,5 +1,20 @@
 # PocketCraft changelog
 
+## v0.9.0-beta.3 (versionCode 64) — Console Shortcuts & Accurate Player Lists
+
+**Incremental official beta, not a completed v0.9.0 stable release.**
+
+- Console quick commands: edit labels and commands for all four shortcut slots, save preferences locally, and reset to defaults. Changes never execute commands by themselves. Custom actions show a confirmation before sending anything to the live Minecraft server.
+- Correct player tracking for Minecraft's modern "System chat: There are N ... players online" /list responses, including Floodgate-prefixed names, an empty roster, and advertised max player count.
+- Ignore misleading player-chat text and reject malformed, contradictory, or duplicate-name status lists instead of overwriting known player data.
+- Add command validation and roster regression tests; preserve all existing logs, worlds, mods, networking, settings, signing identity, themes, and update channels.
+
+### Beta limitations
+- Physical Android testing, real Java/Bedrock joins, Playit/NetherNet validation, and final UI QA remain outstanding.
+- Custom server commands may be dangerous; check each command before confirming. Fabric mod command discovery remains limited to commands exposed in server /help.
+- Only the most recent observed server roster is shown, not a guaranteed real-time player session API. No automatic scheduling or full JVM TPS measurement is claimed.
+
+
 ## v0.9.0-beta.2 (versionCode 63) — Reliability, Backup Safety & Management QoL
 
 **Official public beta; stable users remain on v0.8.39 unless they opt in.**
