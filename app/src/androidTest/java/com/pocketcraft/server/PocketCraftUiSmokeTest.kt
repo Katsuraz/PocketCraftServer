@@ -40,6 +40,32 @@ class PocketCraftUiSmokeTest {
             .commit()
         device.setOrientationNatural()
         device.waitForIdle()
+        dismissHostLauncherAnr()
+    }
+
+    /**
+     * Pixel_5 emulator boot occasionally shows an "Pixel Launcher isn't
+     * responding" system ANR *over the already-running PocketCraft app*.
+     * This is an emulator host issue, not an app failure. Dismiss ONLY this
+     * known launcher modal; never dismiss PocketCraft crashes or errors.
+     */
+    private fun dismissHostLauncherAnr() {
+        repeat(3) {
+            val launcherAnr=device.findObject(
+                By.textContains("Pixel Launcher isn't responding"))
+                ?: device.findObject(By.textContains("Pixel Launcher keeps stopping"))
+                ?: return
+            val close=device.findObject(By.text("Close app"))
+            if(close==null) throw AssertionError(
+                "Pixel Launcher error was shown but cannot be dismissed. " +
+                "See the Android emulator screenshot artifact.")
+            Log.w("PocketCraftUISmoke",
+                "Dismissing Pixel Launcher system error, not PocketCraft")
+            close.click()
+            device.waitForIdle()
+        }
+        if(device.findObject(By.textContains("Pixel Launcher isn't responding"))!=null)
+            throw AssertionError("Pixel Launcher keeps blocking the test emulator")
     }
 
     private fun launch(type: Class<out Activity>) {
@@ -49,6 +75,7 @@ class PocketCraftUiSmokeTest {
         instrumentation.startActivitySync(intent)
         instrumentation.waitForIdleSync()
         device.waitForIdle()
+        dismissHostLauncherAnr()
         // Capture the FIRST rendered frame, including permission prompts or
         // a system crash dialog, so failed launches remain diagnosable.
         capture("00-launch-" + type.simpleName)
@@ -63,8 +90,15 @@ class PocketCraftUiSmokeTest {
     }
 
     private fun assertVisible(selector: BySelector, description: String): UiObject2 {
-        return device.wait(Until.findObject(selector), 15_000L)
-            ?: throw AssertionError(description + " was not displayed (check the UI screenshot artifact)")
+        // Recover from the emulator's Pixel Launcher ANR even if it appears
+        // mid-test after the activity has started. Real app failures still fail.
+        repeat(2) {
+            dismissHostLauncherAnr()
+            val found=device.wait(Until.findObject(selector), 7_500L)
+            if(found!=null)return found
+        }
+        throw AssertionError(description +
+            " was not displayed (check the UI screenshot artifact)")
     }
 
     private fun capture(name: String) {
