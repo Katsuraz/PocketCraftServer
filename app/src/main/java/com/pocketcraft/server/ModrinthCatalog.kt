@@ -85,7 +85,7 @@ internal object ModrinthCatalog {
         conn.connectTimeout = 18000
         conn.readTimeout = 45000
         conn.instanceFollowRedirects = false
-        conn.setRequestProperty("User-Agent", "PocketCraftServer/0.8.40 (Android; Fabric server manager)")
+        conn.setRequestProperty("User-Agent", "PocketCraftServer/0.8.41 (Android; Fabric server manager)")
         conn.setRequestProperty("Accept", "application/json")
         try {
             if (conn.responseCode !in 200..299)
