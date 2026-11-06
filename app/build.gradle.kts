@@ -10,8 +10,8 @@ android {
         minSdk = 26
         targetSdk = 34
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        versionCode = 69
-        versionName = "0.8.44"
+        versionCode = 70
+        versionName = "0.8.45"
     }
     signingConfigs {
         create("pocketcraftUpdates") {
