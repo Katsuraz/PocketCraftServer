@@ -1,5 +1,26 @@
 # PocketCraft changelog
 
+## v0.9.0-beta.1 (versionCode 62) — Official public beta: Appearance Studio and update channels
+
+**Experimental prerelease:** Core Minecraft hosting is preserved; visual and updater changes require physical-device beta testing.
+
+### Implemented
+- Ten built-in UI color palettes: Homestead, Midnight, Obsidian, Aurora, Nether, Ender, Oceanic, Classic Minecraft, Material You and Minimal. Existing Homestead and Midnight preferences migrate without loss.
+- Centralized palette tokens across existing UI components, with original Homestead timber look preserved and compact density support.
+- New **Appearance Studio**: scrollable theme gallery, theme-specific screen previews, apply, custom RGB accent (contrast checked), density choices, and reset. UI changes persist without writing Minecraft files.
+- Explicit opt-in **Beta / Stable** release channel selector with a clear downgrade warning. Stable continues to use GitHub's latest stable release; Beta checks eligible GitHub prereleases and stable releases.
+- Signed APK verification still checks SHA-256, versionCode, package identity and signing certificate; beta releases use matching channel metadata and are marked **prerelease** on GitHub.
+- Retained customizable Hosting & Tools Minimal/Cards/Detailed layouts, server-world/mod storage, runtime, Geyser, Floodgate and Playit integrations from v0.8.39.
+- Added theme and channel-policy unit tests.
+
+### Beta limitations / not yet implemented
+- Not a completed overhaul of the console, mod manager, backup engine, crossplay runtime or server-performance profiler. These remain in the v0.9.0 roadmap.
+- On-device visual QA across all 10 themes and a real remote Bedrock join are still required; CI compilation is not proof of either.
+- No arbitrary JSON theme import/export, custom icon packs, or unverified performance gains in this beta.
+- Dynamic Material You color extraction requires Android 12 or later; older versions use a tested static palette.
+- If running a newer beta, Android will not downgrade to an older stable build. Back up your worlds before joining Beta.
+
+
 ## v0.8.39 (versionCode 61) — Customizable Hosting & Tools layouts
 
 - Rework **Home → Hosting & Tools** to end the long wall of stacked explanatory panels.
