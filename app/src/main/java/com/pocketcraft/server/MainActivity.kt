@@ -2464,6 +2464,9 @@ class MainActivity : Activity() {
                 }
             }
         }
+        if(!WorldStore.isPending(file))item("♻  REGENERATE WORLD",offline) {
+            showWorldRegeneration(file)
+        }
         if(!WorldStore.isPending(file))item("EXPORT WORLD ZIP",offline) {
             pendingBackup=file
             createBackupDocument(file)
@@ -2483,6 +2486,133 @@ class MainActivity : Activity() {
             .setView(ScrollView(this).apply{addView(panel)})
             .setNegativeButton("CLOSE",null).create()
         dialog.show()
+    }
+
+    /**
+     * Regeneration has two explicit paths. The default makes an independent fresh
+     * world; destructive in-place reset requires typing the old world name and
+     * saves a verified snapshot before any world files are replaced.
+     */
+    private fun showWorldRegeneration(world: File) {
+        if (ServerService.running || ServerService.status in setOf("STARTING","STOPPING")) {
+            toast("Stop the Minecraft server before regenerating worlds.")
+            return
+        }
+        val progress = AlertDialog.Builder(this)
+            .setTitle("Checking world seed")
+            .setMessage("Reading the actual Minecraft seed and datapack list…")
+            .setCancelable(false).create()
+        progress.show()
+        Thread {
+            val result = runCatching { WorldRegeneration.preview(this, world) }
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                progress.dismiss()
+                result.onFailure {
+                    AlertDialog.Builder(this).setTitle("Cannot regenerate automatically")
+                        .setMessage("PocketCraft could not verify this world's original seed. " +
+                            "Nothing was changed.\\n\\n" + (it.message ?: "Invalid world data"))
+                        .setPositiveButton("OK",null).show()
+                }.onSuccess { p ->
+                    AlertDialog.Builder(this).setTitle("Regenerate " + p.name)
+                        .setMessage("Original seed: " + p.seed +
+                            "\\nDatapack entries: " + p.datapacks +
+                            "\\n\\nThe same seed and datapacks will be used. " +
+                            "Fresh terrain, new inventories, achievements, entities and structures. " +
+                            "For identical terrain, keep the same Minecraft and worldgen mod versions.")
+                        .setItems(arrayOf(
+                            "CREATE FRESH WORLD (original kept)",
+                            "RESET THIS WORLD (automatic snapshot)"
+                        )) { _, option ->
+                            if (option == 0) {
+                                askWorldName("Regenerate as new world",
+                                    "New world name", p.name.take(32) + "-fresh") { name ->
+                                    AlertDialog.Builder(this)
+                                        .setTitle("Create regenerated world?")
+                                        .setMessage("Create '" + name + "' with seed " + p.seed +
+                                            " and the exact current datapacks? The original '" + p.name +
+                                            "' will remain unchanged.")
+                                        .setNegativeButton("CANCEL",null)
+                                        .setPositiveButton("CREATE") { _, _ ->
+                                            runWorldRegeneration("Regenerate as new world",{
+                                                WorldRegeneration.regenerateAsNew(this, world, name).message
+                                            }) { openedWorldFolder = name }
+                                        }.show()
+                                }
+                            } else {
+                                confirmReplaceWorld(world, p.seed)
+                            }
+                        }.setNegativeButton("CANCEL",null).show()
+                }
+            }
+        }.start()
+    }
+
+    private fun confirmReplaceWorld(world: File, originalSeed: Long) {
+        val entry = android.widget.EditText(this).apply {
+            hint = "Type " + world.name
+            setSingleLine(true)
+            setTextColor(ui.WHITE)
+            setHintTextColor(ui.MUTED)
+            background = ui.shape(this@MainActivity,ui.SURFACE,12,ui.BORDER)
+            setPadding(ui.dp(this@MainActivity,12),ui.dp(this@MainActivity,12),
+                ui.dp(this@MainActivity,12),ui.dp(this@MainActivity,12))
+        }
+        val content = ui.column(this).apply {
+            setPadding(ui.dp(this@MainActivity,20),ui.dp(this@MainActivity,12),
+                ui.dp(this@MainActivity,20),ui.dp(this@MainActivity,14))
+            addView(ui.text(this@MainActivity,
+                "This will reset '" + world.name + "' to seed " + originalSeed +
+                ". Buildings, inventories, advancements and generated chunks will be erased " +
+                "from the live world. A verified local snapshot is required BEFORE the reset. " +
+                "Keep your own off-device backup as well.",12f,ui.MUTED))
+            addView(ui.space(this@MainActivity,12))
+            addView(entry)
+        }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Confirm irreversible world reset")
+            .setView(content).setNegativeButton("CANCEL",null)
+            .setPositiveButton("BACK UP & RESET",null).create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                if (entry.text.toString().trim() != world.name) {
+                    entry.error = "Type the world name exactly to confirm."
+                    return@setOnClickListener
+                }
+                dialog.dismiss()
+                runWorldRegeneration("Back up and reset world",{
+                    WorldRegeneration.regenerateSameName(this,world).message
+                }) { openedWorldFolder = world.name }
+            }
+        }
+        dialog.show()
+    }
+
+    /** A reset must finish or roll back atomically; no misleading cancel button. */
+    private fun runWorldRegeneration(label: String, action: () -> String,
+                                      onSuccess: () -> Unit) {
+        val wait = AlertDialog.Builder(this).setTitle(label)
+            .setMessage("Preparing the fresh world and checking all files. " +
+                "Keep PocketCraft open until this operation finishes.")
+            .setCancelable(false).create()
+        wait.show()
+        Thread {
+            val result = runCatching { action() }
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                wait.dismiss()
+                result.onSuccess {
+                    onSuccess()
+                    render()
+                    AlertDialog.Builder(this).setTitle("World ready for generation")
+                        .setMessage(it).setPositiveButton("OK",null).show()
+                }.onFailure {
+                    AlertDialog.Builder(this).setTitle("Regeneration stopped")
+                        .setMessage(it.message ?: "Check storage space and world data.")
+                        .setPositiveButton("OK",null).show()
+                }
+            }
+        }.start()
     }
 
     private fun showSnapshotManager(world: File? = null) {
