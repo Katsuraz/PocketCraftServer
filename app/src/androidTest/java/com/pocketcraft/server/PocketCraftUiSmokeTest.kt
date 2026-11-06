@@ -1,7 +1,10 @@
 package com.pocketcraft.server
 
 import android.app.Activity
+import android.content.ContentValues
 import android.content.Intent
+import android.os.Environment
+import android.provider.MediaStore
 import android.util.Log
 import android.widget.EditText
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -72,17 +75,33 @@ class PocketCraftUiSmokeTest {
         val output = File(folder,name + ".png")
         assertTrue("Failed to capture " + name, device.takeScreenshot(output))
         assertTrue("Empty screenshot " + name, output.length() > 1000L)
-        // Gradle connectedAndroidTest may uninstall the target APK after tests.
-        // Persist a second copy to the emulator's public Download directory
-        // using the UI Automator shell identity so ADB can retrieve it later.
-        val publicDir = "/sdcard/Download/pocketcraft-ui-smoke"
-        val publicFile = "$publicDir/$name.png"
-        val proof = device.executeShellCommand(
-            "mkdir -p $publicDir && screencap -p $publicFile && stat -c %s $publicFile"
-        ).trim()
-        val size = proof.substringBefore(' ').toLongOrNull() ?: 0L
-        assertTrue("Could not preserve emulator screenshot $name: $proof", size > 1000L)
-        Log.i("PocketCraftUISmoke", "Saved screenshot " + publicFile + " (" + size + " bytes)")
+        // Android 10+ requires MediaStore for owned files in public Pictures.
+        // Files persist after Gradle uninstalls the temporary test APK.
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, name + ".png")
+            put(MediaStore.MediaColumns.MIME_TYPE, "image/png")
+            put(MediaStore.MediaColumns.RELATIVE_PATH,
+                Environment.DIRECTORY_PICTURES + "/PocketCraftUISmoke")
+            put(MediaStore.MediaColumns.IS_PENDING, 1)
+        }
+        val uri = context.contentResolver.insert(
+            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,values)
+            ?: throw AssertionError("Could not create public emulator screenshot " + name)
+        try {
+            val bytes = context.contentResolver.openOutputStream(uri)?.use { stream ->
+                output.inputStream().use { input -> input.copyTo(stream) }
+            } ?: 0L
+            assertTrue("Incomplete screenshot export " + name, bytes == output.length())
+            val published = ContentValues().apply {
+                put(MediaStore.MediaColumns.IS_PENDING,0)
+            }
+            assertTrue("Screenshot not published " + name,
+                context.contentResolver.update(uri,published,null,null) > 0)
+            Log.i("PocketCraftUISmoke","Saved public screenshot " + name + " (" + bytes + " bytes)")
+        } catch (error: Exception) {
+            context.contentResolver.delete(uri,null,null)
+            throw error
+        }
     }
 
     @Test
