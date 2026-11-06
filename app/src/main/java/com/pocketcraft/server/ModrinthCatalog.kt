@@ -136,7 +136,7 @@ internal object ModrinthCatalog {
             if (!validIdentifier(id) || !validIdentifier(slug)) return@mapNotNull null
             val environments = strings(hit.optJSONArray("environment"))
             // Double-check even if the remote search index ignores environment facets.
-            if (type == "mod" && onlyClientSide(hit.optString("server_side"),environments))
+            if (onlyClientSide(hit.optString("server_side"),environments))
                 return@mapNotNull null
             val serverHint = if (environments.isEmpty() || "unknown" in environments)
                 "Server suitability: verify release"
@@ -158,7 +158,7 @@ internal object ModrinthCatalog {
         if (gameVersion !in strings(raw.optJSONArray("game_versions")) ||
             "fabric" !in strings(raw.optJSONArray("loaders"))) return null
         val environment = raw.optString("environment")
-        if (type == "mod" && !isServerEligible(environment)) return null
+        if (!isServerEligible(environment)) return null
         val extension = if (type == "mod") ".jar" else ".mrpack"
         val files = raw.optJSONArray("files") ?: return null
         val selected = (0 until files.length()).mapNotNull { files.optJSONObject(it) }
@@ -209,7 +209,7 @@ internal object ModrinthCatalog {
                 "Modrinth has no Fabric $gameVersion releases for this project. " +
                     "Search for another server-compatible project or check its versions on Modrinth."
             clientOnly == releases.size ->
-                "Every Fabric $gameVersion release of this mod is client-only. " +
+                "Every Fabric $gameVersion release of this project is client-only. " +
                     "Shaders and other visual mods belong in the Java player's client, " +
                     "not the PocketCraft server."
             else ->
