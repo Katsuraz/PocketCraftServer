@@ -68,7 +68,7 @@ class ModrinthStudioActivity : Activity() {
         frame.addView(ui.space(this,8))
         frame.addView(ui.pill(this,"FABRIC  •  MINECRAFT " + minecraft,ui.CYAN))
         frame.addView(ui.space(this,7))
-        frame.addView(ui.text(this,"Discover mods and modpacks. Choose exact releases and their dependencies.",12f,ui.MUTED))
+        frame.addView(ui.text(this,"Discover compatible Fabric server mods and modpacks. Client-only shaders and visuals install in your Java client, not on the server.",12f,ui.MUTED))
         frame.addView(ui.space(this,10))
         val tabs=ui.row(this)
         modsButton=ui.action(this,"MODS",kind=="mod") { changeKind("mod") }
@@ -182,7 +182,7 @@ class ModrinthStudioActivity : Activity() {
         next.alpha=if(next.isEnabled)1f else .4f
         listing.removeAllViews()
         if(results.hits.isEmpty())listing.addView(ui.text(this,
-            "No matching versions. Try another category, sort or shorter search.",13f,ui.MUTED))
+            "No server-capable Fabric "+minecraft+" projects matched. Try another category or shorter search. Client-only mods are intentionally excluded.",13f,ui.MUTED))
         results.hits.forEach { hit ->
             val card=ui.card(this)
             card.addView(ui.text(this,hit.title,15f,ui.WHITE,true))
@@ -211,7 +211,7 @@ class ModrinthStudioActivity : Activity() {
             .setMessage("Loading Fabric "+minecraft+" versions…").setCancelable(false).create()
         dialog.show()
         Thread {
-            val outcome=runCatching {ModrinthCatalog.versions(hit.id,type,minecraft)}
+            val outcome=runCatching {ModrinthCatalog.versionReport(hit.id,type,minecraft)}
             runOnUiThread {
                 if(isFinishing||isDestroyed)return@runOnUiThread
                 dialog.dismiss()
@@ -219,11 +219,15 @@ class ModrinthStudioActivity : Activity() {
                     AlertDialog.Builder(this).setTitle("Could not load versions")
                         .setMessage(it.message?:"Network error").setPositiveButton("OK",null).show()
                 }
-                outcome.onSuccess { versions ->
+                outcome.onSuccess { report ->
+                    val versions=report.versions
                     if(versions.isEmpty()){
-                        AlertDialog.Builder(this).setTitle("No compatible release")
-                            .setMessage("This project has no server-compatible Fabric "+
-                                minecraft+" download.").setPositiveButton("OK",null).show()
+                        AlertDialog.Builder(this).setTitle("No installable server release")
+                            .setMessage(report.unavailableReason)
+                            .setNeutralButton("VIEW ON MODRINTH") { _, _ ->
+                                startActivity(Intent(Intent.ACTION_VIEW,Uri.parse(
+                                    "https://modrinth.com/"+type+"/"+hit.slug)))
+                            }.setPositiveButton("OK",null).show()
                     }else{
                         ModrinthVersionPicker.show(this,hit.title,minecraft,versions) { picked ->
                             selectVersion(hit,picked,type)
