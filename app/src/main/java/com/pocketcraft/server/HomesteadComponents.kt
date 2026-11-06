@@ -36,6 +36,13 @@ internal object HomesteadNavigation {
     fun label(page: Int): String = labels[slotForPage(page)]
     fun subtitle(page: Int): String = subtitles[slotForPage(page)]
     fun validTab(page: Int): Int = page.coerceIn(0, labels.lastIndex)
+    val settingsCategories = listOf("Appearance","Connections","Access","System")
+    fun settingsCategory(section: String): String = when (section) {
+        "Appearance", "Mojangles font", "Sound effects" -> "Appearance"
+        "Server connections", "Bedrock & Geyser" -> "Connections"
+        "Who can join?" -> "Access"
+        else -> "System"
+    }
 }
 
 internal object HomesteadComponents {
