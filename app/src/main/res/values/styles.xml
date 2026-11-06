@@ -7,5 +7,15 @@
         <item name="android:navigationBarColor">#080E18</item>
         <item name="android:windowBackground">#080E18</item>
         <item name="android:colorAccent">#D6B47D</item>
+        <item name="android:alertDialogTheme">@style/PocketCraftAlertDialogTheme</item>
+    </style>
+    <!-- Shared native-dialog treatment for all remaining Android AlertDialog.Builder flows.
+         The Modrinth release picker uses a richer bounded custom view. -->
+    <style name="PocketCraftAlertDialogTheme" parent="android:style/Theme.Material.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/pc_dialog_panel</item>
+        <item name="android:colorAccent">#D6B47D</item>
+        <item name="android:textColorPrimary">#F5ECDD</item>
+        <item name="android:textColorSecondary">#D4C5B0</item>
+        <item name="android:fontFamily">sans</item>
     </style>
 </resources>
