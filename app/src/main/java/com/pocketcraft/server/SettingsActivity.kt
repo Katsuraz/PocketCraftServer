@@ -43,12 +43,8 @@ class SettingsActivity : Activity() {
     private val categoryButtons = linkedMapOf<String, TextView>()
     private var saveFooter: View? = null
 
-    private fun categoryFor(title: String): String = when(title) {
-        "Appearance", "Mojangles font", "Sound effects" -> "Appearance"
-        "Server connections", "Bedrock & Geyser" -> "Connections"
-        "Who can join?" -> "Access"
-        else -> "System"
-    }
+    private fun categoryFor(title: String): String =
+        HomesteadNavigation.settingsCategory(title)
 
     private fun showCategory(category: String) {
         selectedCategory = category
