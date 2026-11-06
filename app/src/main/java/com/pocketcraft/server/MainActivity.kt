@@ -1373,6 +1373,14 @@ class MainActivity : Activity() {
                 card.addView(ui.space(this,12))
                 card.addView(ui.text(this,"BEDROCK EDITION",11f,ui.MUTED,true))
                 card.addView(ui.text(this,bedrockAddress ?: "Requesting Bedrock address...",15f,ui.WHITE,true))
+                if (PlayitManager.bedrockReportedEndpoint != null) {
+                    card.addView(ui.space(this,6))
+                    card.addView(ui.text(this,
+                        "NetherNet players join the hostname on port 19132. Playit also reports " +
+                            PlayitManager.bedrockReportedEndpoint + " as a separate tunnel endpoint; " +
+                            "do not use that port as the Bedrock join port.",
+                        11f,ui.MUTED))
+                }
                 if(bedrockAddress!=null) {
                     card.addView(ui.space(this,6))
                     card.addView(ui.action(this,"COPY BEDROCK ADDRESS",true) {
