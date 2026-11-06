@@ -225,12 +225,9 @@ class ModrinthStudioActivity : Activity() {
                             .setMessage("This project has no server-compatible Fabric "+
                                 minecraft+" download.").setPositiveButton("OK",null).show()
                     }else{
-                        AlertDialog.Builder(this).setTitle("Choose "+hit.title+" version")
-                            .setItems(versions.map { v ->
-                                v.number+" ["+v.releaseType.uppercase(Locale.ROOT)+"]  •  "+v.published+
-                                "\n"+v.requiredCount+" required / "+v.optionalCount+" optional dependencies"
-                            }.toTypedArray()){_,i ->selectVersion(hit,versions[i],type)}
-                            .setNegativeButton("CLOSE",null).show()
+                        ModrinthVersionPicker.show(this,hit.title,minecraft,versions) { picked ->
+                            selectVersion(hit,picked,type)
+                        }
                     }
                 }
             }
