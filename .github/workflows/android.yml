@@ -402,21 +402,7 @@ jobs:
           profile: pixel_5
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           disable-animations: true
-          script: |
-            set +e
-            # This flag excludes ARM64 server JNI only in a disposable x86_64 UI-test APK.
-            # The normal signed production build retains all native runtimes.
-            gradle :app:connectedDebugAndroidTest -Ppocketcraft.uiSmokeOnly=true \
-              --no-daemon --stacktrace 2>&1 | tee "$RUNNER_TEMP/pocketcraft-ui-gradle.log"
-            result=${PIPESTATUS[0]}
-            mkdir -p ui-test-output/screenshots
-            adb pull /sdcard/Android/data/com.pocketcraft.server/files/ui-smoke \
-              ui-test-output/screenshots/ 2>&1 || true
-            adb exec-out screencap -p > ui-test-output/screenshots/last-screen.png || true
-            adb logcat -d -v time -s AndroidRuntime:E PocketCraftCrash:E PocketCraftUISmoke:I '*:S' \
-              > ui-test-output/android-logcat.txt || true
-            cp "$RUNNER_TEMP/pocketcraft-ui-gradle.log" ui-test-output/instrumentation-gradle.log || true
-            exit "$result"
+          script: bash .github/scripts/android-ui-smoke.sh
       - name: Archive emulator screenshots, logs and instrumentation reports
         if: always()
         uses: actions/upload-artifact@v4
