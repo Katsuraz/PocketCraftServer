@@ -134,9 +134,9 @@ object PocketUpdates {
                 !UpdateChannels.accepts(normalized,json.optBoolean("prerelease"))) continue
             // Skip older third-party or incomplete releases from the beta listing,
             // but never accept an unverified artifact.
-            val candidate = if(normalized==UpdateChannels.STABLE) {
+            val candidate = (if(normalized==UpdateChannels.STABLE) {
                 parseVerifiedRelease(json)
-            } else runCatching { parseVerifiedRelease(json) }.getOrNull()
+            } else runCatching { parseVerifiedRelease(json) }.getOrNull())
                 ?: continue
             if (best==null || candidate.versionCode > best.versionCode)
                 best=candidate
@@ -170,8 +170,8 @@ object PocketUpdates {
             "Release prerelease flag and version disagree"
         }
         if(manifest.has("channel"))
-            require(manifest.getString("channel")==
-                if(prerelease) UpdateChannels.BETA else UpdateChannels.STABLE) {
+            require(manifest.getString("channel") ==
+                (if(prerelease) UpdateChannels.BETA else UpdateChannels.STABLE)) {
                 "Manifest update channel mismatch"
             }
         val versionCode=manifest.getLong("versionCode")
