@@ -10,6 +10,7 @@ import android.text.InputType
 import android.view.Gravity
 import android.view.View
 import android.widget.EditText
+import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.Switch
@@ -37,6 +38,32 @@ class SettingsActivity : Activity() {
     private val selected = linkedMapOf<String, String>()
     private lateinit var advertised: EditText
     private var selectedHeapMB: Int = 2048
+    private var selectedCategory = "Appearance"
+    private val settingsGroups = mutableListOf<Pair<String, View>>()
+    private val categoryButtons = linkedMapOf<String, TextView>()
+    private var saveFooter: View? = null
+
+    private fun categoryFor(title: String): String = when(title) {
+        "Appearance", "Mojangles font", "Sound effects" -> "Appearance"
+        "Server connections", "Bedrock & Geyser" -> "Connections"
+        "Who can join?" -> "Access"
+        else -> "System"
+    }
+
+    private fun showCategory(category: String) {
+        selectedCategory = category
+        settingsGroups.forEach { (key, view) ->
+            view.visibility = if (key == category) View.VISIBLE else View.GONE
+        }
+        categoryButtons.forEach { (key, button) ->
+            val active=key==category
+            button.background=ui.pressable(this,ui.shape(this,
+                if(active)ui.SURFACE else ui.PANEL,12,if(active)ui.BORDER else null))
+            button.setTextColor(if(active)ui.GREEN else ui.MUTED)
+        }
+        saveFooter?.visibility = if(category == "Appearance") View.GONE else View.VISIBLE
+    }
+
 
     private fun heading(label: String, description: String): LinearLayout =
         ui.column(this).apply {
@@ -108,17 +135,24 @@ class SettingsActivity : Activity() {
     }
 
     private fun section(body:LinearLayout,title:String,subtitle:String,fill:(LinearLayout)->Unit) {
-        body.addView(ui.space(this,19))
-        body.addView(heading(title,subtitle))
-        body.addView(ui.space(this,12))
+        val group=ui.column(this)
+        group.addView(ui.space(this,17))
+        group.addView(HomesteadComponents.sectionHeading(this,title,subtitle))
+        group.addView(ui.space(this,10))
         val card=ui.card(this)
         fill(card)
-        body.addView(card)
+        group.addView(card)
+        settingsGroups.add(categoryFor(title) to group)
+        group.visibility=if(categoryFor(title)==selectedCategory)View.VISIBLE else View.GONE
+        body.addView(group)
     }
     private fun value(key:String) = editors[key]?.text?.toString()?.trim() ?: ""
 
     override fun onCreate(savedInstanceState:Bundle?) {
         super.onCreate(savedInstanceState)
+        selectedCategory=savedInstanceState?.getString("selectedCategory")
+            ?.takeIf { it in listOf("Appearance","Connections","Access","System") }
+            ?: "Appearance"
         ui.loadTheme(this)
         PocketSounds.prepare(this)
         window.statusBarColor=ui.BG
@@ -154,10 +188,30 @@ class SettingsActivity : Activity() {
         }
         hero.addView(ui.pill(this,"SERVER PROFILE",ui.GREEN))
         hero.addView(ui.space(this,13))
-        hero.addView(ui.text(this,"Server preferences",23f,ui.WHITE,true))
+        hero.addView(ui.text(this,"Your control room",23f,ui.WHITE,true))
         hero.addView(ui.space(this,7))
-        hero.addView(ui.text(this,"Gameplay, connections and privacy.",12f,ui.WHITE))
+        hero.addView(ui.text(this,
+            "Choose one area to manage. World-specific preferences live inside Worlds.",
+            12f,ui.MUTED))
         body.addView(hero)
+        body.addView(ui.space(this,15))
+        val categories=HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled=false
+        }
+        val categoryRow=ui.row(this)
+        listOf("Appearance","Connections","Access","System").forEach { key ->
+            val option=ui.action(this,key,false) {
+                showCategory(key)
+                scroll.smoothScrollTo(0,0)
+            }
+            categoryButtons[key]=option
+            categoryRow.addView(option,LinearLayout.LayoutParams(-2,ui.dp(this,46)).apply {
+                marginEnd=ui.dp(this@SettingsActivity,8)
+            })
+        }
+        categories.addView(categoryRow)
+        body.addView(categories)
+        showCategory(selectedCategory)
         section(body,"Appearance","Theme") { card ->
             card.addView(ui.text(this,"Homestead",16f,ui.WHITE,true))
             card.addView(ui.space(this,6))
@@ -412,15 +466,22 @@ class SettingsActivity : Activity() {
                 ui.dp(this@SettingsActivity,18),ui.dp(this@SettingsActivity,17))
         }
         footer.addView(ui.action(this,
-            if(ServerService.running)"STOP SERVER BEFORE SAVING" else "✓  SAVE SERVER SETTINGS",
-            true,!ServerService.running) { save() })
+            if(ServerService.running || ServerService.status in setOf("STARTING","STOPPING"))
+                "STOP SERVER BEFORE SAVING" else "✓  SAVE SERVER SETTINGS",
+            true,!ServerService.running &&
+                ServerService.status !in setOf("STARTING","STOPPING")) { save() })
         screen.addView(footer)
+        saveFooter=footer
+        showCategory(selectedCategory)
         ui.styleFormInputs(screen)
         setContentView(screen)
     }
 
     private fun save() {
-        if(ServerService.running) {toast("Stop the server before editing its settings");return}
+        if(ServerService.running || ServerService.status in setOf("STARTING","STOPPING")) {
+            toast("Stop the server before editing its settings")
+            return
+        }
         val ranges=mapOf(
             "server-port" to 1..65535,
             "max-players" to 1..100
@@ -479,6 +540,11 @@ class SettingsActivity : Activity() {
             toast("Saved. Restart the server to apply.")
             finish()
         } catch(e:Exception) {toast("Could not save: "+(e.message ?: "storage error"))}
+    }
+
+    override fun onSaveInstanceState(outState:Bundle) {
+        outState.putString("selectedCategory",selectedCategory)
+        super.onSaveInstanceState(outState)
     }
 
     @Deprecated("Activity result callback")
