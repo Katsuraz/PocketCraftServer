@@ -27,7 +27,8 @@ internal object PlayitAddressResolver {
         val host = match.groupValues[1]
         if (!host.contains('.') || host.contains("..")) return Result(reported)
         val suppliedPort = match.groupValues[2]
-        if (suppliedPort.isNotEmpty() && suppliedPort.toIntOrNull() !in 1..65535)
+        val parsedPort = suppliedPort.toIntOrNull()
+        if (suppliedPort.isNotEmpty() && (parsedPort == null || parsedPort !in 1..65535))
             return Result(reported)
 
         val clientAddress = "$host:19132"
