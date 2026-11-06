@@ -31,6 +31,7 @@
         </provider>
         <activity android:name=".UpdatesActivity" android:exported="false"/>
         <activity android:name=".SettingsActivity" android:exported="false"/>
+        <activity android:name=".ThemeGalleryActivity" android:exported="false"/>
         <activity android:name=".GeyserSettingsActivity" android:exported="false"/>
         <activity android:name=".WorldSettingsActivity" android:exported="false"/>
         <activity android:name=".ServerFilesActivity" android:exported="false"/>
