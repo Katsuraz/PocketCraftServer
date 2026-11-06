@@ -43,7 +43,32 @@ class UpdatesActivity : Activity() {
         body.addView(HomesteadComponents.pageIntro(this,
             "RELEASES","Keep PocketCraft updated",
             "Verified updates, changelogs and installation controls."))
-        body.addView(ui.space(this,18))
+        body.addView(ui.space(this,12))
+        val channelCard=ui.card(this)
+        channelCard.addView(ui.text(this,"RELEASE CHANNEL",14f,ui.WHITE,true))
+        channelCard.addView(ui.space(this,9))
+        val choices=ui.row(this)
+        val selectedChannel=PocketUpdates.channel(this)
+        choices.addView(ui.action(this,
+            if(selectedChannel==UpdateChannels.STABLE) "✓  STABLE" else "STABLE",
+            selectedChannel==UpdateChannels.STABLE) {
+            chooseChannel(UpdateChannels.STABLE)
+        },LinearLayout.LayoutParams(0,-2,1f))
+        choices.addView(ui.space(this,8))
+        choices.addView(ui.action(this,
+            if(selectedChannel==UpdateChannels.BETA) "✓  BETA" else "BETA",
+            selectedChannel==UpdateChannels.BETA) {
+            chooseChannel(UpdateChannels.BETA)
+        },LinearLayout.LayoutParams(0,-2,1f))
+        channelCard.addView(choices)
+        channelCard.addView(ui.space(this,8))
+        channelCard.addView(ui.text(this,
+            if(selectedChannel==UpdateChannels.BETA)
+                "Early features • Some issues may remain"
+            else "Recommended • Verified stable releases",
+            11f,ui.MUTED))
+        body.addView(channelCard)
+        body.addView(ui.space(this,14))
         val card = ui.card(this)
         card.addView(ui.pill(this,"APP VERSION",ui.GREEN))
         card.addView(ui.space(this,12))
@@ -110,6 +135,25 @@ class UpdatesActivity : Activity() {
         refreshButtons()
     }
 
+    private fun chooseChannel(channel: String) {
+        if(busy) return
+        if(PocketUpdates.channel(this)==channel) return
+        val apply= {
+            PocketUpdates.setChannel(this,channel)
+            release=null
+            verifiedApk=null
+            recreate()
+        }
+        if(channel==UpdateChannels.BETA) {
+            AlertDialog.Builder(this).setTitle("Join the Beta channel?")
+                .setMessage("Beta APKs are official but experimental. You can return to Stable " +
+                    "for future updates; Android will not downgrade to an older version. " +
+                    "Back up worlds before installing a beta.")
+                .setNegativeButton("CANCEL",null)
+                .setPositiveButton("JOIN BETA") { _,_ -> apply() }.show()
+        } else apply()
+    }
+
     private fun refreshButtons() {
         checkButton.isEnabled = !busy
         downloadButton.isEnabled = !busy && release != null &&
@@ -125,13 +169,13 @@ class UpdatesActivity : Activity() {
         status.text = "Checking GitHub Releases…"
         refreshButtons()
         Thread {
-            val answer = runCatching { PocketUpdates.fetchLatest() }
+            val answer = runCatching { PocketUpdates.fetchLatest(PocketUpdates.channel(this@UpdatesActivity)) }
             runOnUiThread {
                 busy = false
                 answer.onSuccess { item ->
                     release = item
                     verifiedApk = null
-                    latest.text = if (item == null) "Latest release: none published yet"
+                    latest.text = if (item == null) "No eligible releases found"
                         else "Latest release: v" + item.versionName + " • " + item.published.take(10)
                     changelog.text = item?.notes?.takeIf { it.isNotBlank() }
                         ?: "No release notes available."
