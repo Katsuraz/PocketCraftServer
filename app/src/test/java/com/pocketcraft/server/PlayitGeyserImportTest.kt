@@ -61,7 +61,7 @@ class PlayitGeyserImportTest {
 
     @Test fun oldSavedTokenSurvivesWhenPasteHasNone() {
         val withoutToken = fromPlayit.replace(
-            "              token: 'private-replacement-token'\n", "")
+            "      token: 'private-replacement-token'\n", "")
         val result = GeyserConfigEditor.mergePlayitSnippet(original, withoutToken)
         assertTrue(result.contains("original-private-token"))
     }
