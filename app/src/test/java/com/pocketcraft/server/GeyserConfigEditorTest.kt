@@ -75,10 +75,11 @@ class GeyserConfigEditorTest {
     }
 
     @Test fun importRejectsDuplicateBedrockPortsAndNxsTokens() {
-        val duplicatePort = sample.replace("          port: 19132",
-            "          port: 19132\\n          port: 19133")
+        val duplicatePort = sample.replace("  port: 19132",
+            "  port: 19132\\n  port: 19133")
         // Sample already has two signaling modes, but duplicate port is also independently rejected.
-        assertTrue(GeyserConfigEditor.validateImportedStructure(duplicatePort)!!.contains("port"))
+        assertTrue(duplicatePort.contains("port: 19133"))
+        assertTrue(GeyserConfigEditor.validateImportedStructure(duplicatePort)!!.contains("bedrock.port"))
 
         val duplicateToken = """
             bedrock:
