@@ -5,6 +5,7 @@ import android.app.AlertDialog
 import android.content.Intent
 import android.os.Bundle
 import android.text.InputType
+import android.view.View
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -32,12 +33,15 @@ class WorldSettingsActivity : Activity() {
     private lateinit var levelSeed: EditText
     private var difficulty = "normal"
     private var gamemode = "survival"
+    private var selectedWorldCategory = "Gameplay"
 
     private fun stopped(): Boolean =
         !ServerService.running && ServerService.status !in setOf("STARTING","STOPPING")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        selectedWorldCategory=savedInstanceState?.getString("worldCategory")
+            ?.takeIf { it in listOf("Gameplay","Performance","Generation") } ?: "Gameplay"
         ui.loadTheme(this)
         PocketSounds.prepare(this)
         window.statusBarColor = ui.BG
@@ -119,46 +123,74 @@ class WorldSettingsActivity : Activity() {
         val active = WorldStore.active(this) == worldName
 
         val screen = ui.column(this).apply { setBackgroundColor(ui.BG) }
-        val toolbar = ui.row(this).apply {
-            setPadding(ui.dp(this@WorldSettingsActivity,18),ui.dp(this@WorldSettingsActivity,17),
-                ui.dp(this@WorldSettingsActivity,18),ui.dp(this@WorldSettingsActivity,15))
-        }
-        toolbar.addView(ui.text(this,"‹",32f,ui.GREEN,true).apply {
-            contentDescription = "Back to world"
-            setPadding(0,0,ui.dp(this@WorldSettingsActivity,16),0)
-            setOnClickListener { finish() }
-        })
-        toolbar.addView(ui.column(this).apply {
-            addView(ui.text(this@WorldSettingsActivity,worldName,20f,ui.WHITE,true))
-            addView(ui.text(this@WorldSettingsActivity,
-                if (active) "ACTIVE WORLD SETTINGS" else "WORLD PROFILE • INACTIVE",
-                10f,ui.MUTED,true))
-        })
-        screen.addView(toolbar)
+        screen.addView(HomesteadComponents.subpageHeader(this, worldName,
+            if (active) "Active world settings" else "Saved world profile") { finish() })
         val scroll = ScrollView(this).apply { isFillViewport = true }
         val body = ui.column(this).apply {
             setPadding(ui.dp(this@WorldSettingsActivity,18),0,
                 ui.dp(this@WorldSettingsActivity,18),ui.dp(this@WorldSettingsActivity,20))
         }
-        val card = ui.card(this)
-        card.addView(ui.text(this,"World hosting preferences",19f,ui.WHITE,true))
-        card.addView(ui.space(this,8))
-        card.addView(ui.text(this,
-            "These options are remembered separately for this world and applied to server.properties when the world is selected. They do not rewrite Minecraft's level.dat.",
+        val intro=ui.card(this)
+        intro.addView(ui.pill(this,if(active)"ACTIVE WORLD" else "SAVED PROFILE",ui.GREEN))
+        intro.addView(ui.space(this,12))
+        intro.addView(ui.text(this,"World preferences",20f,ui.WHITE,true))
+        intro.addView(ui.space(this,7))
+        intro.addView(ui.text(this,
+            "Each world keeps its own gameplay, performance, and generation options. No level.dat edits.",
             12f,ui.MUTED))
-        card.addView(ui.space(this,12))
-        if (!stopped()) {
-            card.addView(ui.text(this,
-                "Stop the server before changing world preferences.",12f,ui.RED))
-            card.addView(ui.space(this,10))
+        if(!stopped()) {
+            intro.addView(ui.space(this,10))
+            intro.addView(ui.text(this,
+                "Stop Minecraft before changing this world's preferences.",12f,ui.RED))
         }
-        motd = addInput(card,"Server message",
-            "Message shown in the server browser when hosting this world.",
+        body.addView(intro)
+        body.addView(ui.space(this,16))
+
+        val panels=linkedMapOf<String,LinearLayout>()
+        val buttons=linkedMapOf<String,TextView>()
+        val navigation=ui.row(this)
+        listOf("Gameplay","Performance","Generation").forEachIndexed { i, category ->
+            val button=ui.text(this,category,11f,ui.MUTED,true).apply {
+                minHeight=ui.dp(this@WorldSettingsActivity,48)
+                gravity=android.view.Gravity.CENTER
+                isClickable=true
+                isFocusable=true
+                contentDescription="$category world settings"
+                setOnClickListener {
+                    selectedWorldCategory=category
+                    PocketSounds.play(this@WorldSettingsActivity,PocketSounds.Event.SELECT)
+                    panels.forEach { (name,panel) ->
+                        panel.visibility=if(name==category)View.VISIBLE else View.GONE
+                    }
+                    buttons.forEach { (name,view) ->
+                        val selected=name==category
+                        view.background=ui.pressable(this@WorldSettingsActivity,
+                            ui.shape(this@WorldSettingsActivity,
+                                if(selected)ui.SURFACE else ui.PANEL,12,
+                                if(selected)ui.BORDER else null))
+                        view.setTextColor(if(selected)ui.GREEN else ui.MUTED)
+                    }
+                }
+            }
+            buttons[category]=button
+            navigation.addView(button,LinearLayout.LayoutParams(0,ui.dp(this,48),1f).apply {
+                if(i!=2)marginEnd=ui.dp(this@WorldSettingsActivity,5)
+            })
+        }
+        body.addView(navigation)
+        body.addView(ui.space(this,13))
+
+        val gameplay=ui.card(this)
+        gameplay.addView(HomesteadComponents.sectionHeading(this,"Gameplay",
+            "Rules and player behavior"))
+        gameplay.addView(ui.space(this,14))
+        motd=addInput(gameplay,"Server message",
+            "Message shown in the server browser for this world.",
             values.getProperty("motd","PocketCraft Server"))
-        addSelector(card,"Default game mode",gamemode,
-            listOf("survival","creative","adventure","spectator")) { gamemode = it }
-        addSelector(card,"Difficulty",difficulty,
-            listOf("peaceful","easy","normal","hard")) { difficulty = it }
+        addSelector(gameplay,"Default game mode",gamemode,
+            listOf("survival","creative","adventure","spectator")) { gamemode=it }
+        addSelector(gameplay,"Difficulty",difficulty,
+            listOf("peaceful","easy","normal","hard")) { difficulty=it }
         val pvpRow=ui.row(this)
         pvpRow.addView(ui.column(this).apply {
             addView(ui.text(this@WorldSettingsActivity,"Player versus player",14f,ui.WHITE,true))
@@ -167,39 +199,73 @@ class WorldSettingsActivity : Activity() {
         },LinearLayout.LayoutParams(0,-2,1f))
         pvp=Switch(this).apply { isChecked=values.getProperty("pvp","true")=="true" }
         pvpRow.addView(pvp)
-        card.addView(pvpRow)
-        card.addView(ui.space(this,18))
-        viewDistance = addInput(card,"View distance (chunks)","2–32; use 4–6 for slower phones.",
+        gameplay.addView(pvpRow)
+        panels["Gameplay"]=gameplay
+
+        val performance=ui.card(this)
+        performance.addView(HomesteadComponents.sectionHeading(this,"Performance",
+            "Tune simulation workload for your phone"))
+        performance.addView(ui.space(this,14))
+        viewDistance=addInput(performance,"View distance (chunks)",
+            "2–32; a smaller value can improve performance.",
             values.getProperty("view-distance","5"),numeric=true)
-        simulationDistance = addInput(card,"Simulation distance (chunks)","2–32; reducing this saves CPU.",
+        simulationDistance=addInput(performance,"Simulation distance (chunks)",
+            "2–32; reducing simulation can save CPU.",
             values.getProperty("simulation-distance","4"),numeric=true)
-        spawnProtection = addInput(card,"Spawn protection","0 disables spawn protection.",
+        spawnProtection=addInput(performance,"Spawn protection",
+            "0 disables spawn protection.",
             values.getProperty("spawn-protection","0"),numeric=true)
-        card.addView(ui.text(this,"ADVANCED WORLD OPTIONS",12f,ui.CYAN,true))
-        card.addView(ui.space(this,10))
-        allowFlight = addToggle(card,"Allow flight",
+        allowFlight=addToggle(performance,"Allow flight",
             "Allow flying players without being kicked.",
             values.getProperty("allow-flight","false")=="true")
-        hardcore = addToggle(card,"Hardcore flag",
-            "For newly generated worlds; changing this may not alter existing world metadata.",
+        panels["Performance"]=performance
+
+        val generation=ui.card(this)
+        generation.addView(HomesteadComponents.sectionHeading(this,"World generation",
+            "Settings for new worlds and chunks"))
+        generation.addView(ui.space(this,14))
+        hardcore=addToggle(generation,"Hardcore flag",
+            "For newly generated worlds; may not change existing world metadata.",
             values.getProperty("hardcore","false")=="true")
-        generateStructures = addToggle(card,"Generate structures",
-            "Controls new generation; does not regenerate existing chunks.",
+        generateStructures=addToggle(generation,"Generate structures",
+            "Changes new terrain generation; old chunks remain unchanged.",
             values.getProperty("generate-structures","true")=="true")
-        levelSeed = addInput(card,"World seed",
-            "Used for initial generation only. Existing world seeds are not changed by this option.",
+        levelSeed=addInput(generation,"World seed",
+            "Used for initial generation. Does not change existing world seeds.",
             values.getProperty("level-seed",""))
-        card.addView(ui.action(this,"SAVE THIS WORLD'S SETTINGS",true,stopped()) { save() })
-        card.addView(ui.space(this,10))
-        card.addView(ui.text(this,
-            if (active) "Changes apply on the next Minecraft start."
-            else "This profile will be applied when you assign this world. Other worlds keep their own preferences.",
+        panels["Generation"]=generation
+
+        panels.forEach { (name,panel) ->
+            panel.visibility=if(name==selectedWorldCategory)View.VISIBLE else View.GONE
+            body.addView(panel)
+        }
+        buttons.forEach { (name,button) ->
+            val selected=name==selectedWorldCategory
+            button.background=ui.pressable(this,
+                ui.shape(this,if(selected)ui.SURFACE else ui.PANEL,12,
+                    if(selected)ui.BORDER else null))
+            button.setTextColor(if(selected)ui.GREEN else ui.MUTED)
+        }
+        body.addView(ui.space(this,12))
+        body.addView(ui.text(this,
+            if(active)"Saved changes apply when Minecraft is restarted."
+            else "Changes here apply when this world is selected. Other worlds are unaffected.",
             11f,ui.MUTED))
-        body.addView(card)
         scroll.addView(body)
         screen.addView(scroll,LinearLayout.LayoutParams(-1,0,1f))
+        val footer=ui.column(this).apply {
+            setPadding(ui.dp(this@WorldSettingsActivity,16),ui.dp(this@WorldSettingsActivity,10),
+                ui.dp(this@WorldSettingsActivity,16),ui.dp(this@WorldSettingsActivity,14))
+        }
+        footer.addView(ui.action(this,"SAVE WORLD SETTINGS",true,stopped()) { save() })
+        screen.addView(footer)
         ui.styleFormInputs(screen)
         setContentView(screen)
+    }
+
+    override fun onSaveInstanceState(outState:Bundle) {
+        outState.putString("worldCategory",selectedWorldCategory)
+        super.onSaveInstanceState(outState)
     }
 
     private fun save() {

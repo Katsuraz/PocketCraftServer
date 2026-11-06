@@ -1,5 +1,16 @@
 # PocketCraft changelog
 
+## v0.8.36 (versionCode 58) — Homestead 2 UI overhaul
+
+- Completely rebuild Home as a woodland server launchpad with compact server status, cabin artwork, quick-entry tiles and a dedicated advanced hosting panel. Existing Java, Playit, and Bedrock services remain unchanged.
+- Replace the old main navigation chrome with a consistent Homestead header and touch-friendly Home / Worlds / Mods / Console bottom dock. Preserve existing internal tab IDs and server controls.
+- Rework Worlds into folder-style rows and dedicated per-world management actions. Split individual world preferences into Gameplay, Performance and Generation panels with a persistent Save action.
+- Replace Mods' crowded layout with a workshop, library cards, and a single Geyser configuration entry.
+- Categorize global Settings into Appearance, Connections, Access and System. Organize Geyser into Local, Internet and Files panels with sensitive tokens never shown.
+- Bring file browser and updater screens into the same visual system; preserve custom Minecraft-like fonts, Homestead palette, sounds, user data and existing servers.
+- Add navigation regression tests and fix a start/stop button edge case. Verified build and release are required before users should install.
+
+
 ## v0.8.35 (versionCode 57) — Safe world switching and Geyser imports
 
 - Fix world switching to preserve existing Minecraft settings when the destination world has no saved PocketCraft profile; avoid silently resetting difficulty, gamemode, PvP, view/simulation distance, and other server properties.
