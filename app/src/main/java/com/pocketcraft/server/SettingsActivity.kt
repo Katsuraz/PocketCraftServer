@@ -202,28 +202,16 @@ class SettingsActivity : Activity() {
         categories.addView(categoryRow)
         body.addView(categories)
         showCategory(selectedCategory)
-        section(body,"Appearance","Theme") { card ->
-            card.addView(ui.text(this,"Homestead",16f,ui.WHITE,true))
-            card.addView(ui.space(this,6))
-            card.addView(ui.text(this,"Woodland theme",12f,ui.MUTED))
-            card.addView(ui.space(this,13))
-            card.addView(ui.action(this,
-                if(ui.homestead()) "✓ HOMESTEAD • ACTIVE" else "🌿  USE HOMESTEAD",true) {
-                if(!ui.homestead()) {
-                    ui.setTheme(this,"homestead")
-                    recreate()
-                }
+        section(body,"Appearance","Themes & personalization") { card ->
+            card.addView(ui.text(this,ui.themeName(),16f,ui.WHITE,true))
+            card.addView(ui.space(this,7))
+            card.addView(ui.text(this,
+                "10 themes  •  "+ui.density().replaceFirstChar { it.uppercase() }+" layout",
+                11f,ui.MUTED))
+            card.addView(ui.space(this,11))
+            card.addView(ui.action(this,"OPEN APPEARANCE STUDIO",true) {
+                startActivityForResult(Intent(this,ThemeGalleryActivity::class.java),72)
             })
-            card.addView(ui.space(this,9))
-            card.addView(ui.action(this,
-                if(!ui.homestead()) "✓ MIDNIGHT • ACTIVE" else "USE MIDNIGHT") {
-                if(ui.homestead()) {
-                    ui.setTheme(this,"classic")
-                    recreate()
-                }
-            })
-            card.addView(ui.space(this,8))
-            card.addView(ui.text(this,"Changes apply instantly.",11f,ui.MUTED))
         }
         section(body,"Mojangles font","Real Minecraft-style lettering across the interface") { card ->
             card.addView(ui.text(this,
@@ -540,7 +528,7 @@ class SettingsActivity : Activity() {
     @Deprecated("Activity result callback")
     override fun onActivityResult(requestCode:Int,resultCode:Int,data:Intent?) {
         super.onActivityResult(requestCode,resultCode,data)
-        if (requestCode != 71 || resultCode != RESULT_OK) return
+        if (requestCode == 72 && resultCode == RESULT_OK) {\n            ui.loadTheme(this)\n            recreate()\n            return\n        }\n        if (requestCode != 71 || resultCode != RESULT_OK) return
         val fontUri = data?.data ?: return
         val filename = runCatching {
             contentResolver.query(fontUri,arrayOf(android.provider.OpenableColumns.DISPLAY_NAME),
