@@ -107,31 +107,67 @@ object PocketUi {
             styleFormInputs(view.getChildAt(index))
     }
 
+    private var activePalette = PocketThemes.palette("homestead")
+    private var densityMode = "comfortable"
+
+    fun themeId(): String = currentTheme
+    fun themeName(): String = PocketThemes.selected(currentTheme).name
+    fun density(): String = densityMode
+
     fun loadTheme(c: Context) {
         val prefs = c.getSharedPreferences("pocketcraft",0)
-        currentTheme = prefs.getString("uiTheme","homestead")
-            .let { if (it=="classic") "classic" else "homestead" }
+        currentTheme = PocketThemes.selected(prefs.getString("uiTheme","homestead")).id
+        activePalette = PocketThemes.palette(currentTheme)
+        if (currentTheme == "material" && android.os.Build.VERSION.SDK_INT >= 31) {
+            // Android system accents; fallback remains available on older phones.
+            val accent = runCatching { c.getColor(android.R.color.system_accent1_600) }.getOrNull()
+            val primary = runCatching { c.getColor(android.R.color.system_accent2_700) }.getOrNull()
+            if (accent != null && primary != null)
+                activePalette = activePalette.copy(primary=primary,accent=accent)
+        }
+        PocketThemes.parseAccent(prefs.getString("uiAccent",null))?.let {
+            activePalette = activePalette.copy(primary=it,accent=it)
+        }
+        densityMode = prefs.getString("uiDensity","comfortable")
+            .takeIf { it in setOf("comfortable","compact","minimal") } ?: "comfortable"
         pixelFonts = prefs.getBoolean("pixelFonts",true)
         if (pixelFonts) initFonts(c)
     }
-    fun setTheme(c: Context, theme: String) {
-        require(theme=="homestead" || theme=="classic")
-        c.getSharedPreferences("pocketcraft",0).edit().putString("uiTheme",theme).apply()
-        currentTheme = theme
-    }
-    fun homestead(): Boolean = currentTheme=="homestead"
 
-    val BG: Int get() = if(homestead()) 0xFF1C1814.toInt() else 0xFF080E18.toInt()
-    val PANEL: Int get() = if(homestead()) 0xFF30251E.toInt() else 0xFF141E2C.toInt()
-    val SURFACE: Int get() = if(homestead()) 0xFF654A34.toInt() else 0xFF223245.toInt()
-    val MUTED: Int get() = if(homestead()) 0xFFC9BA9E.toInt() else 0xFFACBED1.toInt()
-    val WHITE: Int get() = if(homestead()) 0xFFF1E5CA.toInt() else 0xFFF6F9FD.toInt()
-    val GREEN: Int get() = if(homestead()) 0xFFD6B47D.toInt() else 0xFF70E9B4.toInt()
-    val CYAN: Int get() = if(homestead()) 0xFFE1B977.toInt() else 0xFF80D7FA.toInt()
-    val PURPLE: Int get() = if(homestead()) 0xFFC29A70.toInt() else 0xFFB5A5FF.toInt()
-    val RED: Int get() = if(homestead()) 0xFFF5AA93.toInt() else 0xFFFFA0AB.toInt()
-    val BORDER: Int get() = if(homestead()) 0xFF97704D.toInt() else 0xFF324459.toInt()
-    val SUBTLE: Int get() = if(homestead()) 0xFF261D18.toInt() else 0xFF182737.toInt()
+    fun setTheme(c: Context, theme: String) {
+        require(PocketThemes.valid(theme)) { "Unknown PocketCraft theme" }
+        c.getSharedPreferences("pocketcraft",0).edit().putString("uiTheme",theme).apply()
+        loadTheme(c)
+    }
+
+    fun setAccent(c: Context, value: String?) {
+        require(value.isNullOrBlank() || PocketThemes.parseAccent(value) != null) {
+            "Enter an RGB hex color like #406080"
+        }
+        c.getSharedPreferences("pocketcraft",0).edit()
+            .putString("uiAccent",value?.takeIf { it.isNotBlank() }).apply()
+        loadTheme(c)
+    }
+
+    fun setDensity(c: Context, density: String) {
+        require(density in setOf("comfortable","compact","minimal"))
+        c.getSharedPreferences("pocketcraft",0).edit().putString("uiDensity",density).apply()
+        loadTheme(c)
+    }
+
+    fun homestead(): Boolean = currentTheme == "homestead"
+    fun pixelStyle(): Boolean = currentTheme in setOf("homestead","minecraft")
+    val BG: Int get() = activePalette.bg
+    val PANEL: Int get() = activePalette.panel
+    val SURFACE: Int get() = activePalette.surface
+    val MUTED: Int get() = activePalette.muted
+    val WHITE: Int get() = activePalette.text
+    val GREEN: Int get() = activePalette.primary
+    val CYAN: Int get() = activePalette.accent
+    val PURPLE: Int get() = activePalette.purple
+    val RED: Int get() = activePalette.error
+    val BORDER: Int get() = activePalette.border
+    val SUBTLE: Int get() = activePalette.subtle
 
     fun dp(c: Context, v: Int): Int = (v * c.resources.displayMetrics.density + .5f).toInt()
 
@@ -143,7 +179,7 @@ object PocketUi {
                 else intArrayOf(0xFF75583D.toInt(), 0xFF553E2B.toInt()))
                 orientation = GradientDrawable.Orientation.TOP_BOTTOM
             } else setColor(color)
-            cornerRadius = dp(c, if(homestead()) radius.coerceAtMost(15) else radius).toFloat()
+            cornerRadius = dp(c, when (currentTheme) {\n                "minecraft" -> 4\n                "obsidian", "minimal" -> radius.coerceAtMost(8)\n                "homestead" -> radius.coerceAtMost(15)\n                else -> radius\n            }).toFloat()
             if (stroke != null) setStroke(dp(c, 1), stroke)
         }
 
@@ -294,7 +330,7 @@ class WorldArt(context: Context) : View(context) {
         }
         val unit = width / 25f
         val ground = height * .72f
-        paint.color = 0x3357DCF5
+        paint.color = PocketUi.CYAN and 0x33FFFFFF
         for (i in 0..4) {
             val x = width * (.08f + i * .22f)
             canvas.drawCircle(x, height * .25f, unit * (if (i % 2 == 0) 1.3f else .7f), paint)
@@ -313,11 +349,11 @@ class WorldArt(context: Context) : View(context) {
                 canvas.drawRect(i*unit, ground + .5f*unit, (i+1)*unit, ground + 1.1f*unit, paint)
             }
         }
-        paint.color = 0xFFAB95FF.toInt()
+        paint.color = PocketUi.PURPLE
         canvas.drawRect(unit*19, ground-unit*5, unit*20.8f, ground-unit*3, paint)
-        paint.color = 0xFF8C77E9.toInt()
+        paint.color = PocketUi.CYAN
         canvas.drawRect(unit*19.5f, ground-unit*6.3f, unit*20.3f, ground-unit*4, paint)
-        paint.color = 0xFFDBE5FF.toInt()
+        paint.color = PocketUi.WHITE
         canvas.drawRect(unit*19.7f, ground-unit*5.6f, unit*20.1f, ground-unit*5.2f, paint)
     }
 }
