@@ -22,6 +22,10 @@ object DatapackInstaller {
     private const val MAX_ZIP_BYTES = 64L * 1024 * 1024
     private const val MAX_UNPACKED_BYTES = 512L * 1024 * 1024
 
+    /** Pending worlds accept datapacks before level.dat is generated. */
+    internal fun isEligibleWorld(world: File): Boolean =
+        File(world, "level.dat").isFile || WorldStore.isPending(world)
+
     private fun encoded(s: String) = URLEncoder.encode(s, "UTF-8")
 
     fun activeDirectory(context: Context): File {
@@ -30,8 +34,7 @@ object DatapackInstaller {
         if (!name.matches(Regex("[A-Za-z0-9._-]{1,64}")) || name == "." || name == "..")
             throw IOException("Unsafe world name. Check the active world in Settings.")
         val world = File(root, name).canonicalFile
-        if (world.parentFile != root ||
-            !(File(world, "level.dat").isFile || WorldStore.isPending(world)))
+        if (world.parentFile != root || !isEligibleWorld(world))
             throw IOException("Create or select a managed world first. Datapacks can be installed before its first launch.")
         val folder = File(world, "datapacks").canonicalFile
         if (folder.parentFile != world)
