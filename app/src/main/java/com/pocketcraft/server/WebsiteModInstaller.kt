@@ -189,38 +189,61 @@ object WebsiteModInstaller {
 
     data class DependencyChoice(
         val projectId: String, val title: String, val required: Boolean,
-        val installed: Boolean, val versionId: String?
+        val installed: Boolean, val versionId: String?,
+        val kind: String = "required"
     )
 
-    /** Preview the exact compatible release's dependencies for a selection dialog. */
-    fun previewDependencies(context: Context, slug: String): List<DependencyChoice> {
+    /**
+     * Preview dependencies of the EXACT selected release. Incompatible entries
+     * are warnings, never selectable optional installations.
+     */
+    fun previewDependencies(context: Context, slug: String,
+                            pinnedVersionId: String? = null): List<DependencyChoice> {
         val current = installedVersion(context)
-        val versions = array("https://api.modrinth.com/v2/project/" + encode(slug) +
+        require(slug.matches(Regex("[A-Za-z0-9_-]{1,120}"))) { "Invalid Modrinth project" }
+        val project = json("https://api.modrinth.com/v2/project/" + encode(slug))
+        val id = project.getString("id")
+        val versions = if (pinnedVersionId != null) {
+            require(pinnedVersionId.matches(Regex("[A-Za-z0-9_-]{1,120}"))) {
+                "Invalid Modrinth version ID"
+            }
+            JSONArray().put(json("https://api.modrinth.com/v2/version/" + encode(pinnedVersionId)))
+        } else array("https://api.modrinth.com/v2/project/" + encode(id) +
             "/version?loaders=" + encode("[\"fabric\"]") +
             "&game_versions=" + encode("[\"" + current + "\"]") +
             "&include_changelog=false")
-        if (versions.length() == 0) throw IOException("No Fabric $current version found")
-        val deps = versions.getJSONObject(0).optJSONArray("dependencies") ?: JSONArray()
+        if (versions.length() == 0) throw IOException("No Fabric $current release found")
+        val version = versions.getJSONObject(0)
+        if (version.optString("project_id") != id ||
+            !(0 until (version.optJSONArray("game_versions") ?: JSONArray()).length()).any {
+                version.optJSONArray("game_versions")?.optString(it) == current
+            } ||
+            !(0 until (version.optJSONArray("loaders") ?: JSONArray()).length()).any {
+                version.optJSONArray("loaders")?.optString(it) == "fabric"
+            }) throw IOException("The selected version is not Fabric $current for this project")
+        val deps = version.optJSONArray("dependencies") ?: JSONArray()
+        val presentIds = installedModIds(context)
         val found = mutableListOf<DependencyChoice>()
-        for (i in 0 until deps.length()) {
+        for (i in 0 until minOf(deps.length(), 60)) {
             val dep = deps.getJSONObject(i)
-            val type = dep.optString("dependency_type")
-            if (type != "required" && type != "optional") continue
+            val kind = dep.optString("dependency_type")
+            if (kind !in setOf("required","optional","incompatible")) continue
             val versionId = dep.optString("version_id").takeIf { it.isNotBlank() }
-            val id = dep.optString("project_id").ifBlank {
+            val depProjectId = dep.optString("project_id").ifBlank {
                 if (versionId == null) "" else
                     json("https://api.modrinth.com/v2/version/" + encode(versionId))
                         .optString("project_id")
             }
-            if (id.isBlank()) continue
-            val project = json("https://api.modrinth.com/v2/project/" + encode(id))
-            val modId = project.optString("slug")
-            val presentIds = installedModIds(context)
-            val installed = modId in presentIds || id in presentIds
-            found.add(DependencyChoice(id, project.optString("title", id),
-                type == "required", installed, versionId))
+            if (depProjectId.isBlank() || !depProjectId.matches(Regex("[A-Za-z0-9_-]{1,120}")))
+                continue
+            val dependencyProject = json("https://api.modrinth.com/v2/project/" + encode(depProjectId))
+            val modId = dependencyProject.optString("slug")
+            val installed = modId in presentIds || depProjectId in presentIds
+            found.add(DependencyChoice(depProjectId,
+                dependencyProject.optString("title",depProjectId),
+                kind == "required", installed, versionId, kind))
         }
-        return found.distinctBy { it.projectId }
+        return found.distinctBy { it.projectId to it.kind }
     }
 
     private fun installedModIds(context: Context): Set<String> {
@@ -246,6 +269,7 @@ object WebsiteModInstaller {
      * if a Modrinth CDN asset disappears (HTTP 404/410). Keep checksums and
      * Fabric JAR verification; never install an unverified or client-only JAR.
      */
+    @Synchronized
     fun installWithDependencies(context: Context, slug: String, pinnedVersionId: String? = null, selectedOptional: Set<String> = emptySet()): String {
         if (ServerService.running) throw IOException("Stop Minecraft before installing mods")
         val current = installedVersion(context)
@@ -311,10 +335,17 @@ object WebsiteModInstaller {
                         val deps = version.optJSONArray("dependencies") ?: JSONArray()
                         for (j in 0 until deps.length()) {
                             val d = deps.getJSONObject(j)
-                            if (d.optString("dependency_type") != "required" &&
-                                !(d.optString("dependency_type") == "optional" &&
-                                    (d.optString("project_id") in selectedOptional))) continue
+                            val kind = d.optString("dependency_type")
                             val depId = d.optString("project_id")
+                            if (kind == "incompatible") {
+                                if (depId in existingModIds) {
+                                    throw IOException("Conflicting installed mod " + depId +
+                                        "; disable it and review compatibility before installing " + title)
+                                }
+                                continue
+                            }
+                            if (kind != "required" &&
+                                !(kind == "optional" && depId in selectedOptional)) continue
                             val depVersion = d.optString("version_id").takeIf { it.isNotBlank() }
                             try {
                                 if (depId.isNotBlank()) installProject(depId,depVersion,depth+1)
@@ -332,8 +363,11 @@ object WebsiteModInstaller {
                         for (jar in jars) {
                             InstallProgress.check()
                             try {
+                                val sha512 = jar.optJSONObject("hashes")?.optString("sha512")
+                                if (sha512 == null || !sha512.matches(Regex("[0-9a-fA-F]{128}")))
+                                    throw IOException("Missing trusted SHA-512 checksum for " + title)
                                 installFile(context,jar.getString("url"),jar.getString("filename"),
-                                    jar.optJSONObject("hashes")?.optString("sha512"),title)
+                                    sha512,title)
                                 installed.add(title)
                                 completed.add(id)
                                 return
@@ -412,7 +446,19 @@ object WebsiteModInstaller {
                 visiting.remove(id)
             }
         }
-        installProject(slug, pinnedVersionId)
+        // The installer never overwrites existing JARs. If an individual
+        // dependency fails, roll back newly introduced JARs from this attempt.
+        val modsFolder = File(WorldStore.root(context),"mods")
+        val before = modsFolder.listFiles().orEmpty().filter { it.isFile }
+            .map { it.name }.toSet()
+        try {
+            installProject(slug, pinnedVersionId)
+        } catch (failure: Exception) {
+            modsFolder.listFiles().orEmpty().filter {
+                it.isFile && it.name.endsWith(".jar",true) && it.name !in before
+            }.forEach { it.delete() }
+            throw failure
+        }
         return "Installed " + installed.joinToString(", ") +
             ". Restart Minecraft to load mods."
     }

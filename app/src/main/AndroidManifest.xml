@@ -29,6 +29,7 @@
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/update_file_paths"/>
         </provider>
+        <activity android:name=".ModrinthStudioActivity" android:exported="false"/>
         <activity android:name=".UpdatesActivity" android:exported="false"/>
         <activity android:name=".SettingsActivity" android:exported="false"/>
         <activity android:name=".ThemeGalleryActivity" android:exported="false"/>
