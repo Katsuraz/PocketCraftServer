@@ -1,5 +1,19 @@
 # PocketCraft changelog
 
+## v0.8.41 (versionCode 66) — Stable: Homestead UI & File Browser Polish
+
+- Replaced Modrinth's giant default-Android **version popup** with a bounded, scrollable, Homestead-styled release picker. Compact cards show exact version numbers, release/beta/alpha status, publication date and downloads. Zero-dependency lines are omitted, while nonzero required/optional/incompatible counts remain visible.
+- Added version search, release-channel filters, oldest/newest ordering, accessibility descriptions and deliberate release selection before installation. The underlying Modrinth API and permission-safe installation behavior remain intact.
+- Styled remaining native Android alert dialogs with a consistent dark woodland palette and readable text, avoiding the large flat gray Android default look.
+- Added persistent **Files sorting** by name, file type, size and modification date, with folders first. Search status is shown separately so the buttons don't crowd small screens. No server files are modified simply by sorting.
+- Added offline version picker filtering tests, file sorting tests and a **deterministic Android 14 emulator UI test** for the release picker (including screenshots of the unfiltered, beta-only and sorted states). CI still blocks GitHub release publication when build or UI smoke checks fail.
+- Preserved application ID, signing configuration, Minecraft data paths, worlds, mod configurations, Java engine, Playit, Geyser, Floodgate and all other existing server features.
+
+### Verification boundaries
+- CI builds, UI automation and screenshots are necessary but not a substitute for real-device visual review, Android OEM compatibility, live Minecraft hosting or Bedrock join testing.
+- The v0.9.0 Ultimate Hosting roadmap remains unfinished; v0.8.41 is a scoped, non-beta stable maintenance update.
+
+
 ## v0.8.40 (versionCode 65) — Official stable: Modrinth Workshop
 
 A **non-beta, incremental stable release** focused on the existing Fabric mod/modpack manager.
