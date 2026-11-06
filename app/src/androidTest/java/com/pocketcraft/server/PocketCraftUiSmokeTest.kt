@@ -198,6 +198,41 @@ class PocketCraftUiSmokeTest {
         capture("12-version-picker-sorted")
     }
 
+    @Test
+    fun releaseOptionsHaveCompactButtonsAndExplicitWarnings() {
+        val screen=instrumentation.startActivitySync(Intent(context,
+            ModrinthStudioActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+            }) as ModrinthStudioActivity
+        device.waitForIdle()
+        val hit=ModrinthCatalog.Hit("8oi3bsk5","terralith","Terralith",
+            "World generation","Apollo",1000L,null,"Review compatibility")
+        val release=ModrinthCatalog.Version(
+            "aGE3hYAA","8oi3bsk5","Terralith","2.6.5+26.3",
+            "release","2026-10-14",1200L,1,0,0,
+            "terralith-2.6.5+26.3.jar",
+            "https://cdn.modrinth.com/data/8oi3bsk5/versions/example.jar",
+            "a".repeat(128),listOf("26.3"),"server_only",listOf("fabric"))
+        instrumentation.runOnMainSync {
+            screen.selectVersion(hit,release,"mod")
+        }
+        assertVisible(By.text("Release options"),"Release options title")
+        assertVisible(By.text("REVIEW INSTALL"),"Review install button")
+        assertVisible(By.text("DOWNLOAD ONLY"),"Download-only button")
+        assertVisible(By.text("CANCEL"),"Cancel button")
+        capture("14-terralith-release-options-compact")
+        assertVisible(By.text("CANCEL"),"Cancel action").click()
+
+        instrumentation.runOnMainSync {
+            screen.selectVersion(hit,release.copy(gameVersions=listOf("26.2")),"mod")
+        }
+        assertVisible(By.textContains("Compatibility warning"),"Mismatch warning")
+        assertVisible(By.text("INSTALL ANYWAY"),"Explicit compatibility override")
+        assertVisible(By.text("DOWNLOAD ONLY"),"Safe download alternative")
+        capture("15-terralith-incompatible-warning")
+        assertVisible(By.text("CANCEL"),"Cancel mismatch dialog").click()
+    }
+
     /**
      * Live Modrinth API is not a test dependency. Capture the actual version
      * selector when connectivity works; never treat a temporary API outage as
