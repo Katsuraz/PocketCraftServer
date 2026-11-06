@@ -1,6 +1,7 @@
 package com.pocketcraft.server
 
 import android.content.Context
+import android.app.AlertDialog
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
@@ -166,21 +167,34 @@ internal object HomesteadComponents {
         return dock
     }
 
+    /** Short headings; supporting copy is available on demand. */
     fun pageIntro(c: Context, eyebrow: String, heading: String, sub: String): LinearLayout =
         ui.column(c).apply {
             addView(ui.text(c, eyebrow.uppercase(), 10f, ui.CYAN, true))
-            addView(ui.space(c, 8))
-            addView(ui.text(c, heading, 23f, ui.WHITE, true))
             addView(ui.space(c, 6))
-            addView(ui.text(c, sub, 12f, ui.MUTED))
+            addView(ui.text(c, heading, 23f, ui.WHITE, true).apply {
+                contentDescription = listOf(heading,sub).filter { it.isNotBlank() }.joinToString(". ")
+            })
         }
 
     fun sectionHeading(c: Context, title: String, subtitle: String = ""): LinearLayout =
-        ui.column(c).apply {
-            addView(ui.text(c, title, 17f, ui.WHITE, true))
-            if (subtitle.isNotBlank()) {
-                addView(ui.space(c, 5))
-                addView(ui.text(c, subtitle, 11f, ui.MUTED))
+        ui.row(c).apply {
+            val heading=ui.text(c,title,17f,ui.WHITE,true)
+            addView(heading,LinearLayout.LayoutParams(0,-2,1f))
+            if(subtitle.isNotBlank()) {
+                val info=ui.text(c,"ⓘ",15f,ui.MUTED,true).apply {
+                    gravity=Gravity.CENTER
+                    minHeight=d(c,40)
+                    minWidth=d(c,40)
+                    isClickable=true
+                    isFocusable=true
+                    contentDescription="About $title"
+                    setOnClickListener {
+                        AlertDialog.Builder(c).setTitle(title).setMessage(subtitle)
+                            .setPositiveButton("OK",null).show()
+                    }
+                }
+                addView(info)
             }
         }
 
@@ -191,8 +205,8 @@ internal object HomesteadComponents {
     ): LinearLayout {
         val row = ui.row(c).apply {
             background = ui.pressable(c, ui.shape(c, ui.PANEL, 13, ui.BORDER))
-            setPadding(d(c, 13), d(c, 14), d(c, 13), d(c, 14))
-            minimumHeight = d(c, 66)
+            setPadding(d(c, 12), d(c, 10), d(c, 12), d(c, 10))
+            minimumHeight = d(c, 56)
             isClickable = enabled
             isFocusable = enabled
             alpha = if(enabled) 1f else .48f
@@ -209,9 +223,10 @@ internal object HomesteadComponents {
         row.addView(symbolView, LinearLayout.LayoutParams(d(c, 43), d(c, 45)))
         val body = ui.column(c).apply {
             setPadding(d(c, 12), 0, d(c, 5), 0)
-            addView(ui.text(c,title,14f,ui.WHITE,true))
-            addView(ui.space(c,5))
-            addView(ui.text(c,detail,11f,ui.MUTED))
+            addView(ui.text(c,title,14f,ui.WHITE,true).apply {
+                maxLines=1
+                ellipsize=android.text.TextUtils.TruncateAt.END
+            })
         }
         row.addView(body,LinearLayout.LayoutParams(0,-2,1f))
         if(caption.isNotEmpty()) {
